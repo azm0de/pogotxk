@@ -31,3 +31,9 @@ VAPID_PRIVATE_KEY=
 # --- Sessions ---
 # Random 32+ byte secret: openssl rand -base64 48
 SESSION_SECRET=
+
+# --- Maintenance endpoints ---
+# Bearer token guarding /api/admin/import-legacy and /api/admin/import-media.
+# Stopgap until Discord OAuth lands, at which point those routes move behind
+# the `admin` role. Generate with: openssl rand -hex 32
+IMPORT_TOKEN=

@@ -12,10 +12,10 @@
     "check": "astro check",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
-    "db:migrate:local": "wrangler d1 migrations apply pogotxk --local",
-    "db:migrate:remote": "wrangler d1 migrations apply pogotxk --remote",
-    "db:studio": "wrangler d1 execute pogotxk --local --command",
-    "import:legacy": "node --experimental-strip-types scripts/import-legacy.ts"
+    "db:migrate:local": "wrangler d1 migrations apply pogotxk-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply pogotxk-db --remote",
+    "db:query": "wrangler d1 execute pogotxk-db --local --command",
+    "import:dry-run": "tsx scripts/dry-run-import.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.7",
@@ -34,6 +34,7 @@
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "tsx": "^4.23.8",
     "typescript": "^5.9.3",
     "wrangler": "^4.83.0"
   }
