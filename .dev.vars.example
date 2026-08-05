@@ -40,19 +40,17 @@ DISCORD_ROLE_MEMBER=
 # you can sign in and configure everything else. Right-click yourself > Copy User ID.
 DISCORD_BOOTSTRAP_ADMIN_ID=
 
-# Webhook the flare/announcement fan-out posts into.
-DISCORD_WEBHOOK_URL=
-
-# --- Web Push (VAPID) ---
-# Generate with: npx web-push generate-vapid-keys
-# VAPID_SUBJECT must be a mailto: or https:// URL — Apple returns 403 otherwise.
-VAPID_SUBJECT=mailto:admin@pokemontxk.com
-VAPID_PUBLIC_KEY=
-VAPID_PRIVATE_KEY=
-
-# --- Sessions ---
-# Random 32+ byte secret: openssl rand -base64 48
-SESSION_SECRET=
+# --- Not read by any code yet ---
+# Listed so the eventual names are agreed, but setting them today does nothing.
+# Delete this block if it is still here once the features land.
+#
+#   DISCORD_WEBHOOK_URL   flare/announcement fan-out into a Discord channel
+#   VAPID_SUBJECT         web push; must be a mailto: or https:// URL, or Apple 403s
+#   VAPID_PUBLIC_KEY      generate with: npx web-push generate-vapid-keys
+#   VAPID_PRIVATE_KEY
+#
+# Sessions need no secret: tokens are random and stored as SHA-256 hashes
+# rather than signed, so there is nothing to sign with.
 
 # --- Maintenance endpoints ---
 # Bearer token guarding /api/admin/import-legacy and /api/admin/import-media.
