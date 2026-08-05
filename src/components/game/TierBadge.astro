@@ -1,0 +1,26 @@
+---
+/**
+ * Raid tier badge.
+ *
+ * `data-tier` carries the slugified upstream string so the stylesheet can key
+ * colour off it with prefix selectors — a tier we have never seen still renders
+ * correctly, just in the default accent.
+ */
+import './game.css';
+import { slugifyLabel } from '~/lib/scrapedduck';
+
+interface Props {
+  tier: string;
+  /** Drop the trailing "Raids" — right inside a card, wrong as a page heading. */
+  short?: boolean;
+}
+
+const { tier, short = true } = Astro.props;
+
+const label = short ? tier.replace(/\s*raids?\s*$/i, '').trim() || tier : tier;
+---
+
+<span class="g-tier" data-tier={slugifyLabel(tier)}>
+  <span class="g-tier-dot" aria-hidden="true"></span>
+  {label}
+</span>

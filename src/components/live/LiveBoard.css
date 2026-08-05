@@ -1,0 +1,346 @@
+.live {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px clamp(12px, 3vw, 20px) 64px;
+  display: grid;
+  gap: 18px;
+}
+
+/* ------------------------------------------------------------------ head -- */
+
+.live-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.live-head h1 {
+  margin: 0 0 4px;
+  font-size: 1.6rem;
+}
+.live-head p {
+  margin: 0;
+  max-width: 54ch;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+.live-status--live {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.live-status--live .live-dot {
+  background: var(--live);
+  /* The pulse is the only motion on the page; reduced-motion callers get a
+     static dot via the global media query in global.css. */
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+.live-status--connecting .live-dot,
+.live-status--reconnecting .live-dot {
+  background: var(--poi-campsite);
+}
+.live-status--polling {
+  white-space: normal;
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(232 69 60 / 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgb(232 69 60 / 0);
+  }
+}
+
+/* ----------------------------------------------------------------- toast -- */
+
+.live-toast {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+.live-toast--ok {
+  background: var(--navy-800);
+  color: #fff;
+}
+.live-toast--err {
+  background: var(--live);
+  color: #fff;
+}
+
+.live-signin,
+.live-empty {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+/* --------------------------------------------------------------- compose -- */
+
+.live-compose form {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.live-compose h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.live-compose label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.live-compose input,
+.live-compose select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.kind-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btn {
+  padding: 9px 16px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn--ghost {
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn--big {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 0.95rem;
+  border-radius: var(--radius);
+}
+
+/* ----------------------------------------------------------------- chips -- */
+
+.live .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.live .chip:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+.live .chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* aria-pressed is the source of truth for the active state — the styling
+   follows the semantics rather than a parallel class, exactly as the map
+   filters do. */
+.live .chip[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.live .chip--close {
+  margin-left: auto;
+  color: var(--live);
+  border-color: color-mix(in srgb, var(--live) 45%, transparent);
+  background: transparent;
+}
+
+/* ----------------------------------------------------------------- cards -- */
+
+.flare-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.flare {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  /* A hairline in the kind's colour down the left edge: the card is
+     identifiable at a glance while scrolling, without colour being the only
+     signal — the kind is spelled out in the badge too. */
+  border-left: 4px solid var(--flare-color, var(--accent));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.flare--raid {
+  --flare-color: var(--poi-gym);
+}
+.flare--gym_takedown {
+  --flare-color: var(--team-valor);
+}
+.flare--meetup_here {
+  --flare-color: var(--poi-campsite);
+}
+.flare--remote_invites {
+  --flare-color: var(--poi-powerspot);
+}
+.flare--trade {
+  --flare-color: var(--poi-pokestop);
+}
+.flare--help {
+  --flare-color: var(--navy-600);
+}
+
+.flare-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.flare-kind {
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--flare-color, var(--accent));
+  color: #fff;
+}
+
+.flare-left {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.flare-title {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+}
+
+.flare-where {
+  margin: 0;
+  font-size: 0.86rem;
+}
+.flare-where--none {
+  color: var(--text-muted);
+}
+
+.flare-note {
+  margin: 2px 0 0;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.flare-meta {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.flare-author {
+  font-weight: 700;
+  color: var(--text);
+}
+.flare-author--valor {
+  color: var(--team-valor);
+}
+.flare-author--mystic {
+  color: var(--team-mystic);
+}
+.flare-author--instinct {
+  /* The instinct yellow fails contrast on the cream background, so it darkens
+     rather than being used raw. */
+  color: color-mix(in srgb, var(--team-instinct) 70%, #4a3a00);
+}
+
+.flare-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .live-head {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+  }
+}

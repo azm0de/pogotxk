@@ -1,0 +1,10 @@
+---
+import PostEditor from '~/components/admin/PostEditor';
+import Admin from '~/layouts/Admin.astro';
+
+export const prerender = false;
+---
+
+<Admin title="News">
+  <PostEditor client:load />
+</Admin>

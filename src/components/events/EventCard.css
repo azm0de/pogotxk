@@ -1,0 +1,174 @@
+.event-card {
+  position: relative;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-sm);
+}
+
+/* A left rule rather than a tinted background: it survives dark mode and does
+   not fight the POI colours the rest of the site uses. */
+.event-card[data-state='live'] {
+  border-color: var(--live);
+  box-shadow: var(--shadow-md);
+}
+
+/* Running, but for weeks — present, not urgent. */
+.event-card[data-state='ongoing'] {
+  border-left: 3px solid var(--poi-powerspot);
+}
+
+.event-card[data-state='past'] {
+  background: var(--bg-sunken);
+  box-shadow: none;
+}
+.event-card[data-state='past'] .event-title {
+  color: var(--text-muted);
+}
+
+.event-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.event-badge {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.event-badge--meetup {
+  background: var(--navy-800);
+  border-color: var(--navy-800);
+  color: #fff;
+}
+
+.event-badge--global {
+  background: var(--poi-powerspot);
+  border-color: var(--poi-powerspot);
+  color: #fff;
+}
+
+.event-badge--cancelled {
+  background: var(--live);
+  border-color: var(--live);
+  color: #fff;
+}
+
+.event-badge--repeat {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+
+.event-title {
+  margin: 0 0 6px;
+  font-size: 1.06rem;
+}
+
+.event-card[data-cancelled] .event-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--live);
+  color: var(--text-muted);
+}
+
+.event-when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.countdown[data-state='live'] {
+  background: var(--live);
+  border-color: var(--live);
+  color: #fff;
+}
+.countdown[data-state='live']::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: countdown-pulse 1.4s ease-in-out infinite;
+}
+@keyframes countdown-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* `hidden` loses to any display rule, and the countdown ships hidden. */
+.countdown[hidden] {
+  display: none;
+}
+
+.event-where {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+}
+.event-where-icon {
+  display: inline-flex;
+  color: var(--poi-gym);
+  flex: none;
+}
+
+.event-blurb {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  white-space: pre-line;
+}
+
+.event-actions {
+  margin: 12px 0 0;
+}
+
+.event-action {
+  display: inline-block;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.event-action:hover {
+  filter: brightness(1.08);
+}

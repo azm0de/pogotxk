@@ -1,0 +1,32 @@
+---
+/**
+ * Pokémon type chips.
+ *
+ * The icons are hotlinked from leekduck.com — they are the licensed source and
+ * the attribution block credits them — with explicit dimensions so a slow icon
+ * never reflows the card underneath it.
+ */
+import './game.css';
+import type { NamedImage } from '~/lib/scrapedduck';
+
+interface Props {
+  types: NamedImage[];
+  label?: string;
+}
+
+const { types, label = 'Types' } = Astro.props;
+---
+
+{
+  types.length > 0 && (
+    <ul class="g-chips" aria-label={label}>
+      {types.map((type) => (
+        <li class="g-chip g-chip--type" data-type={type.name.toLowerCase()}>
+          {/* alt="" — the type name is right there as text. */}
+          <img src={type.image} alt="" width="16" height="16" loading="lazy" decoding="async" />
+          {type.name}
+        </li>
+      ))}
+    </ul>
+  )
+}

@@ -1,0 +1,357 @@
+---
+/**
+ * The public events page.
+ *
+ * Two sources arrive here and are rendered identically: community meetups out of
+ * D1, and the global Pokémon GO calendar fetched from /api/game/events.json.
+ * That route is owned by the ScrapedDuck module and may not be deployed yet, so
+ * the page treats it as optional — if it is missing or slow, this still renders
+ * the meetups and says so rather than failing.
+ *
+ * The page itself is server-rendered. The only client JavaScript is the
+ * countdown ticker and the copy-link button.
+ */
+
+import Base from '~/layouts/Base.astro';
+import EventCard from '~/components/events/EventCard.astro';
+import SubscribeCard from '~/components/events/SubscribeCard.astro';
+import { env } from 'cloudflare:workers';
+import { listPublicMeetups, meetupToCalendarEvent } from '~/lib/db/meetups';
+import {
+  allDayEndExclusive,
+  fetchGameEvents,
+  groupEvents,
+  type CalendarEvent,
+} from '~/lib/ics';
+import { DEFAULT_TZ } from '~/lib/time';
+
+export const prerender = false;
+
+/**
+ * Calendar links point at the canonical site in production, but at whatever host
+ * you are actually on when developing — a "copy link" button that hands you a
+ * pokemontxk.com URL from localhost is a trap.
+ */
+const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(Astro.url.hostname);
+const base = new URL(isLocal ? Astro.url.origin : (Astro.site?.toString() ?? Astro.url.origin));
+
+// Independent sources, so they run together. Origin-relative so the subrequest
+// reaches this deployment, not production.
+const [meetups, global] = await Promise.all([
+  listPublicMeetups(env.DB),
+  fetchGameEvents(new URL(Astro.url.origin)),
+]);
+
+const globalAvailable = global !== null;
+const meetupEvents = meetups.map((meetup) => meetupToCalendarEvent(meetup, base));
+
+const grouped = groupEvents([...meetupEvents, ...(global?.events ?? [])]);
+// The past is context, not content — a dozen cards is plenty.
+const past = grouped.past.slice(0, 12);
+
+interface Feed {
+  id: string;
+  name: string;
+  blurb: string;
+  href: string;
+  webcal: string;
+}
+
+function feed(id: string, name: string, blurb: string): Feed {
+  const href = new URL(`/calendar/${id}.ics`, base).toString();
+  // webcal:// is not a real scheme, just https with a handler registration —
+  // swapping the prefix is exactly what every calendar app expects.
+  return { id, name, blurb, href, webcal: href.replace(/^https?:/, 'webcal:') };
+}
+
+const feeds: Feed[] = [
+  feed('meetups', 'Community meetups', 'Texarkana meetups, raid hours and community days.'),
+  ...(globalAvailable
+    ? [
+        feed('all', 'Everything', 'Community meetups plus the global Pokémon GO calendar.'),
+        feed('game', 'Global Pokémon GO events', 'Just the worldwide in-game event calendar.'),
+      ]
+    : []),
+];
+
+/* ------------------------------------------------------------ formatting -- */
+
+// Built once per request and reused across every card; constructing an
+// Intl.DateTimeFormat per event adds up over a 40-event calendar.
+const dayFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: DEFAULT_TZ,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+});
+const timeFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: DEFAULT_TZ,
+  hour: 'numeric',
+  minute: '2-digit',
+});
+const zoneFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: DEFAULT_TZ,
+  timeZoneName: 'short',
+});
+
+/** "CDT" or "CST" — resolved at the given instant, not at page-render time. */
+function zoneLabel(at: Date): string {
+  return zoneFmt.formatToParts(at).find((part) => part.type === 'timeZoneName')?.value ?? '';
+}
+
+function formatWhen(event: CalendarEvent): string {
+  const start = new Date(event.start);
+
+  if (event.allDay) {
+    const startDay = dayFmt.format(start);
+    // Step back off the exclusive end so a one-day event reads as one day.
+    const lastDay = dayFmt.format(new Date(allDayEndExclusive(event) - 86_400_000));
+    return lastDay === startDay ? `${startDay} · all day` : `${startDay} – ${lastDay}`;
+  }
+
+  const zone = zoneLabel(start);
+  const startDay = dayFmt.format(start);
+  if (!event.end) return `${startDay} · ${timeFmt.format(start)} ${zone}`;
+
+  const end = new Date(event.end);
+  const endDay = dayFmt.format(end);
+  return endDay === startDay
+    ? `${startDay} · ${timeFmt.format(start)} – ${timeFmt.format(end)} ${zone}`
+    : `${startDay} ${timeFmt.format(start)} – ${endDay} ${timeFmt.format(end)} ${zone}`;
+}
+
+const nowZone = zoneLabel(new Date());
+
+// Leek Duck and ScrapedDuck both require visible credit wherever their data is
+// shown, so the credit line renders alongside the events, not in the footer.
+const credit = global?.attribution ?? null;
+---
+
+<Base
+  title="Events"
+  description="Pokémon GO meetups, raid hours and community days in Texarkana, plus the global in-game event calendar — with a calendar feed you can subscribe to."
+>
+  <div class="events">
+    <header class="events-hero">
+      <h1>Events</h1>
+      <p class="events-lede">
+        Community meetups around Texarkana alongside the global Pokémon GO calendar. All times
+        are shown in Texarkana local time ({nowZone}).
+      </p>
+    </header>
+
+    <SubscribeCard feeds={feeds} />
+
+    {
+      !globalAvailable && (
+        <p class="events-note">
+          The global Pokémon GO event calendar is unavailable right now, so this page is showing
+          community meetups only. Try again shortly.
+        </p>
+      )
+    }
+
+    {/* Announces an event flipping to live; the countdowns write into it. */}
+    <p class="events-live-status" id="events-status" role="status" aria-live="polite"></p>
+
+    {
+      grouped.live.length > 0 && (
+        <section class="event-group" aria-labelledby="live-heading">
+          <h2 class="group-heading group-heading--live" id="live-heading">
+            <span class="group-dot" aria-hidden="true"></span>Live now
+          </h2>
+          <div class="event-grid">
+            {grouped.live.map((event) => (
+              <EventCard event={event} when={formatWhen(event)} state="live" />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      grouped.ongoing.length > 0 && (
+        <section class="event-group" aria-labelledby="ongoing-heading">
+          <h2 class="group-heading" id="ongoing-heading">Running now</h2>
+          <div class="event-grid">
+            {grouped.ongoing.map((event) => (
+              <EventCard event={event} when={formatWhen(event)} state="ongoing" />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    <section class="event-group" aria-labelledby="upcoming-heading">
+      <h2 class="group-heading" id="upcoming-heading">Upcoming</h2>
+      {
+        grouped.upcoming.length > 0 ? (
+          <div class="event-grid">
+            {grouped.upcoming.map((event) => (
+              <EventCard event={event} when={formatWhen(event)} state="upcoming" />
+            ))}
+          </div>
+        ) : (
+          <p class="events-empty">
+            Nothing on the calendar yet. Meetups are announced in
+            <a href="https://discord.com/invite/2sYR5YdRpH" rel="noopener noreferrer" target="_blank">
+              the Discord
+            </a>
+            first — subscribe to the feed above and they will land on your phone as soon as they
+            are posted.
+          </p>
+        )
+      }
+    </section>
+
+    {
+      past.length > 0 && (
+        <section class="event-group" aria-labelledby="past-heading">
+          <h2 class="group-heading" id="past-heading">Recently finished</h2>
+          <div class="event-grid">
+            {past.map((event) => (
+              <EventCard event={event} when={formatWhen(event)} state="past" />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      credit && (
+        <p class="events-credit">
+          Global Pokémon GO event data from{' '}
+          {credit.sourceUrl ? (
+            <a href={credit.sourceUrl} rel="noopener noreferrer" target="_blank">
+              {credit.source}
+            </a>
+          ) : (
+            credit.source
+          )}
+          {credit.scraper && ' via '}
+          {credit.scraper &&
+            (credit.scraperUrl ? (
+              <a href={credit.scraperUrl} rel="noopener noreferrer" target="_blank">
+                {credit.scraper}
+              </a>
+            ) : (
+              credit.scraper
+            ))}
+          .
+        </p>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .events {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: clamp(20px, 4vw, 40px) clamp(14px, 3vw, 24px) 56px;
+    display: grid;
+    gap: 24px;
+  }
+
+  .events-hero h1 {
+    margin: 0 0 6px;
+    font-size: clamp(1.7rem, 4vw, 2.3rem);
+  }
+  .events-lede {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--text-muted);
+  }
+
+  .events-note {
+    margin: 0;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--poi-campsite);
+    border-radius: var(--radius-sm);
+    background: var(--bg-sunken);
+    color: var(--text-muted);
+    font-size: 0.86rem;
+  }
+
+  /* Empty until a countdown announces something, so it must not reserve space. */
+  .events-live-status {
+    margin: 0;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--live);
+  }
+  .events-live-status:empty {
+    display: none;
+  }
+
+  .event-group {
+    display: grid;
+    gap: 12px;
+  }
+
+  .group-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+
+  .group-heading--live {
+    color: var(--live);
+    border-bottom-color: var(--live);
+  }
+  .group-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: group-dot-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes group-dot-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  .event-grid {
+    display: grid;
+    gap: 12px;
+  }
+  @media (min-width: 760px) {
+    .event-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .events-credit {
+    margin: 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  .events-empty {
+    margin: 0;
+    padding: 22px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--bg-sunken);
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 60ch;
+    justify-self: center;
+  }
+</style>

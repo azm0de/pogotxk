@@ -1,0 +1,383 @@
+---
+/**
+ * The news index. Pinned posts first, then newest, twelve to a page.
+ *
+ * Nothing here decides what is public — `listPublishedPosts` does, against the
+ * database clock, so a post scheduled for tonight starts appearing on this page
+ * by itself.
+ */
+
+import { env } from 'cloudflare:workers';
+import Base from '~/layouts/Base.astro';
+import { listPublicTags, listPublishedPosts, normalizeTag } from '~/lib/db/posts';
+import { DEFAULT_TZ } from '~/lib/time';
+
+export const prerender = false;
+
+const PAGE_SIZE = 12;
+
+const params = Astro.url.searchParams;
+const rawTag = params.get('tag');
+// Normalise rather than 404 — `?tag=Raid Hour` should find the `raid-hour` tag.
+const tag = rawTag ? normalizeTag(rawTag) || null : null;
+// Clamped, not just floored: `?page=1e999` parses to Infinity, and an infinite
+// OFFSET reaches D1 as an invalid binding and 500s the page. An upper bound
+// costs nothing — no real feed is a million pages deep.
+const MAX_PAGE = 10_000;
+const rawPage = Math.floor(Number(params.get('page')) || 1);
+const page = Number.isFinite(rawPage) ? Math.min(Math.max(1, rawPage), MAX_PAGE) : 1;
+
+const [{ posts, total }, tags] = await Promise.all([
+  listPublishedPosts(env.DB, { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, tag }),
+  listPublicTags(env.DB),
+]);
+
+const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+// Dates are shown in Texarkana's zone: a post published at 11 PM Central should
+// carry that evening's date, not tomorrow's UTC one.
+const dateFormat = new Intl.DateTimeFormat('en-US', {
+  timeZone: DEFAULT_TZ,
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+const showDate = (iso: string | null) => (iso ? dateFormat.format(new Date(iso)) : 'Unpublished');
+
+const pageHref = (n: number) => {
+  const next = new URLSearchParams();
+  if (tag) next.set('tag', tag);
+  if (n > 1) next.set('page', String(n));
+  const query = next.toString();
+  return query ? `/blog?${query}` : '/blog';
+};
+
+const title = tag ? `News tagged “${tag}”` : 'News';
+const description = tag
+  ? `PoGo TXK community news tagged ${tag} — meetups, raids, events and Campsite updates from Texarkana.`
+  : 'Community news from PoGo TXK — meetup recaps, raid plans, event guides and Spring Lake Park Campsite updates for Texarkana trainers.';
+---
+
+<Base title={title} description={description}>
+  <Fragment slot="head">
+    <link rel="alternate" type="application/rss+xml" title="PoGo TXK News" href="/rss.xml" />
+    {
+      /* Filtered and paged views are the same articles in a different order —
+         let crawlers follow the links without indexing the permutations. */
+      (tag || page > 1) && <meta name="robots" content="noindex, follow" />
+    }
+  </Fragment>
+
+  <div class="blog">
+    <header class="blog-head">
+      <div>
+        <h1>{tag ? <>Tagged <span class="blog-tagname">{tag}</span></> : 'Community news'}</h1>
+        <p>
+          Meetup recaps, raid plans and Campsite updates from the PoGo TXK crew.
+          <a class="blog-feed" href="/rss.xml">RSS feed</a>
+        </p>
+      </div>
+    </header>
+
+    {
+      tags.length > 0 && (
+        <nav class="blog-tags" aria-label="Filter by tag">
+          <a href="/blog" aria-current={tag ? undefined : 'page'}>
+            All
+          </a>
+          {tags.map((t) => (
+            <a
+              href={`/blog?tag=${encodeURIComponent(t.tag)}`}
+              aria-current={t.tag === tag ? 'page' : undefined}
+            >
+              {t.tag}
+              <span class="blog-tag-count">{t.count}</span>
+            </a>
+          ))}
+        </nav>
+      )
+    }
+
+    {
+      posts.length === 0 ? (
+        <p class="blog-empty">
+          {tag
+            ? 'Nothing tagged that yet.'
+            : 'No posts yet. Check the Discord for what is happening this week.'}
+        </p>
+      ) : (
+        <ul class="blog-list">
+          {posts.map((post) => (
+            <li>
+              <article class={`post-card${post.pinned ? ' post-card--pinned' : ''}`}>
+                {post.hero && (
+                  <a class="post-card-media" href={`/blog/${post.slug}`} tabindex="-1" aria-hidden="true">
+                    <img
+                      src={`/media/${post.hero.key}`}
+                      alt=""
+                      width={post.hero.width ?? undefined}
+                      height={post.hero.height ?? undefined}
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </a>
+                )}
+
+                <div class="post-card-body">
+                  {post.pinned && <p class="post-pin">Pinned</p>}
+                  <h2>
+                    <a href={`/blog/${post.slug}`}>{post.title}</a>
+                  </h2>
+                  <p class="post-meta">
+                    <time datetime={post.publishedAt ?? undefined}>{showDate(post.publishedAt)}</time>
+                    {post.author && <> · {post.author.name}</>}
+                  </p>
+                  <p class="post-excerpt">{post.excerpt}</p>
+                  {post.tags.length > 0 && (
+                    <p class="post-card-tags">
+                      {post.tags.map((t) => (
+                        <a href={`/blog?tag=${encodeURIComponent(t)}`}>#{t}</a>
+                      ))}
+                    </p>
+                  )}
+                </div>
+              </article>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+
+    {
+      pageCount > 1 && (
+        <nav class="blog-pager" aria-label="Pagination">
+          {page > 1 ? (
+            <a rel="prev" href={pageHref(page - 1)}>
+              ← Newer
+            </a>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          <p>
+            Page {page} of {pageCount}
+          </p>
+          {page < pageCount ? (
+            <a rel="next" href={pageHref(page + 1)}>
+              Older →
+            </a>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+        </nav>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .blog {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: clamp(24px, 5vw, 48px) clamp(16px, 4vw, 32px) 72px;
+  }
+
+  .blog-head h1 {
+    font-size: clamp(1.7rem, 4vw, 2.3rem);
+    margin: 0 0 6px;
+  }
+  .blog-head p {
+    margin: 0;
+    color: var(--text-muted);
+    max-width: 60ch;
+  }
+  .blog-tagname {
+    color: var(--accent);
+  }
+  .blog-feed {
+    margin-left: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .blog-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 20px 0 24px;
+  }
+  .blog-tags a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-panel);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .blog-tags a:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+  .blog-tags a[aria-current='page'] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-contrast);
+  }
+  .blog-tag-count {
+    font-size: 0.7rem;
+    opacity: 0.7;
+  }
+
+  .blog-empty {
+    padding: 28px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  .blog-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 16px;
+  }
+
+  .post-card {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 18px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: box-shadow 0.16s ease, border-color 0.16s ease;
+  }
+  .post-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-strong);
+  }
+  .post-card:not(:has(.post-card-media)) {
+    grid-template-columns: 1fr;
+  }
+  .post-card--pinned {
+    border-color: var(--accent);
+  }
+
+  /* The image is taken out of flow so the row height comes from the text
+     column alone. Left in flow, a portrait hero drags the whole card to its
+     own aspect ratio and a 4:3 photo and a 3:4 photo produce wildly different
+     cards in the same list. */
+  .post-card-media {
+    position: relative;
+    display: block;
+    background: var(--bg-sunken);
+  }
+  .post-card-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .post-card:has(.post-card-media) {
+    min-height: 168px;
+  }
+
+  .post-card-body {
+    padding: 16px 18px 18px;
+    min-width: 0;
+  }
+  .post-card-body h2 {
+    font-size: 1.15rem;
+    margin: 0 0 4px;
+  }
+  .post-card-body h2 a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .post-card-body h2 a:hover {
+    text-decoration: underline;
+  }
+
+  .post-pin {
+    display: inline-block;
+    margin: 0 0 6px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .post-meta {
+    margin: 0 0 8px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .post-excerpt {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
+
+  .post-card-tags {
+    margin: 10px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.76rem;
+  }
+  .post-card-tags a {
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .post-card-tags a:hover {
+    text-decoration: underline;
+  }
+
+  .blog-pager {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-top: 28px;
+  }
+  .blog-pager p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+  }
+  .blog-pager a {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .blog-pager a[rel='next'] {
+    justify-self: end;
+  }
+  .blog-pager a:hover {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 640px) {
+    .post-card {
+      grid-template-columns: 1fr;
+    }
+    /* Stacked, the image is back in flow and sets its own band. */
+    .post-card-media img {
+      position: static;
+      height: auto;
+      aspect-ratio: 16 / 9;
+    }
+  }
+</style>

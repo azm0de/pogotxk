@@ -1,0 +1,42 @@
+---
+/**
+ * "Where did this come from and how old is it" line.
+ *
+ * A stale raid list is still useful, but only if the reader can see that it is
+ * stale — someone standing at a gym needs to know whether to trust the tier
+ * before they burn a pass. The exact local time sits beside the fuzzy one
+ * because "2 hours ago" is useless once the page itself has been open a while.
+ */
+import './game.css';
+import { relativeTime } from '~/lib/scrapedduck';
+import { DEFAULT_TZ, formatInZone } from '~/lib/time';
+
+interface Props {
+  fetchedAt: string | null;
+  stale: boolean;
+  /** What the feed is called in prose, e.g. "raid list". */
+  label: string;
+}
+
+const { fetchedAt, stale, label } = Astro.props;
+
+const relative = relativeTime(fetchedAt);
+const absolute = fetchedAt ? formatInZone(fetchedAt, DEFAULT_TZ) : null;
+---
+
+<p class:list={['g-status', stale && 'g-status--stale']} role="status">
+  {
+    fetchedAt ? (
+      <>
+        <span>
+          {stale ? <strong>Showing a saved copy.</strong> : null} This {label} was last refreshed{' '}
+          <strong>{relative}</strong>
+          {absolute ? <> (<time datetime={fetchedAt}>{absolute}</time>)</> : null}.
+        </span>
+        {stale ? <span>Leek Duck could not be reached on the last try — we kept the previous data rather than showing you nothing.</span> : null}
+      </>
+    ) : (
+      <span><strong>Live data unavailable.</strong> We have not been able to reach the {label} source yet.</span>
+    )
+  }
+</p>

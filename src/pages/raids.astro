@@ -1,0 +1,166 @@
+---
+/**
+ * Current raid bosses, grouped by tier.
+ *
+ * Server-rendered from the KV-cached ScrapedDuck feed so the page is useful on
+ * a phone with one bar of signal at Spring Lake Park — no client fetch, no
+ * spinner. The only script is the shiny filter, and the page is complete
+ * without it.
+ */
+import Base from '~/layouts/Base.astro';
+import Attribution from '~/components/game/Attribution.astro';
+import FeedStatus from '~/components/game/FeedStatus.astro';
+import RaidCard from '~/components/game/RaidCard.astro';
+import TierBadge from '~/components/game/TierBadge.astro';
+import '~/components/game/game.css';
+import { getFeed, groupSorted, raidTierRank, slugifyLabel } from '~/lib/scrapedduck';
+
+export const prerender = false;
+
+// Keep the KV write off the response path — the reader gets their bosses while
+// the cache refresh finishes in the background.
+const cfContext = Astro.locals.cfContext as ExecutionContext | undefined;
+const feed = await getFeed('raids', {
+  waitUntil: cfContext ? (promise) => cfContext.waitUntil(promise) : undefined,
+});
+
+const tiers = groupSorted(feed.data, (boss) => boss.tier, raidTierRank);
+const total = feed.data.length;
+const shinyCount = feed.data.filter((boss) => boss.canBeShiny).length;
+
+/** Local, practical context per tier — the part a boss list alone does not tell you. */
+function tierNote(tier: string): string | null {
+  const t = tier.toLowerCase();
+  if (t.includes('shadow')) return 'Shadow bosses hit harder and cannot be re-lobbied — go in with a full group.';
+  if (t.includes('mega') || t.includes('primal'))
+    return 'Rewards Mega Energy for that species line. Two or three trainers usually clear it.';
+  if (t.includes('1-star')) return 'Soloable at almost any level — good candy and TM farming.';
+  if (t.includes('3-star')) return 'Soloable once you have a decent counter roster; quicker with a friend.';
+  if (t.includes('5-star'))
+    return 'Legendary tier. Raid trains and remote invites get organised in the Discord.';
+  return null;
+}
+---
+
+<Base
+  title="Raid Bosses"
+  description="Every current Pokémon GO raid boss by tier, with catch CP, weather-boosted CP, type matchups, and shiny availability — for the PoGo TXK community in Texarkana."
+>
+  <div class="g-page">
+    <header class="g-head">
+      <h1>Current raid bosses</h1>
+      <p>
+        Every boss in rotation right now, grouped by tier, with the CP you will see on the catch
+        screen and the weather that boosts it.
+      </p>
+    </header>
+
+    <FeedStatus fetchedAt={feed.fetchedAt} stale={feed.stale} label="raid list" />
+
+    {
+      total > 0 && (
+        <div class="g-toolbar" id="raid-toolbar" hidden>
+          <button type="button" class="g-toggle" id="shiny-toggle" aria-pressed="false">
+            Shiny-eligible only
+          </button>
+          <p class="g-count" id="raid-filter-status" role="status">
+            Showing all {total} bosses · {shinyCount} can be shiny
+          </p>
+        </div>
+      )
+    }
+
+    {
+      total === 0 ? (
+        <div class="g-empty">
+          <h2>No raid list right now</h2>
+          <p>
+            We could not reach the live boss list and have nothing saved to fall back on. Try again
+            in a few minutes, or check <a href="https://leekduck.com/boss/">Leek Duck's boss list</a>{' '}
+            directly.
+          </p>
+        </div>
+      ) : (
+        tiers.map((group) => {
+          const note = tierNote(group.key);
+          return (
+            <section class="g-section" data-tier-section aria-labelledby={`tier-${slugifyLabel(group.key)}`}>
+              <div class="g-section-head">
+                <h2 id={`tier-${slugifyLabel(group.key)}`}>
+                  <TierBadge tier={group.key} short={false} />
+                </h2>
+                <span class="g-count">
+                  {group.items.length} {group.items.length === 1 ? 'boss' : 'bosses'}
+                </span>
+                {note && <p class="g-section-note">{note}</p>}
+              </div>
+              <ul class="g-grid">
+                {group.items.map((boss) => (
+                  <RaidCard boss={boss} />
+                ))}
+              </ul>
+            </section>
+          );
+        })
+      )
+    }
+
+    <p class="g-related">
+      Also live: <a href="/eggs">egg pools</a> and <a href="/research">field research</a>.
+    </p>
+
+    <Attribution />
+  </div>
+</Base>
+
+<style>
+  /* The tier name is the heading; the badge inside it carries the colour, so
+     the heading itself needs no extra type styling. */
+  .g-page :global(.g-section-head h2) {
+    font-size: 1rem;
+  }
+
+  .g-related {
+    margin-top: 28px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+</style>
+
+<script>
+  /*
+   * Shiny filter. Rendered `hidden` and revealed here so the control never
+   * appears for a reader who has no JavaScript to run it — without this script
+   * the page is simply the full, unfiltered list.
+   */
+  const toolbar = document.getElementById('raid-toolbar');
+  const toggle = document.getElementById('shiny-toggle');
+  const status = document.getElementById('raid-filter-status');
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('.g-card[data-shiny]'));
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-tier-section]'));
+
+  if (toolbar && toggle && status && cards.length > 0) {
+    toolbar.hidden = false;
+
+    toggle.addEventListener('click', () => {
+      const shinyOnly = toggle.getAttribute('aria-pressed') !== 'true';
+      toggle.setAttribute('aria-pressed', String(shinyOnly));
+
+      let shown = 0;
+      for (const card of cards) {
+        const visible = !shinyOnly || card.dataset.shiny === 'true';
+        card.hidden = !visible;
+        if (visible) shown += 1;
+      }
+
+      // A tier whose whole grid just emptied should take its heading with it.
+      for (const section of sections) {
+        section.hidden = section.querySelector('.g-card:not([hidden])') === null;
+      }
+
+      status.textContent = shinyOnly
+        ? `Showing ${shown} shiny-eligible ${shown === 1 ? 'boss' : 'bosses'}`
+        : `Showing all ${cards.length} bosses`;
+    });
+  }
+</script>

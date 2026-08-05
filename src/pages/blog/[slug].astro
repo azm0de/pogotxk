@@ -1,0 +1,412 @@
+---
+/**
+ * A single post.
+ *
+ * The body is Markdown rendered by `~/lib/markdown`, which escapes everything
+ * before it emits a tag — so `set:html` here is handling HTML this codebase
+ * built, never HTML an author typed.
+ */
+
+import { env } from 'cloudflare:workers';
+import Base from '~/layouts/Base.astro';
+import { getPostNeighbours, getPublishedPost } from '~/lib/db/posts';
+import { markdownToText, readingMinutes, renderMarkdown } from '~/lib/markdown';
+import { DEFAULT_TZ } from '~/lib/time';
+
+export const prerender = false;
+
+const slug = Astro.params.slug!;
+const post = await getPublishedPost(env.DB, slug);
+
+if (!post) {
+  // A draft and a typo look the same from outside, which is the point.
+  Astro.response.status = 404;
+}
+
+const neighbours = post
+  ? await getPostNeighbours(env.DB, post)
+  : { newer: null, older: null };
+
+const canonical = new URL(`/blog/${slug}`, Astro.site ?? Astro.url.origin).href;
+
+const dateFormat = new Intl.DateTimeFormat('en-US', {
+  timeZone: DEFAULT_TZ,
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+
+const publishedIso = post?.publishedAt ?? post?.createdAt ?? null;
+const bodyHtml = post ? renderMarkdown(post.bodyMd) : '';
+const description = post
+  ? post.excerpt || markdownToText(post.bodyMd, 200)
+  : 'That post does not exist.';
+
+// Structured data goes in the body on purpose: JSON-LD is valid anywhere in the
+// document, so this works without the layout needing to grow a head slot.
+const jsonLd = post
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description,
+      datePublished: publishedIso,
+      dateModified: post.updatedAt,
+      url: canonical,
+      mainEntityOfPage: canonical,
+      ...(post.hero ? { image: new URL(`/media/${post.hero.key}`, canonical).href } : {}),
+      ...(post.author ? { author: { '@type': 'Person', name: post.author.name } } : {}),
+      publisher: { '@type': 'Organization', name: 'PoGo TXK' },
+      ...(post.tags.length ? { keywords: post.tags.join(', ') } : {}),
+    }
+  : null;
+---
+
+<Base
+  title={post ? post.title : 'Post not found'}
+  description={description}
+  ogImage={post?.hero ? `/media/${post.hero.key}` : undefined}
+  ogType={post ? 'article' : 'website'}
+>
+  <Fragment slot="head">
+    {
+      post && (
+        <>
+          {publishedIso && <meta property="article:published_time" content={publishedIso} />}
+          <meta property="article:modified_time" content={post.updatedAt} />
+          {post.author && <meta property="article:author" content={post.author.name} />}
+          {post.tags.map((tag) => <meta property="article:tag" content={tag} />)}
+        </>
+      )
+    }
+    {!post && <meta name="robots" content="noindex, follow" />}
+  </Fragment>
+
+  {
+    post ? (
+      <article class="post">
+        <nav class="post-back" aria-label="Breadcrumb">
+          <a href="/blog">← All news</a>
+        </nav>
+
+        <header class="post-header">
+          {post.pinned && <p class="post-pin">Pinned</p>}
+          <h1>{post.title}</h1>
+          <p class="post-byline">
+            {post.author?.avatarUrl && (
+              <img class="post-avatar" src={post.author.avatarUrl} alt="" width="28" height="28" />
+            )}
+            {post.author && <span class="post-author">{post.author.name}</span>}
+            <time datetime={publishedIso ?? undefined}>
+              {publishedIso ? dateFormat.format(new Date(publishedIso)) : 'Unpublished'}
+            </time>
+            <span class="post-read">{readingMinutes(post.bodyMd)} min read</span>
+          </p>
+
+          {post.tags.length > 0 && (
+            <p class="post-taglist">
+              {post.tags.map((tag) => (
+                <a href={`/blog?tag=${encodeURIComponent(tag)}`}>#{tag}</a>
+              ))}
+            </p>
+          )}
+        </header>
+
+        {post.hero && (
+          <figure class="post-hero">
+            <img
+              src={`/media/${post.hero.key}`}
+              alt={post.hero.alt ?? ''}
+              width={post.hero.width ?? undefined}
+              height={post.hero.height ?? undefined}
+              decoding="async"
+            />
+            {post.hero.credit && <figcaption>{post.hero.credit}</figcaption>}
+          </figure>
+        )}
+
+        <div class="post-body" set:html={bodyHtml} />
+
+        {(neighbours.newer || neighbours.older) && (
+          <nav class="post-nav" aria-label="More posts">
+            {neighbours.newer ? (
+              <a class="post-nav-link" rel="prev" href={`/blog/${neighbours.newer.slug}`}>
+                <span>← Newer</span>
+                <strong>{neighbours.newer.title}</strong>
+              </a>
+            ) : (
+              <span aria-hidden="true" />
+            )}
+            {neighbours.older ? (
+              <a class="post-nav-link post-nav-link--older" rel="next" href={`/blog/${neighbours.older.slug}`}>
+                <span>Older →</span>
+                <strong>{neighbours.older.title}</strong>
+              </a>
+            ) : (
+              <span aria-hidden="true" />
+            )}
+          </nav>
+        )}
+
+        {jsonLd && (
+          <script
+            type="application/ld+json"
+            is:inline
+            set:html={JSON.stringify(jsonLd).replace(/</g, '\\u003c')}
+          />
+        )}
+      </article>
+    ) : (
+      <div class="post post-missing">
+        <h1>Post not found</h1>
+        <p>
+          That link is either wrong or points at a post that has not gone live yet. Scheduled posts
+          appear on their own at the time they were set for.
+        </p>
+        <p>
+          <a href="/blog">Browse all news</a>
+        </p>
+      </div>
+    )
+  }
+</Base>
+
+<style>
+  .post {
+    max-width: 74ch;
+    margin: 0 auto;
+    padding: clamp(20px, 4vw, 40px) clamp(16px, 4vw, 32px) 80px;
+  }
+
+  .post-back {
+    margin-bottom: 18px;
+    font-size: 0.85rem;
+  }
+  .post-back a {
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .post-back a:hover {
+    text-decoration: underline;
+  }
+
+  .post-header h1 {
+    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    margin: 0 0 12px;
+  }
+
+  .post-pin {
+    display: inline-block;
+    margin: 0 0 10px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .post-byline {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+  .post-avatar {
+    border-radius: 50%;
+  }
+  .post-author {
+    font-weight: 600;
+    color: var(--text);
+  }
+  .post-read::before,
+  .post-byline time::before {
+    content: '·';
+    margin-right: 10px;
+    opacity: 0.6;
+  }
+
+  .post-taglist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 12px 0 0;
+    font-size: 0.8rem;
+  }
+  .post-taglist a {
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .post-taglist a:hover {
+    text-decoration: underline;
+  }
+
+  .post-hero {
+    margin: 26px 0 0;
+  }
+  .post-hero img {
+    width: 100%;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  .post-hero figcaption {
+    margin-top: 6px;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+
+  /* -------------------------------------------------------------- prose -- */
+  /* `set:html` content carries no scope attribute, so these descendants have
+     to be addressed globally from the scoped parent. */
+
+  .post-body {
+    margin-top: 28px;
+    font-size: 1.02rem;
+    line-height: 1.7;
+  }
+  .post-body :global(h2) {
+    margin: 1.8em 0 0.4em;
+    font-size: 1.4rem;
+  }
+  .post-body :global(h3) {
+    margin: 1.5em 0 0.35em;
+    font-size: 1.15rem;
+  }
+  .post-body :global(h4),
+  .post-body :global(h5),
+  .post-body :global(h6) {
+    margin: 1.4em 0 0.3em;
+    font-size: 1rem;
+  }
+  .post-body :global(p) {
+    margin: 0 0 1.05em;
+  }
+  .post-body :global(ul),
+  .post-body :global(ol) {
+    margin: 0 0 1.05em;
+    padding-left: 1.35em;
+  }
+  .post-body :global(li) {
+    margin-bottom: 0.35em;
+  }
+  .post-body :global(li > ul),
+  .post-body :global(li > ol) {
+    margin: 0.35em 0 0;
+  }
+  .post-body :global(a) {
+    color: var(--accent);
+  }
+  .post-body :global(blockquote) {
+    margin: 1.4em 0;
+    padding: 2px 0 2px 18px;
+    border-left: 3px solid var(--accent);
+    color: var(--text-muted);
+  }
+  .post-body :global(blockquote p:last-child) {
+    margin-bottom: 0;
+  }
+  .post-body :global(code) {
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    font-size: 0.86em;
+  }
+  .post-body :global(pre) {
+    margin: 0 0 1.2em;
+    padding: 14px 16px;
+    overflow-x: auto;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .post-body :global(pre code) {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 0.86rem;
+  }
+  .post-body :global(hr) {
+    margin: 2em 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+  .post-body :global(figure) {
+    margin: 1.6em 0;
+  }
+  .post-body :global(img) {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+  .post-body :global(figcaption) {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-align: center;
+  }
+  .post-body :global(del) {
+    color: var(--text-muted);
+  }
+
+  /* --------------------------------------------------------------- nav -- */
+
+  .post-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 44px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .post-nav-link {
+    display: grid;
+    gap: 3px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
+    text-decoration: none;
+    color: inherit;
+  }
+  .post-nav-link:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-sm);
+  }
+  .post-nav-link span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .post-nav-link strong {
+    font-size: 0.92rem;
+  }
+  .post-nav-link--older {
+    text-align: right;
+  }
+
+  .post-missing {
+    text-align: center;
+    padding-top: 64px;
+  }
+  .post-missing p {
+    color: var(--text-muted);
+    max-width: 50ch;
+    margin: 0 auto 14px;
+  }
+
+  @media (max-width: 560px) {
+    .post-nav {
+      grid-template-columns: 1fr;
+    }
+    .post-nav-link--older {
+      text-align: left;
+    }
+  }
+</style>

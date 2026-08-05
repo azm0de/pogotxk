@@ -7,6 +7,12 @@ interface Props {
   /** Full-bleed pages (the map) manage their own scrolling. */
   fullBleed?: boolean;
   ogImage?: string;
+  /**
+   * Open Graph type. Pages set this rather than emitting their own `og:type`
+   * into the head slot — two conflicting tags is worse than one wrong one,
+   * since scrapers pick between them unpredictably.
+   */
+  ogType?: 'website' | 'article';
 }
 
 const {
@@ -14,6 +20,7 @@ const {
   description = 'PoGo TXK — the Pokémon GO community for Texarkana, Texas and Arkansas. Spring Lake Park Campsite map, meetups, raids, and community news.',
   fullBleed = false,
   ogImage = '/og-default.png',
+  ogType = 'website',
 } = Astro.props;
 
 const fullTitle = title === 'PoGo TXK' ? title : `${title} | PoGo TXK`;
@@ -42,7 +49,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <link rel="canonical" href={canonical} />
     <meta name="theme-color" content="#123254" />
 
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content="PoGo TXK" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
@@ -53,6 +60,12 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="apple-mobile-web-app-title" content="PoGo TXK" />
+
+    {/* Per-page head additions — feed autodiscovery, article metadata, noindex.
+        Without this slot, any <Fragment slot="head"> a page declares is
+        silently dropped, which is invisible in the browser and only shows up
+        as missing metadata in a scraper. */}
+    <slot name="head" />
   </head>
 
   <body class={fullBleed ? 'is-full-bleed' : ''}>

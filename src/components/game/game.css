@@ -1,0 +1,425 @@
+/*
+ * Shared styling for the live game-data pages (/raids, /eggs, /research).
+ *
+ * Global rather than scoped because the same card language is shared across a
+ * handful of components; every class is `g-` prefixed so it cannot collide with
+ * the map or admin styles. Everything is built from the tokens in global.css —
+ * the only new colours here are the eighteen Pokémon type hues, which are data,
+ * not brand, and which live beside their only consumer because global.css is
+ * owned elsewhere.
+ */
+
+/*
+ * `[hidden]` is a UA rule with attribute specificity, so any class that sets
+ * `display` silently beats it. Everything the shiny filter toggles opts back in
+ * explicitly, or hiding a card would do nothing at all.
+ */
+.g-card[hidden],
+.g-section[hidden],
+.g-toolbar[hidden] {
+  display: none;
+}
+
+.g-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px clamp(14px, 4vw, 32px) 56px;
+}
+
+.g-head {
+  max-width: 62ch;
+  margin-bottom: 22px;
+}
+.g-head h1 {
+  margin-bottom: 8px;
+  font-size: clamp(1.6rem, 4.5vw, 2.2rem);
+}
+.g-head p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------- sections -- */
+
+.g-section {
+  margin-top: 32px;
+}
+.g-section:first-of-type {
+  margin-top: 24px;
+}
+
+.g-section-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.g-section-head h2 {
+  margin: 0;
+  font-size: 1.12rem;
+}
+.g-count {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.g-section-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.g-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.g-grid--wide {
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+}
+
+/* ---------------------------------------------------------------- cards -- */
+
+.g-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.g-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.g-card-name {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/*
+ * Fixed box + contain. The Pokémon icons are not a uniform aspect ratio
+ * (pokemon_icons is 256×256, pokemon_icons_crop varies per species), so the
+ * width/height attributes describe the *box* and `contain` letterboxes the art
+ * inside it — explicit dimensions, no layout shift, no squashed Pokémon.
+ */
+.g-art {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  align-self: center;
+  image-rendering: auto;
+}
+.g-art--sm {
+  width: 56px;
+  height: 56px;
+}
+
+.g-card-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+.g-fact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.g-fact dt {
+  color: var(--text-muted);
+}
+.g-fact dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.g-fact--boosted dd {
+  color: var(--poi-gym);
+}
+
+/* ---------------------------------------------------------------- chips -- */
+
+.g-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.g-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  font-size: 0.71rem;
+  font-weight: 600;
+  line-height: 1.5;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.g-chip img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.g-chip--type {
+  background: color-mix(in srgb, var(--chip-color, var(--accent)) 15%, var(--bg-panel));
+  border-color: color-mix(in srgb, var(--chip-color, var(--accent)) 45%, transparent);
+}
+
+.g-chip--flag {
+  padding-inline: 8px;
+  text-transform: none;
+}
+
+/* Type hues. Used only as a tint + border via color-mix, so text stays on the
+   theme's own foreground colour and contrast holds in light and dark. */
+[data-type='normal'] {
+  --chip-color: #9fa19f;
+}
+[data-type='fire'] {
+  --chip-color: #e62829;
+}
+[data-type='water'] {
+  --chip-color: #2980ef;
+}
+[data-type='electric'] {
+  --chip-color: #d9a400;
+}
+[data-type='grass'] {
+  --chip-color: #3fa129;
+}
+[data-type='ice'] {
+  --chip-color: #3dcef3;
+}
+[data-type='fighting'] {
+  --chip-color: #ff8000;
+}
+[data-type='poison'] {
+  --chip-color: #9141cb;
+}
+[data-type='ground'] {
+  --chip-color: #915121;
+}
+[data-type='flying'] {
+  --chip-color: #81b9ef;
+}
+[data-type='psychic'] {
+  --chip-color: #ef4179;
+}
+[data-type='bug'] {
+  --chip-color: #91a119;
+}
+[data-type='rock'] {
+  --chip-color: #afa981;
+}
+[data-type='ghost'] {
+  --chip-color: #704170;
+}
+[data-type='dragon'] {
+  --chip-color: #5060e1;
+}
+[data-type='dark'] {
+  --chip-color: #6b5a57;
+}
+[data-type='steel'] {
+  --chip-color: #60a1b8;
+}
+[data-type='fairy'] {
+  --chip-color: #ef70ef;
+}
+
+/* ---------------------------------------------------------- tier badges -- */
+
+.g-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tier-color, var(--accent)) 18%, var(--bg-panel));
+  border: 1px solid color-mix(in srgb, var(--tier-color, var(--accent)) 50%, transparent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.g-tier-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tier-color, var(--accent));
+}
+
+[data-tier^='1-star'] {
+  --tier-color: var(--text-muted);
+}
+[data-tier^='2-star'],
+[data-tier^='3-star'] {
+  --tier-color: var(--poi-pokestop);
+}
+[data-tier^='4-star'],
+[data-tier^='5-star'],
+[data-tier^='6-star'] {
+  --tier-color: var(--poi-campsite);
+}
+[data-tier^='mega'],
+[data-tier^='primal'] {
+  --tier-color: var(--poi-powerspot);
+}
+[data-tier^='elite'],
+[data-tier^='ultra'] {
+  --tier-color: var(--poi-gym);
+}
+[data-tier*='shadow'] {
+  --tier-color: var(--team-valor);
+}
+
+/* ---------------------------------------------------------------- shiny -- */
+
+.g-shiny {
+  flex: none;
+  color: var(--poi-campsite);
+}
+.g-shiny svg {
+  display: block;
+}
+
+/* --------------------------------------------------------------- rarity -- */
+
+.g-rarity {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+.g-rarity span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+}
+.g-rarity span.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ------------------------------------------------------- status / empty -- */
+
+.g-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font-size: 0.79rem;
+}
+.g-status--stale {
+  border-color: var(--poi-gym);
+  background: color-mix(in srgb, var(--poi-gym) 12%, var(--bg-panel));
+  color: var(--text);
+}
+.g-status strong {
+  font-weight: 700;
+}
+.g-status time {
+  font-variant-numeric: tabular-nums;
+}
+
+.g-empty {
+  padding: 26px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  text-align: center;
+}
+.g-empty h2 {
+  margin-bottom: 6px;
+  font-size: 1.05rem;
+}
+.g-empty p {
+  max-width: 46ch;
+  margin: 0 auto;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+/* -------------------------------------------------------------- toolbar -- */
+
+.g-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.g-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.g-toggle:hover {
+  border-color: var(--accent);
+}
+.g-toggle[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.g-toggle[aria-pressed='true'] .g-shiny {
+  color: inherit;
+}
+
+/* --------------------------------------------------------- attribution -- */
+
+.g-attribution {
+  margin-top: 36px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+.g-attribution p {
+  max-width: 74ch;
+  margin: 0;
+}
+.g-attribution p + p {
+  margin-top: 6px;
+}

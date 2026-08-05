@@ -1,0 +1,40 @@
+---
+/**
+ * The live board.
+ *
+ * Rendered server-side with the current flares so the page is correct before
+ * any JavaScript runs — which also means the island hydrates onto real markup
+ * rather than a spinner, and the WebSocket only ever has to carry deltas.
+ */
+import { env } from 'cloudflare:workers';
+import Base from '~/layouts/Base.astro';
+import LiveBoard from '~/components/live/LiveBoard';
+import { hasRole } from '~/lib/auth/types';
+import { getViewerRsvps, isoNow, listActiveFlares } from '~/lib/db/flares';
+
+export const prerender = false;
+
+const user = Astro.locals.user;
+const now = isoNow();
+
+const [flares, mine] = await Promise.all([
+  listActiveFlares(env.DB, now),
+  user ? getViewerRsvps(env.DB, user.id) : Promise.resolve({}),
+]);
+---
+
+<Base
+  title="Live Board"
+  description="Raids, gym takedowns, trades and remote invites happening right now around Texarkana. Raise a flare and the community sees it instantly."
+>
+  <LiveBoard
+    client:load
+    initialFlares={flares}
+    initialNow={now}
+    initialMine={mine}
+    canPost={hasRole(user, 'member')}
+    signedIn={!!user}
+    currentUserId={user?.id ?? null}
+    canModerate={hasRole(user, 'ambassador')}
+  />
+</Base>

@@ -49,18 +49,36 @@
       "binding": "CACHE",
       "id": "3141511cbac84035a73941fca56449c1"
     }
-  ],
+  ]
 
   // Durable Object — live board (flares + presence) over WebSocket hibernation.
-  // Enabled in the live-board task, once src/do/LiveBoard.ts exists and is
-  // re-exported from the worker entry. Binding a class that isn't exported
-  // fails the build, so it stays commented until then.
+  // src/do/LiveBoard.ts exists and uses the hibernation API correctly, but
+  // binding a class the worker entry does not export fails the deploy, and the
+  // Astro adapter emits an entry exporting only `default`. Wiring it needs a
+  // Vite transform against the adapter's virtual entry module. Until that is
+  // done and verified, the binding stays off — /live degrades to polling
+  // /api/flares, which is implemented and works.
   // "durable_objects": {
   //   "bindings": [{ "name": "LIVE", "class_name": "LiveBoard" }]
   // },
   // "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveBoard"] }],
 
-  // Refresh ScrapedDuck every 30 minutes (~48 requests/day, well under the
-  // 5000/hr GitHub limit, and GitHub caches raw files for 5 minutes anyway).
-  "triggers": { "crons": ["*/30 * * * *"] }
+  // NO CRON. Deliberately.
+  //
+  // A `*/30 * * * *` trigger was declared here before the handler existed, and
+  // the Astro adapter emits a worker entry exporting only `default` — verified:
+  // `dist/server/entry.mjs` contains no `scheduled()`. Cloudflare would have
+  // invoked the trigger and failed with "Handler does not export a scheduled()
+  // function" every thirty minutes, forever, into an observability-enabled
+  // Worker. A permanent error stream is a worse trade than a cold cache.
+  //
+  // It is not needed for correctness: `getFeed` in src/lib/scrapedduck.ts
+  // refreshes lazily on read and falls back to the last good copy when upstream
+  // is unreachable, so pages stay correct without it. The only cost is that the
+  // first visitor after the freshness window waits for the upstream fetch.
+  //
+  // To add it back properly: @astrojs/cloudflare passes `auxiliaryWorkers`
+  // through to the Cloudflare Vite plugin. Register a second worker that
+  // exports `scheduled()` and calls `refreshAllFeeds`, then put the cron on
+  // that worker rather than this one.
 }

@@ -1,0 +1,24 @@
+---
+/**
+ * Shiny-eligible indicator.
+ *
+ * The sparkle is decorative; the meaning lives in the visually-hidden text so a
+ * screen reader announces "Shiny available" rather than a bare image.
+ */
+import './game.css';
+
+interface Props {
+  label?: string;
+  size?: number;
+}
+
+const { label = 'Shiny available', size = 15 } = Astro.props;
+---
+
+<span class="g-shiny">
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M11 1.6l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7z"></path>
+    <path d="M18.4 13.2l.9 2.5 2.5.9-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9z" opacity="0.85"></path>
+  </svg>
+  <span class="sr-only">{label}</span>
+</span>

@@ -1,0 +1,119 @@
+---
+/**
+ * "Subscribe in your calendar" — the point of the ICS feeds.
+ *
+ * Three affordances per feed because the three platforms want different things:
+ * `webcal://` hands the URL straight to the OS calendar on iOS, macOS and
+ * Outlook; the `https://` link is what Google Calendar's "From URL" box needs;
+ * and the copy button is for everyone whose calendar lives in a browser tab
+ * they have to switch to.
+ */
+
+import './SubscribeCard.css';
+
+interface Props {
+  feeds: {
+    id: string;
+    name: string;
+    blurb: string;
+    /** Absolute https:// URL of the .ics. */
+    href: string;
+    /** The same URL with the webcal scheme. */
+    webcal: string;
+  }[];
+}
+
+const { feeds } = Astro.props;
+---
+
+<section class="subscribe" aria-labelledby="subscribe-heading">
+  <div class="subscribe-head">
+    <span class="subscribe-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22">
+        <path
+          fill="currentColor"
+          d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm13 8H4v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9Z"
+        />
+      </svg>
+    </span>
+    <div>
+      <h2 id="subscribe-heading">Subscribe in your calendar</h2>
+      <p>
+        Add the feed once and every meetup shows up on your phone — including changes and
+        cancellations. Times arrive in your device's own zone.
+      </p>
+    </div>
+  </div>
+
+  <ul class="subscribe-list">
+    {
+      feeds.map((feed) => (
+        <li class="subscribe-feed">
+          <div class="subscribe-copy">
+            <h3>{feed.name}</h3>
+            <p>{feed.blurb}</p>
+          </div>
+
+          <div class="subscribe-actions">
+            <a class="subscribe-btn subscribe-btn--primary" href={feed.webcal}>
+              Subscribe
+              <span class="sr-only"> to {feed.name} in your calendar app</span>
+            </a>
+            <a class="subscribe-btn" href={feed.href}>
+              Download .ics
+              <span class="sr-only"> for {feed.name}</span>
+            </a>
+            <button class="subscribe-btn" type="button" data-copy-feed={feed.href}>
+              Copy link
+              <span class="sr-only"> to the {feed.name} calendar feed</span>
+            </button>
+          </div>
+
+          <label class="subscribe-url">
+            <span class="sr-only">{feed.name} feed URL</span>
+            <input type="text" value={feed.href} readonly spellcheck="false" />
+          </label>
+        </li>
+      ))
+    }
+  </ul>
+
+  <p class="subscribe-status" role="status" aria-live="polite" data-copy-status></p>
+</section>
+
+<script>
+  const status = document.querySelector<HTMLElement>('[data-copy-status]');
+  let clearTimer = 0;
+
+  function report(message: string): void {
+    if (!status) return;
+    status.textContent = message;
+    window.clearTimeout(clearTimer);
+    clearTimer = window.setTimeout(() => {
+      status.textContent = '';
+    }, 4000);
+  }
+
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy-feed]')) {
+    button.addEventListener('click', async () => {
+      const url = button.dataset.copyFeed;
+      if (!url) return;
+
+      try {
+        await navigator.clipboard.writeText(url);
+        report('Feed URL copied to your clipboard.');
+      } catch {
+        // Clipboard access is denied on insecure origins and in some embedded
+        // browsers. Selecting the text is the manual path that always works.
+        const input = button.closest('.subscribe-feed')?.querySelector('input');
+        if (input instanceof HTMLInputElement) {
+          input.focus();
+          input.select();
+          report('Press Ctrl+C (or Cmd+C) to copy the selected URL.');
+        } else {
+          report('Could not copy automatically — select the URL and copy it.');
+        }
+      }
+    });
+  }
+</script>

@@ -1,0 +1,120 @@
+---
+/**
+ * Egg pools by walking distance.
+ *
+ * Same server-rendered, KV-cached shape as /raids. Hatch CP matters more here
+ * than anywhere else in the game — eggs hatch at a fixed level 20, so the CP
+ * printed on each card *is* the full range you can roll.
+ */
+import Base from '~/layouts/Base.astro';
+import Attribution from '~/components/game/Attribution.astro';
+import EggCard from '~/components/game/EggCard.astro';
+import FeedStatus from '~/components/game/FeedStatus.astro';
+import '~/components/game/game.css';
+import { eggDistanceRank, getFeed, groupSorted, slugifyLabel } from '~/lib/scrapedduck';
+
+export const prerender = false;
+
+const cfContext = Astro.locals.cfContext as ExecutionContext | undefined;
+const feed = await getFeed('eggs', {
+  waitUntil: cfContext ? (promise) => cfContext.waitUntil(promise) : undefined,
+});
+
+const pools = groupSorted(feed.data, (egg) => egg.eggType, eggDistanceRank);
+const total = feed.data.length;
+
+/**
+ * Where a pool comes from. Only the two the source makes unambiguous are
+ * stated outright; everything else is counted straight off the feed rather than
+ * asserted from memory, so it stays true when Niantic reshuffles the pools.
+ */
+function poolNote(eggType: string, adventureSync: number, gift: number): string | null {
+  const parts: string[] = [];
+
+  if (eggType.startsWith('7')) parts.push('Gift Eggs — you get these by opening gifts from friends.');
+  if (eggType.startsWith('12')) parts.push('Strange Eggs, dropped by Team GO Rocket leaders.');
+  if (adventureSync > 0)
+    parts.push(`${adventureSync} of these appear only in Adventure Sync weekly-reward eggs.`);
+  if (gift > 0) parts.push(`${gift} are flagged as gift-exchange exclusives.`);
+
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+---
+
+<Base
+  title="Egg Pools"
+  description="What is hatching from 1 km, 2 km, 5 km, 7 km, 10 km, and 12 km eggs in Pokémon GO right now — with hatch CP, shiny availability, and Adventure Sync exclusives."
+>
+  <div class="g-page">
+    <header class="g-head">
+      <h1>What is hatching</h1>
+      <p>
+        The current egg pools by walking distance. Eggs always hatch at level 20, so the CP shown
+        on each card is the entire range you can get — handy for spotting a perfect before you
+        spend dust on it.
+      </p>
+    </header>
+
+    <FeedStatus fetchedAt={feed.fetchedAt} stale={feed.stale} label="egg pool" />
+
+    {
+      total === 0 ? (
+        <div class="g-empty">
+          <h2>No egg pools right now</h2>
+          <p>
+            We could not reach the live egg data and have nothing saved to fall back on. Try again
+            shortly, or check <a href="https://leekduck.com/eggs/">Leek Duck's egg pools</a> directly.
+          </p>
+        </div>
+      ) : (
+        pools.map((group) => {
+          const adventureSync = group.items.filter((egg) => egg.isAdventureSync).length;
+          const gift = group.items.filter((egg) => egg.isGiftExchange).length;
+          const shiny = group.items.filter((egg) => egg.canBeShiny).length;
+          const note = poolNote(group.key, adventureSync, gift);
+          const id = `pool-${slugifyLabel(group.key)}`;
+
+          return (
+            <section class="g-section" aria-labelledby={id}>
+              <div class="g-section-head">
+                <h2 id={id}>{group.key} eggs</h2>
+                <span class="g-count">
+                  {group.items.length} species · {shiny} can be shiny
+                </span>
+                {note && <p class="g-section-note">{note}</p>}
+              </div>
+              <ul class="g-grid">
+                {group.items.map((egg) => (
+                  <EggCard egg={egg} />
+                ))}
+              </ul>
+            </section>
+          );
+        })
+      )
+    }
+
+    <p class="g-legend">
+      The dots on each card are Leek Duck's own rarity tier for that species within its pool, shown
+      as published rather than relabelled.
+    </p>
+
+    <p class="g-related">
+      Also live: <a href="/raids">raid bosses</a> and <a href="/research">field research</a>.
+    </p>
+
+    <Attribution />
+  </div>
+</Base>
+
+<style>
+  .g-legend,
+  .g-related {
+    margin-top: 24px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+  .g-related {
+    margin-top: 8px;
+  }
+</style>

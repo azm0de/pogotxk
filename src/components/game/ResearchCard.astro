@@ -1,0 +1,89 @@
+---
+/**
+ * One field research task and everything it can reward.
+ *
+ * Upstream ships the task text as a fragment of Leek Duck's markup, so it goes
+ * through `stripTags` before Astro escapes it — we render their words, never
+ * their HTML.
+ */
+import './game.css';
+import ShinyMark from './ShinyMark.astro';
+import { formatCp, stripTags, type ResearchTask } from '~/lib/scrapedduck';
+
+interface Props {
+  task: ResearchTask;
+}
+
+const { task } = Astro.props;
+
+const text = stripTags(task.text);
+const rewards = task.rewards ?? [];
+const anyShiny = rewards.some((reward) => reward.canBeShiny);
+---
+
+<li class="g-card" data-shiny={anyShiny ? 'true' : 'false'}>
+  <div class="g-card-top">
+    <h3 class="g-card-name">{text}</h3>
+    {anyShiny && <ShinyMark label="Shiny possible from this task" />}
+  </div>
+
+  <ul class="g-chips" aria-label={`Rewards for ${text}`}>
+    {
+      rewards.map((reward) => (
+        <li class="g-reward">
+          <img
+            class="g-art g-art--sm"
+            src={reward.image}
+            alt={reward.name}
+            width="56"
+            height="56"
+            loading="lazy"
+            decoding="async"
+          />
+          <span class="g-reward-name">
+            {reward.name}
+            {reward.canBeShiny && <ShinyMark size={12} />}
+          </span>
+          <span class="g-reward-cp">CP {formatCp(reward.combatPower)}</span>
+        </li>
+      ))
+    }
+  </ul>
+
+  {rewards.length === 0 && <p class="g-reward-none">Reward not listed upstream.</p>}
+</li>
+
+<style>
+  /* Reward tiles are specific to this card, so they stay scoped here rather
+     than growing the shared sheet. */
+  .g-reward {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: 84px;
+    padding: 6px 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-sunken);
+    text-align: center;
+  }
+  .g-reward-name {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .g-reward-cp {
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .g-reward-none {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+</style>

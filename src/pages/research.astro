@@ -1,0 +1,113 @@
+---
+/**
+ * Field research tasks and their encounter rewards, grouped by task category.
+ *
+ * Grouping matters here: a trainer spinning stops at Spring Lake Park wants to
+ * know "which task should I keep" and the answer depends on what they can
+ * actually do while walking a loop — throwing tasks are trivial, Rocket tasks
+ * are not.
+ */
+import Base from '~/layouts/Base.astro';
+import Attribution from '~/components/game/Attribution.astro';
+import FeedStatus from '~/components/game/FeedStatus.astro';
+import ResearchCard from '~/components/game/ResearchCard.astro';
+import '~/components/game/game.css';
+import {
+  getFeed,
+  groupSorted,
+  researchCategoryLabel,
+  researchCategoryRank,
+  slugifyLabel,
+} from '~/lib/scrapedduck';
+
+export const prerender = false;
+
+const cfContext = Astro.locals.cfContext as ExecutionContext | undefined;
+const feed = await getFeed('research', {
+  waitUntil: cfContext ? (promise) => cfContext.waitUntil(promise) : undefined,
+});
+
+// A handful of tasks arrive with no category at all; they get their own bucket
+// rather than being dropped or silently folded into "catch".
+const categories = groupSorted(feed.data, (task) => task.type ?? 'other', researchCategoryRank);
+
+const total = feed.data.length;
+const shinyTasks = feed.data.filter((task) =>
+  (task.rewards ?? []).some((reward) => reward.canBeShiny),
+).length;
+---
+
+<Base
+  title="Field Research"
+  description="Every current Pokémon GO field research task and the encounters it rewards, grouped by task type — with CP ranges and shiny availability."
+>
+  <div class="g-page">
+    <header class="g-head">
+      <h1>Field research</h1>
+      <p>
+        Tasks currently dropping from PokéStops, grouped by what they ask you to do. Each card
+        lists every possible encounter, its CP range at the fixed research level, and whether the
+        shiny is available.
+      </p>
+    </header>
+
+    <FeedStatus fetchedAt={feed.fetchedAt} stale={feed.stale} label="research list" />
+
+    {
+      total > 0 && (
+        <p class="g-count g-summary">
+          {total} tasks in rotation · {shinyTasks} can reward a shiny
+        </p>
+      )
+    }
+
+    {
+      total === 0 ? (
+        <div class="g-empty">
+          <h2>No research list right now</h2>
+          <p>
+            We could not reach the live research data and have nothing saved to fall back on. Try
+            again shortly, or check{' '}
+            <a href="https://leekduck.com/research/">Leek Duck's research list</a> directly.
+          </p>
+        </div>
+      ) : (
+        categories.map((group) => {
+          const id = `task-${slugifyLabel(group.key)}`;
+          return (
+            <section class="g-section" aria-labelledby={id}>
+              <div class="g-section-head">
+                <h2 id={id}>{researchCategoryLabel(group.key)}</h2>
+                <span class="g-count">
+                  {group.items.length} {group.items.length === 1 ? 'task' : 'tasks'}
+                </span>
+              </div>
+              <ul class="g-grid g-grid--wide">
+                {group.items.map((task) => (
+                  <ResearchCard task={task} />
+                ))}
+              </ul>
+            </section>
+          );
+        })
+      )
+    }
+
+    <p class="g-related">
+      Also live: <a href="/raids">raid bosses</a> and <a href="/eggs">egg pools</a>.
+    </p>
+
+    <Attribution />
+  </div>
+</Base>
+
+<style>
+  .g-summary {
+    margin: 12px 0 0;
+  }
+  .g-related {
+    margin-top: 28px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+</style>

@@ -1,0 +1,64 @@
+---
+/**
+ * One raid boss.
+ *
+ * Renders as an <li> because the grids on /raids are real lists — a screen
+ * reader should hear "list, 6 items" before wading through the bosses.
+ */
+import './game.css';
+import ShinyMark from './ShinyMark.astro';
+import TypeChips from './TypeChips.astro';
+import { formatCp, type RaidBoss } from '~/lib/scrapedduck';
+
+interface Props {
+  boss: RaidBoss;
+}
+
+const { boss } = Astro.props;
+
+const weather = boss.boostedWeather ?? [];
+const weatherNames = weather.map((w) => w.name).join(', ');
+---
+
+<li class="g-card" data-shiny={boss.canBeShiny ? 'true' : 'false'}>
+  <div class="g-card-top">
+    <h3 class="g-card-name">{boss.name}</h3>
+    {boss.canBeShiny && <ShinyMark />}
+  </div>
+
+  <img
+    class="g-art"
+    src={boss.image}
+    alt={boss.name}
+    width="96"
+    height="96"
+    loading="lazy"
+    decoding="async"
+  />
+
+  <TypeChips types={boss.types ?? []} label={`${boss.name} types`} />
+
+  <dl class="g-card-facts">
+    <div class="g-fact">
+      <dt>Catch CP</dt>
+      <dd>{formatCp(boss.combatPower?.normal)}</dd>
+    </div>
+    <div class="g-fact g-fact--boosted">
+      <dt>Weather boosted</dt>
+      <dd>{formatCp(boss.combatPower?.boosted)}</dd>
+    </div>
+  </dl>
+
+  {
+    weather.length > 0 && (
+      <ul class="g-chips" aria-label={`Boosted in ${weatherNames}`}>
+        {weather.map((w) => (
+          <li class="g-chip">
+            <img src={w.image} alt="" width="16" height="16" loading="lazy" decoding="async" />
+            {w.name}
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</li>

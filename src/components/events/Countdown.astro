@@ -1,0 +1,145 @@
+---
+/**
+ * Live countdown for an imminent event.
+ *
+ * Progressive enhancement rather than a hydrated component: the card already
+ * renders the absolute local time server-side, so this element starts `hidden`
+ * and the script below reveals it. That means one implementation of the
+ * formatting instead of a server copy and a client copy drifting apart, and no
+ * framework runtime shipped for what is a `setInterval` and some arithmetic.
+ *
+ * Astro hoists and bundles component `<script>` tags once per page, so this runs
+ * a single ticker over every countdown on the page no matter how many cards
+ * render it.
+ */
+
+interface Props {
+  /** ISO-8601 UTC instant the event starts. */
+  start: string;
+  /** ISO-8601 UTC instant it ends; blank falls back to one hour. */
+  end?: string | null;
+  /** Announced when this event goes live. */
+  title: string;
+}
+
+const { start, end = null, title } = Astro.props;
+---
+
+<span
+  class="countdown"
+  role="timer"
+  data-countdown
+  data-start={start}
+  data-end={end ?? ''}
+  data-title={title}
+  hidden></span>
+
+<script>
+  const MINUTE = 60_000;
+  const HOUR = 60 * MINUTE;
+  const DAY = 24 * HOUR;
+
+  /** Matches DEFAULT_EVENT_MINUTES in ~/lib/ics — an event with no end runs an hour. */
+  const DEFAULT_DURATION = HOUR;
+
+  /**
+   * Beyond two days a ticking clock is noise; the card's date line already says
+   * "Sat, Aug 22" better than "in 17 days 4h" does.
+   */
+  const HORIZON = 2 * DAY;
+
+  type State = 'live' | 'soon' | 'over';
+
+  function pad(value: number): string {
+    return String(value).padStart(2, '0');
+  }
+
+  function untilLabel(ms: number): string {
+    const total = Math.floor(ms / 1000);
+    const days = Math.floor(total / 86_400);
+    const hours = Math.floor((total % 86_400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+
+    if (days > 0) return `in ${days} day${days === 1 ? '' : 's'} ${hours}h`;
+    if (hours > 0) return `in ${hours}h ${pad(minutes)}m`;
+    if (minutes > 0) return `in ${minutes}m ${pad(seconds)}s`;
+    return `in ${seconds}s`;
+  }
+
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-countdown]'));
+
+  if (nodes.length) {
+    const status = document.getElementById('events-status');
+
+    /**
+     * Events already live when the page loaded are seeded in, so the live region
+     * only ever announces a *transition* someone is watching happen. On load the
+     * server-rendered "Live now" heading already carries that information, and
+     * repeating it is just noise in a screen reader.
+     */
+    const announced = new Set<HTMLElement>();
+    let firstPass = true;
+
+    /** Visible = something is ticking on screen. Pending = will be, later. */
+    const render = (): { visible: number; pending: number } => {
+      const now = Date.now();
+      let visible = 0;
+      let pending = 0;
+
+      for (const node of nodes) {
+        const start = Date.parse(node.dataset.start ?? '');
+        if (!Number.isFinite(start)) {
+          node.hidden = true;
+          continue;
+        }
+
+        const rawEnd = node.dataset.end ? Date.parse(node.dataset.end) : NaN;
+        const end = Number.isFinite(rawEnd) && rawEnd > start ? rawEnd : start + DEFAULT_DURATION;
+
+        let state: State;
+        if (now >= end) state = 'over';
+        else if (now >= start) state = 'live';
+        else state = 'soon';
+
+        if (state === 'over') {
+          node.hidden = true;
+          continue;
+        }
+
+        if (state === 'soon' && start - now > HORIZON) {
+          node.hidden = true;
+          pending++;
+          continue;
+        }
+
+        node.hidden = false;
+        node.dataset.state = state;
+        node.textContent = state === 'live' ? 'Live now' : untilLabel(start - now);
+        visible++;
+
+        // One polite announcement as an event flips over, rather than a live
+        // region that reads a changing number every second.
+        if (state === 'live' && !announced.has(node)) {
+          announced.add(node);
+          if (!firstPass && status) {
+            status.textContent = `${node.dataset.title ?? 'An event'} is starting now.`;
+          }
+        }
+      }
+
+      firstPass = false;
+      return { visible, pending };
+    };
+
+    // Self-scheduling instead of a fixed interval: a page left open on a day
+    // with nothing near does not need to wake up every second to decide that.
+    const schedule = (): void => {
+      const { visible, pending } = render();
+      if (visible) window.setTimeout(schedule, 1000);
+      else if (pending) window.setTimeout(schedule, 30_000);
+    };
+
+    schedule();
+  }
+</script>

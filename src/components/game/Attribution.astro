@@ -1,0 +1,28 @@
+---
+/**
+ * Required licence notice for every page built on ScrapedDuck data.
+ *
+ * ScrapedDuck mirrors leekduck.com and allows reuse only with visible credit to
+ * both projects on a page that is neither paywalled nor ad-supported. This
+ * component is the single place that promise is kept — render it on any page
+ * that shows raids, eggs, research, or events.
+ */
+import './game.css';
+import { LEEKDUCK_URL, SCRAPEDDUCK_URL } from '~/lib/scrapedduck';
+---
+
+<aside class="g-attribution">
+  <p>
+    Live game data comes from <a href={LEEKDUCK_URL} rel="noopener noreferrer" target="_blank"
+      >Leek Duck</a
+    > and is mirrored for us by <a href={SCRAPEDDUCK_URL} rel="noopener noreferrer" target="_blank"
+      >ScrapedDuck</a
+    >. Pokémon artwork and type icons are served from Leek Duck's own CDN. Please support them —
+    they do the daily work of keeping this current, and we simply read it.
+  </p>
+  <p>
+    PoGo TXK is a free community site: no ads, no paywall, no tracking on this page. Raid tiers,
+    egg pools, and research tasks rotate frequently, so check Leek Duck if something here looks
+    out of date.
+  </p>
+</aside>

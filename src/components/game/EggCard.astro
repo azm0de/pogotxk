@@ -1,0 +1,77 @@
+---
+/**
+ * One species in an egg pool.
+ *
+ * Hatch CP is fixed at level 20, so the min/max here is the entire spread you
+ * can get — worth showing, because it is how you spot a hundo before you power
+ * anything up.
+ */
+import './game.css';
+import ShinyMark from './ShinyMark.astro';
+import { formatCp, type EggEntry } from '~/lib/scrapedduck';
+
+interface Props {
+  egg: EggEntry;
+}
+
+const { egg } = Astro.props;
+
+const flags = [
+  egg.isAdventureSync && 'Adventure Sync',
+  egg.isGiftExchange && 'From gifts',
+  egg.isRegional && 'Regional',
+].filter((flag): flag is string => typeof flag === 'string');
+
+// Leek Duck publishes `rarity` as a 1–5 tier and does not document which end is
+// rare, so the dots are shown as their raw tier rather than relabelled
+// "common"/"rare" — inventing a direction here would be worse than showing none.
+const RARITY_MAX = 5;
+// A missing `rarity` would otherwise reach the template as NaN and be announced
+// as "rarity tier NaN of 5"; no dots is the honest rendering of "not published".
+const rarity = Number.isFinite(egg.rarity)
+  ? Math.min(Math.max(Math.round(egg.rarity), 0), RARITY_MAX)
+  : 0;
+const dots = Array.from({ length: RARITY_MAX }, (_, i) => i < rarity);
+---
+
+<li class="g-card" data-shiny={egg.canBeShiny ? 'true' : 'false'}>
+  <div class="g-card-top">
+    <h3 class="g-card-name">{egg.name}</h3>
+    {egg.canBeShiny && <ShinyMark />}
+  </div>
+
+  <img
+    class="g-art"
+    src={egg.image}
+    alt={egg.name}
+    width="96"
+    height="96"
+    loading="lazy"
+    decoding="async"
+  />
+
+  <dl class="g-card-facts">
+    <div class="g-fact">
+      <dt>Hatch CP</dt>
+      <dd>{formatCp(egg.combatPower)}</dd>
+    </div>
+    <div class="g-fact">
+      <dt>Rarity tier</dt>
+      <dd>
+        <span class="g-rarity" role="img" aria-label={`Leek Duck rarity tier ${rarity} of ${RARITY_MAX}`}>
+          {dots.map((on) => <span class:list={[on && 'is-on']}></span>)}
+        </span>
+      </dd>
+    </div>
+  </dl>
+
+  {
+    flags.length > 0 && (
+      <ul class="g-chips" aria-label={`${egg.name} notes`}>
+        {flags.map((flag) => (
+          <li class="g-chip g-chip--flag">{flag}</li>
+        ))}
+      </ul>
+    )
+  }
+</li>

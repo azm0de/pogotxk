@@ -1,0 +1,125 @@
+.subscribe {
+  padding: 20px clamp(16px, 3vw, 24px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-md);
+}
+
+.subscribe-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.subscribe-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-sm);
+  background: var(--navy-800);
+  color: #fff;
+}
+
+.subscribe-head h2 {
+  margin: 0 0 4px;
+  font-size: 1.12rem;
+}
+
+.subscribe-head p {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+.subscribe-list {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subscribe-feed {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.subscribe-copy h3 {
+  margin: 0 0 2px;
+  font-size: 0.96rem;
+}
+.subscribe-copy p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.subscribe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.subscribe-btn {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 0.83rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.subscribe-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.subscribe-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.subscribe-btn--primary:hover {
+  color: var(--accent-contrast);
+  filter: brightness(1.08);
+}
+
+.subscribe-url input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+}
+
+.subscribe-status {
+  margin: 12px 0 0;
+  min-height: 1.2em;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+@media (min-width: 720px) {
+  .subscribe-feed {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .subscribe-url {
+    grid-column: 1 / -1;
+  }
+}

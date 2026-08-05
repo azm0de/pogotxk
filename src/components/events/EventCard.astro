@@ -1,0 +1,102 @@
+---
+/**
+ * One event, community meetup or global game event alike — both arrive as a
+ * `CalendarEvent`, so the card does not need to know which.
+ *
+ * The absolute local time is always rendered server-side; the countdown is an
+ * optional enhancement layered on top of it.
+ */
+
+import type { CalendarEvent } from '~/lib/ics';
+import { describeRecurrence } from '~/lib/db/meetups';
+import Countdown from './Countdown.astro';
+import './EventCard.css';
+
+interface Props {
+  event: CalendarEvent;
+  /** Pre-formatted local time, e.g. "Wed, Aug 5 · 6:00 PM – 7:00 PM CDT". */
+  when: string;
+  state: 'live' | 'ongoing' | 'upcoming' | 'past';
+}
+
+const { event, when, state } = Astro.props;
+
+const recurrence = describeRecurrence(event.rrule ?? null);
+const cancelled = event.status === 'CANCELLED';
+
+// The UID's local part doubles as the anchor, so /events#meetup-3 survives a
+// rename of the meetup it points at.
+const anchor = event.uid.split('@')[0];
+
+const badge = event.heading ?? (event.source === 'meetup' ? 'Community meetup' : 'Pokémon GO');
+
+const summary = event.description?.split('\n\n')[0]?.trim() ?? '';
+const blurb = summary.length > 240 ? `${summary.slice(0, 237).trimEnd()}…` : summary;
+
+// Only link out to somewhere that is actually elsewhere; a meetup with no
+// Campfire page links back to this very card, which is not worth a button.
+const externalUrl = event.url && !event.url.includes('/events#') ? event.url : null;
+---
+
+<article
+  class="event-card"
+  id={anchor}
+  data-state={state}
+  data-source={event.source}
+  data-cancelled={cancelled ? '' : undefined}
+  aria-labelledby={`${anchor}-title`}
+>
+  <p class="event-badges">
+    <span class={`event-badge event-badge--${event.source}`}>{badge}</span>
+    {cancelled && <span class="event-badge event-badge--cancelled">Cancelled</span>}
+    {recurrence && <span class="event-badge event-badge--repeat">{recurrence}</span>}
+  </p>
+
+  <h3 class="event-title" id={`${anchor}-title`}>{event.summary}</h3>
+
+  <p class="event-when">
+    <time datetime={event.start}>{when}</time>
+    {
+      /* No countdown on an ongoing season — "Live now" on a card that has been
+         live for six weeks is noise, and the section heading already says it. */
+      (state === 'live' || state === 'upcoming') && !cancelled && (
+        <Countdown start={event.start} end={event.end} title={event.summary} />
+      )
+    }
+  </p>
+
+  {
+    event.location && (
+      <p class="event-where">
+        <span class="event-where-icon" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="14" height="14">
+            <path
+              fill="currentColor"
+              d="M8 0a5 5 0 0 0-5 5c0 3.6 4.4 10.4 4.6 10.7a.5.5 0 0 0 .8 0C8.6 15.4 13 8.6 13 5a5 5 0 0 0-5-5Zm0 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"
+            />
+          </svg>
+        </span>
+        {
+          event.locationUrl ? (
+            <a href={event.locationUrl}>{event.location}</a>
+          ) : (
+            <span>{event.location}</span>
+          )
+        }
+      </p>
+    )
+  }
+
+  {blurb && <p class="event-blurb">{blurb}</p>}
+
+  {
+    externalUrl && (
+      <p class="event-actions">
+        <a class="event-action" href={externalUrl} rel="noopener noreferrer" target="_blank">
+          Details
+          <span class="sr-only"> for {event.summary} (opens in a new tab)</span>
+        </a>
+      </p>
+    )
+  }
+</article>
