@@ -496,12 +496,34 @@ export function attributionText(attribution: GameAttribution | null): string | n
 }
 
 /**
- * Fetch the global events from the sibling API route.
+ * Turn an already-fetched payload into calendar events.
  *
- * Returns `null` — not an empty feed — when the route is missing, erroring or
- * slow, so callers can say "unavailable" instead of silently claiming there is
- * nothing on. The timeout matters: the events page must still render if the
- * upstream scrape is wedged.
+ * Pure on purpose: this module must stay importable under plain node so
+ * scripts/test-ics.ts can run, which rules out importing ~/lib/scrapedduck
+ * (it reads `cloudflare:workers` at module scope). Callers running inside the
+ * Worker fetch the data themselves and hand the result in here.
+ *
+ * Accepts the raw `getFeed` result, the API route's envelope, or a bare array —
+ * `extractRows` finds the first key that actually holds an array.
+ */
+export function gameEventsFromPayload(payload: unknown): GameEventFeed {
+  const events = normalizeGameEvents(payload);
+  // Never hand back events without the credit that licences them.
+  const attribution = readAttribution(payload) ?? (events.length ? FALLBACK_ATTRIBUTION : null);
+  return { events, attribution };
+}
+
+/**
+ * Fetch the global events over HTTP from the sibling API route.
+ *
+ * DO NOT USE FROM INSIDE THE WORKER. A Worker fetching its own public hostname
+ * is a loopback subrequest through the edge; it works against `astro dev` and
+ * fails in production, which is exactly how this shipped once — the API route
+ * served 39 events while the calendar it fed rendered zero, with no error
+ * anywhere because the catch swallowed it.
+ *
+ * Call `gameEventsFromPayload(await getFeed('events'))` instead. This is kept
+ * only for callers genuinely outside the Worker, such as a test harness.
  */
 export async function fetchGameEvents(base: URL): Promise<GameEventFeed | null> {
   try {
@@ -510,11 +532,7 @@ export async function fetchGameEvents(base: URL): Promise<GameEventFeed | null> 
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return null;
-    const payload = await res.json();
-    const events = normalizeGameEvents(payload);
-    // Never hand back events without the credit that licences them.
-    const attribution = readAttribution(payload) ?? (events.length ? FALLBACK_ATTRIBUTION : null);
-    return { events, attribution };
+    return gameEventsFromPayload(await res.json());
   } catch {
     return null;
   }

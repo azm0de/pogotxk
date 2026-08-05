@@ -19,10 +19,11 @@ import { env } from 'cloudflare:workers';
 import { listPublicMeetups, meetupToCalendarEvent } from '~/lib/db/meetups';
 import {
   allDayEndExclusive,
-  fetchGameEvents,
+  gameEventsFromPayload,
   groupEvents,
   type CalendarEvent,
 } from '~/lib/ics';
+import { getFeed } from '~/lib/scrapedduck';
 import { DEFAULT_TZ } from '~/lib/time';
 
 export const prerender = false;
@@ -35,11 +36,17 @@ export const prerender = false;
 const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(Astro.url.hostname);
 const base = new URL(isLocal ? Astro.url.origin : (Astro.site?.toString() ?? Astro.url.origin));
 
-// Independent sources, so they run together. Origin-relative so the subrequest
-// reaches this deployment, not production.
+// Independent sources, so they run together.
+//
+// Global events come straight from the data layer rather than over HTTP from
+// /api/game/events.json — a Worker fetching its own hostname is a loopback
+// through the edge, which works against `astro dev` and returns nothing in
+// production.
 const [meetups, global] = await Promise.all([
   listPublicMeetups(env.DB),
-  fetchGameEvents(new URL(Astro.url.origin)),
+  getFeed('events')
+    .then(gameEventsFromPayload)
+    .catch(() => null),
 ]);
 
 const globalAvailable = global !== null;

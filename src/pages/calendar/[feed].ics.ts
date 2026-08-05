@@ -17,13 +17,14 @@ import { env } from 'cloudflare:workers';
 import {
   attributionText,
   buildIcs,
-  fetchGameEvents,
+  gameEventsFromPayload,
   icsEtag,
   icsResponse,
   type CalendarEvent,
   type CalendarMeta,
 } from '~/lib/ics';
 import { listPublicMeetups, meetupToCalendarEvent } from '~/lib/db/meetups';
+import { getFeed } from '~/lib/scrapedduck';
 
 export const prerender = false;
 
@@ -66,12 +67,19 @@ export async function GET(ctx: APIContext): Promise<Response> {
 
   const base = new URL(ctx.site ?? ctx.url.origin);
 
-  // The two sources are independent; there is no reason to wait for D1 before
-  // starting the subrequest. Origin-relative so it reaches this deployment
-  // rather than production when running locally or on a preview URL.
+  // The two sources are independent, so they run together.
+  //
+  // Global events come straight from the data layer, NOT over HTTP from
+  // /api/game/events.json: a Worker fetching its own hostname is a loopback
+  // through the edge that works in dev and silently yields nothing in
+  // production.
   const [meetups, global] = await Promise.all([
     feed === 'game' ? Promise.resolve([]) : listPublicMeetups(env.DB),
-    feed === 'meetups' ? Promise.resolve(null) : fetchGameEvents(new URL(ctx.url.origin)),
+    feed === 'meetups'
+      ? Promise.resolve(null)
+      : getFeed('events')
+          .then(gameEventsFromPayload)
+          .catch(() => null),
   ]);
 
   const events: CalendarEvent[] = [
