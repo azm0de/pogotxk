@@ -48,6 +48,13 @@ check('gated, unverified -> guest', resolveRole(gated, 'u1', ['SOMETHING']), 'gu
 check('gated, verified -> member', resolveRole(gated, 'u1', ['ROLE_VERIFIED']), 'member');
 check('gated, ambassador still wins', resolveRole(gated, 'u1', ['ROLE_AMB']), 'ambassador');
 
+console.log('\n== guild not configured yet ==');
+// Without a guild id the lookup is skipped and everyone is a guest — except the
+// bootstrap admin, which is what lets a fresh deployment reach the console.
+const noGuild: DiscordConfig = { clientId: 'x', clientSecret: 'y', bootstrapAdminId: 'BOOT123' };
+check('stranger -> guest', resolveRole(noGuild, 'u1', null), 'guest');
+check('bootstrap admin still gets in', resolveRole(noGuild, 'BOOT123', null), 'admin');
+
 console.log('\n== role hierarchy ==');
 const asUser = (role: Role): SessionUser => ({
   id: 1,

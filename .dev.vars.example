@@ -3,14 +3,26 @@
 # Cloudflare dashboard under Workers > pogotxk > Settings > Variables.
 
 # --- Discord OAuth (https://discord.com/developers/applications) ---
-# Redirect URI to register: http://localhost:4321/auth/callback (dev)
-#                           https://pokemontxk.com/auth/callback (prod)
+#
+# In the developer portal, the ONLY thing that must be configured is the
+# redirect URI, under OAuth2 > Redirects. Scopes are sent per-request in the
+# authorize URL, so the "OAuth2 URL Generator" checkboxes are just a link
+# builder and are not part of this flow.
+#
+# Register both:
+#   http://localhost:4321/auth/callback                                   (dev)
+#   https://<your-worker>.workers.dev/auth/callback                       (prod)
+#   https://pokemontxk.com/auth/callback                       (prod, custom domain)
+#
+# Leave "Public Client" OFF — we use a client secret from the server side.
 DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
 
-# Bot token — used to read guild member roles so we can map them to site roles.
-# Bot needs to be in the guild; no privileged intents required for this.
-DISCORD_BOT_TOKEN=
+# Your Discord server. Enable Developer Mode (Settings > Advanced), then
+# right-click the server icon > Copy Server ID.
+#
+# No bot token is needed: guild roles are read with the signed-in user's own
+# access token via the `guilds.members.read` scope.
 DISCORD_GUILD_ID=
 
 # Role IDs from your Discord server, mapped to site roles.

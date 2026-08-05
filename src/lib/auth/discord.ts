@@ -18,7 +18,12 @@ const SCOPES = 'identify guilds.members.read';
 export interface DiscordConfig {
   clientId: string;
   clientSecret: string;
-  guildId: string;
+  /**
+   * Optional. Without it the guild lookup is skipped and everyone signs in as a
+   * guest — which still lets `bootstrapAdminId` in, so a fresh deployment can
+   * reach the admin console before the server has been wired up.
+   */
+  guildId?: string;
   roleAdmin?: string;
   roleAmbassador?: string;
   roleMember?: string;
@@ -29,7 +34,7 @@ export interface DiscordConfig {
 /** Pulls Discord settings off the env, or null when not configured yet. */
 export function discordConfig(env: Env): DiscordConfig | null {
   const e = env as unknown as Record<string, string | undefined>;
-  if (!e.DISCORD_CLIENT_ID || !e.DISCORD_CLIENT_SECRET || !e.DISCORD_GUILD_ID) return null;
+  if (!e.DISCORD_CLIENT_ID || !e.DISCORD_CLIENT_SECRET) return null;
   return {
     clientId: e.DISCORD_CLIENT_ID,
     clientSecret: e.DISCORD_CLIENT_SECRET,
@@ -121,8 +126,12 @@ export async function fetchUser(accessToken: string): Promise<DiscordUser> {
  */
 export async function fetchGuildRoles(
   accessToken: string,
-  guildId: string,
+  guildId: string | undefined,
 ): Promise<string[] | null> {
+  // No guild configured yet — treat as "not a member" rather than calling the
+  // API with an empty id, which would 400.
+  if (!guildId) return null;
+
   const res = await fetch(`${API}/users/@me/guilds/${guildId}/member`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });

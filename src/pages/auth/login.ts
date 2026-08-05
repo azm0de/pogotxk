@@ -23,7 +23,7 @@ export async function GET({ url }: APIContext): Promise<Response> {
   const cfg = discordConfig(env);
   if (!cfg) {
     return new Response(
-      'Discord sign-in is not configured yet. Set DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET and DISCORD_GUILD_ID.',
+      'Discord sign-in is not configured yet. Set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET.',
       { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } },
     );
   }
