@@ -1,0 +1,172 @@
+/*
+ * Design tokens.
+ *
+ * The palette carries over from the current site — the deep navy (#123254 was
+ * its theme-color) and the cream page background — so the rebuild still reads
+ * as PoGo TXK. Everything else is new.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Brand */
+  --navy-900: #0b1f36;
+  --navy-800: #123254;
+  --navy-700: #1c4675;
+  --navy-600: #2a5d95;
+
+  --cream: #eef1e7;
+  --cream-dim: #e3e7da;
+
+  /* POI types — distinct in hue *and* silhouette, so the map stays readable
+     for colour-blind users and in greyscale. */
+  --poi-pokestop: #2f7fd4;
+  --poi-gym: #e2703a;
+  --poi-powerspot: #8257d9;
+  --poi-campsite: #f2a33c;
+
+  /* Teams */
+  --team-valor: #e8453c;
+  --team-mystic: #3b7dd8;
+  --team-instinct: #f2c53d;
+
+  /* Semantic */
+  --accent: var(--navy-800);
+  --accent-contrast: #ffffff;
+  --live: #e8453c;
+
+  --bg: var(--cream);
+  --bg-panel: #ffffff;
+  --bg-sunken: #f6f7f2;
+  --text: #16202e;
+  --text-muted: #5a6675;
+  --border: #d8ddd0;
+  --border-strong: #bcc4b3;
+
+  --shadow-sm: 0 1px 2px rgb(11 31 54 / 0.08);
+  --shadow-md: 0 4px 16px rgb(11 31 54 / 0.12);
+  --shadow-lg: 0 12px 40px rgb(11 31 54 / 0.18);
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 22px;
+
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  --header-h: 60px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #4d8fd6;
+    --accent-contrast: #06121f;
+
+    --bg: #0d1622;
+    --bg-panel: #16212f;
+    --bg-sunken: #111b28;
+    --text: #e8edf4;
+    --text-muted: #9aa8ba;
+    --border: #26344a;
+    --border-strong: #3a4d68;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 16px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.55);
+
+    /* Lift the POI hues so they hold up on a dark basemap. */
+    --poi-pokestop: #55a2ec;
+    --poi-gym: #f08a53;
+    --poi-powerspot: #a17ceb;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.2;
+  margin: 0 0 0.5em;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+a {
+  color: var(--accent);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Visible focus for keyboard users, suppressed for pointer input. */
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip link — first tab stop on every page. */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -100px;
+  z-index: 2000;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.skip-link:focus {
+  top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

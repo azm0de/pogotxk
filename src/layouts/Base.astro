@@ -1,0 +1,218 @@
+---
+import '~/styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  /** Full-bleed pages (the map) manage their own scrolling. */
+  fullBleed?: boolean;
+  ogImage?: string;
+}
+
+const {
+  title,
+  description = 'PoGo TXK — the Pokémon GO community for Texarkana, Texas and Arkansas. Spring Lake Park Campsite map, meetups, raids, and community news.',
+  fullBleed = false,
+  ogImage = '/og-default.png',
+} = Astro.props;
+
+const fullTitle = title === 'PoGo TXK' ? title : `${title} | PoGo TXK`;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
+
+const nav = [
+  { href: '/', label: 'Home' },
+  { href: '/map', label: 'Map' },
+  { href: '/events', label: 'Events' },
+  { href: '/raids', label: 'Raids' },
+  { href: '/blog', label: 'News' },
+  { href: '/gallery', label: 'Gallery' },
+];
+
+const path = Astro.url.pathname;
+const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="theme-color" content="#123254" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PoGo TXK" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL(ogImage, canonical)} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="apple-mobile-web-app-title" content="PoGo TXK" />
+  </head>
+
+  <body class={fullBleed ? 'is-full-bleed' : ''}>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true">TXK</span>
+        <span class="brand-copy">
+          <strong>PoGo TXK</strong>
+          <span>Pokémon GO Texarkana</span>
+        </span>
+      </a>
+
+      <nav aria-label="Primary">
+        <ul>
+          {
+            nav.map((item) => (
+              <li>
+                <a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>
+                  {item.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    {
+      !fullBleed && (
+        <footer class="site-footer">
+          <p>
+            <strong>PoGo TXK</strong> — Pokémon GO Texarkana. Not officially affiliated with
+            Pokémon GO. Pokémon and its trademarks are ©1995–2026 Nintendo, Creatures, and
+            GAMEFREAK. All images and names owned and trademarked by Nintendo, Niantic, The
+            Pokémon Company, and GAMEFREAK are property of their respective owners.
+          </p>
+          <p class="footer-links">
+            <a href="/about">About</a> · <a href="/conduct">Code of Conduct</a> ·
+            <a href="https://discord.com/invite/2sYR5YdRpH" rel="noopener noreferrer" target="_blank"
+              >Discord</a
+            >
+          </p>
+        </footer>
+      )
+    }
+
+    <style>
+      body.is-full-bleed {
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      body.is-full-bleed main {
+        flex: 1;
+        min-height: 0;
+      }
+
+      .site-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        height: var(--header-h);
+        padding: 0 clamp(12px, 3vw, 24px);
+        background: var(--navy-800);
+        color: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 900;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: inherit;
+        text-decoration: none;
+      }
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: rgb(255 255 255 / 0.14);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+      .brand-copy {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.15;
+      }
+      .brand-copy strong {
+        font-size: 0.98rem;
+      }
+      .brand-copy span {
+        font-size: 0.72rem;
+        opacity: 0.75;
+      }
+
+      nav ul {
+        display: flex;
+        gap: 4px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      nav ul::-webkit-scrollbar {
+        display: none;
+      }
+      nav a {
+        display: block;
+        padding: 7px 12px;
+        border-radius: 999px;
+        color: rgb(255 255 255 / 0.82);
+        text-decoration: none;
+        font-size: 0.88rem;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      nav a:hover {
+        background: rgb(255 255 255 / 0.1);
+        color: #fff;
+      }
+      nav a[aria-current='page'] {
+        background: #fff;
+        color: var(--navy-800);
+      }
+
+      .site-footer {
+        padding: 28px clamp(12px, 3vw, 24px);
+        border-top: 1px solid var(--border);
+        background: var(--bg-sunken);
+        color: var(--text-muted);
+        font-size: 0.76rem;
+      }
+      .site-footer p {
+        max-width: 70ch;
+        margin: 0 auto 10px;
+      }
+      .footer-links {
+        text-align: center;
+      }
+
+      @media (max-width: 560px) {
+        .brand-copy span {
+          display: none;
+        }
+      }
+    </style>
+  </body>
+</html>

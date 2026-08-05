@@ -1,0 +1,38 @@
+---
+import Base from '~/layouts/Base.astro';
+import MapView from '~/components/map/MapView';
+
+export const prerender = false;
+
+// Deep links like /map?poi=campsite-genuine open straight onto that pin.
+const initialPoi = Astro.url.searchParams.get('poi') ?? undefined;
+---
+
+<Base
+  title="Spring Lake Park Map"
+  description="Every PokéStop, Gym, and Power Spot in the PoGo TXK Community Campsite at Spring Lake Park, Texarkana — with photos, the raid route, and the meetup spot."
+  fullBleed
+>
+  <MapView client:only="react" initialPoi={initialPoi} />
+
+  <noscript>
+    <div class="noscript-note">
+      <h1>Spring Lake Park Map</h1>
+      <p>
+        The interactive map needs JavaScript. The Campsite covers 104 locations — 66 PokéStops,
+        16 Gyms, and 22 Power Spots — across Spring Lake Park in Texarkana, Texas.
+      </p>
+      <p>
+        <a href="https://discord.com/invite/2sYR5YdRpH">Join the Discord</a> for meetup times and
+        raid coordination.
+      </p>
+    </div>
+  </noscript>
+</Base>
+
+<style>
+  .noscript-note {
+    padding: 32px clamp(16px, 4vw, 40px);
+    max-width: 60ch;
+  }
+</style>
