@@ -1,0 +1,255 @@
+---
+import Base from '~/layouts/Base.astro';
+import '~/styles/legal.css';
+
+export const prerender = true;
+
+const UPDATED = '5 August 2026';
+const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
+---
+
+<Base
+  title="Privacy Policy"
+  description="What PoGo TXK collects, why, and how to have it deleted. A volunteer-run community site for Pokémon GO players in Texarkana."
+>
+  <article class="legal">
+    <p class="legal-eyebrow">PoGo TXK</p>
+    <h1>Privacy Policy</h1>
+    <p class="legal-updated">Last updated {UPDATED}</p>
+
+    <div class="legal-summary">
+      <p><strong>The short version.</strong></p>
+      <p>
+        You can browse the whole site without an account. If you sign in, we store your Discord
+        username, avatar and account ID so we know who you are — and nothing else unless you
+        type it in yourself.
+      </p>
+      <p>
+        We do not sell your data, we do not run advertising, and we do not track you across
+        other websites. Ask any ambassador on Discord and we will delete your account.
+      </p>
+    </div>
+
+    <nav class="legal-toc" aria-label="Contents">
+      <p>Contents</p>
+      <ol>
+        <li><a href="#who">Who we are</a></li>
+        <li><a href="#collect">What we collect</a></li>
+        <li><a href="#why">Why we collect it</a></li>
+        <li><a href="#discord">Signing in with Discord</a></li>
+        <li><a href="#third-parties">Third parties</a></li>
+        <li><a href="#retention">How long we keep it</a></li>
+        <li><a href="#rights">Your choices</a></li>
+        <li><a href="#children">Children</a></li>
+        <li><a href="#security">Security</a></li>
+        <li><a href="#changes">Changes</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="who">1. Who we are</h2>
+    <p>
+      PoGo TXK is a volunteer-run community site for Pokémon GO players in Texarkana, Texas and
+      Arkansas. It is not a company, and nobody is paid to run it. This policy covers the
+      website and any companion app we publish under the same name.
+    </p>
+
+    <h2 id="collect">2. What we collect</h2>
+
+    <h3>If you never sign in</h3>
+    <p>
+      Nothing that identifies you. We do not use analytics, advertising trackers, or
+      cookies for visitors who are not signed in. Our hosting provider processes your IP
+      address to serve the page, as any web host must.
+    </p>
+
+    <h3>If you sign in with Discord</h3>
+    <p>We store the following in our database:</p>
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Where it comes from</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Discord account ID</td><td>Discord, when you authorise sign-in</td></tr>
+        <tr><td>Discord username and display name</td><td>Discord</td></tr>
+        <tr><td>Discord avatar reference</td><td>Discord</td></tr>
+        <tr><td>Whether you are in our Discord server, and which of our roles you hold</td><td>Discord</td></tr>
+        <tr><td>Your site role (guest, member, ambassador, admin)</td><td>Worked out from the above</td></tr>
+        <tr><td>Team, trainer name, trainer level, trainer code</td><td>Only if you enter them yourself. All optional.</td></tr>
+        <tr><td>When you last signed in</td><td>Recorded automatically</td></tr>
+      </tbody>
+    </table>
+
+    <p>We also keep, for as long as your session or the record lasts:</p>
+    <ul>
+      <li>
+        <strong>A session record.</strong> Your sign-in cookie holds a random token. We store
+        only a one-way hash of it, never the token itself, alongside its expiry and a
+        short hash of your browser's user-agent string used to spot session hijacking.
+      </li>
+      <li>
+        <strong>A change log.</strong> If you are an ambassador or admin, edits you make to
+        locations, posts and meetups are recorded with your account ID, so the community can
+        see who changed what.
+      </li>
+      <li>
+        <strong>Things you post.</strong> Photos you upload, locations you submit, reports you
+        file, and meetup or raid activity you take part in.
+      </li>
+    </ul>
+
+    <p>
+      <strong>We never receive your Discord password, email address, or direct messages.</strong>
+      Discord does not give them to us and we do not ask for them.
+    </p>
+
+    <h2 id="why">3. Why we collect it</h2>
+    <ul>
+      <li><strong>To know who you are</strong> — so you stay signed in and see the right things.</li>
+      <li><strong>To decide what you can do</strong> — editing the map is limited to ambassadors and admins.</li>
+      <li><strong>To confirm you are part of the community</strong> — membership of our Discord server is the check.</li>
+      <li><strong>To keep the site honest</strong> — the change log lets us undo mistakes and see who made them.</li>
+      <li><strong>To run community features</strong> — meetups, raid coordination, and the photo gallery.</li>
+    </ul>
+    <p>
+      We do not profile you, sell or rent your data, share it with advertisers, or use it to
+      train machine learning models.
+    </p>
+
+    <h2 id="discord">4. Signing in with Discord</h2>
+    <p>
+      We use Discord as our only sign-in method. When you authorise it, we request two
+      permissions:
+    </p>
+    <ul>
+      <li><code>identify</code> — your account ID, username and avatar. Not your email.</li>
+      <li>
+        <code>guilds.members.read</code> — whether you are in the PoGo TXK Discord server and
+        which roles you hold there. It does not grant access to your messages or to any other
+        server you are in.
+      </li>
+    </ul>
+    <p>
+      You can revoke this at any time from Discord under <em>User Settings → Authorized Apps</em>.
+      Revoking stops future sign-ins; to have the data already stored removed, see
+      <a href="#rights">Your choices</a>.
+    </p>
+    <p>
+      What Discord itself does with your data is governed by
+      <a href="https://discord.com/privacy" rel="noopener noreferrer" target="_blank">Discord's privacy policy</a>,
+      not this one.
+    </p>
+
+    <h2 id="third-parties">5. Third parties</h2>
+    <p>
+      We keep these to a minimum, but some are unavoidable for a map site. Where a third party
+      serves content directly to your browser, that party necessarily sees your IP address.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Who</th><th>What for</th><th>What they see</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Cloudflare</td>
+          <td>Hosting, database, image storage</td>
+          <td>Your IP address and requests, as our hosting provider</td>
+        </tr>
+        <tr>
+          <td>Discord</td>
+          <td>Sign-in</td>
+          <td>That you signed in to this site</td>
+        </tr>
+        <tr>
+          <td>OpenStreetMap and CARTO</td>
+          <td>Map tiles</td>
+          <td>Your IP address, and which map tiles you loaded</td>
+        </tr>
+        <tr>
+          <td>Leek Duck</td>
+          <td>Raid boss and event artwork</td>
+          <td>Your IP address when those images load</td>
+        </tr>
+        <tr>
+          <td>Google or Apple Maps</td>
+          <td>Only if you tap "Directions"</td>
+          <td>Nothing unless you tap it — it is an ordinary outbound link</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="retention">6. How long we keep it</h2>
+    <ul>
+      <li><strong>Your account:</strong> until you ask us to delete it.</li>
+      <li><strong>Sessions:</strong> two weeks from last use, then removed automatically.</li>
+      <li><strong>Raid and meetup activity:</strong> raid flares expire within hours; attendance records persist as community history.</li>
+      <li>
+        <strong>Change log:</strong> kept indefinitely, because its purpose is an accurate record
+        of who edited what. If you delete your account, entries remain but are no longer linked
+        to you.
+      </li>
+      <li>
+        <strong>Photos:</strong> kept until removed by an ambassador. Photos of the community at
+        public events may remain in the gallery with their original credit.
+      </li>
+    </ul>
+
+    <h2 id="rights">7. Your choices</h2>
+    <p>Ask any ambassador on our <a href={DISCORD} rel="noopener noreferrer" target="_blank">Discord server</a> to:</p>
+    <ul>
+      <li>See what we hold about you</li>
+      <li>Correct anything wrong</li>
+      <li>Delete your account and personal data</li>
+      <li>Remove a specific photo you are in</li>
+    </ul>
+    <p>
+      We will action it within a reasonable time — usually a few days, since this is run by
+      volunteers. You do not need to give a reason.
+    </p>
+    <p>
+      Depending on where you live you may have additional rights under laws such as the GDPR or
+      the CCPA. We aim to honour requests of that kind regardless of where you are, because the
+      simplest policy is to just do it.
+    </p>
+
+    <h2 id="children">8. Children</h2>
+    <p>
+      Discord requires users to be at least 13, and older in some countries. Because signing in
+      requires a Discord account, the same applies here. We do not knowingly collect data from
+      anyone below that age. If you believe a child's data is stored here, tell an ambassador
+      and we will remove it.
+    </p>
+
+    <h2 id="security">9. Security</h2>
+    <p>
+      The site is served over HTTPS. Sign-in tokens are stored only as one-way hashes, so a
+      copy of our database could not be used to sign in as you. Access to the admin console is
+      limited to ambassadors and admins.
+    </p>
+    <p>
+      We are volunteers, not a security team. We will not pretend the site is impenetrable — do
+      not store anything here you would be upset to see made public. If you find a
+      vulnerability, please report it privately on Discord rather than publicly.
+    </p>
+
+    <h2 id="changes">10. Changes</h2>
+    <p>
+      If we change this policy materially we will announce it in the Discord server and update
+      the date at the top. Continuing to use the site after a change means you accept it.
+    </p>
+
+    <h2 id="contact">11. Contact</h2>
+    <p>
+      The fastest way to reach us is the
+      <a href={DISCORD} rel="noopener noreferrer" target="_blank">PoGo TXK Discord server</a> —
+      message any ambassador or admin.
+    </p>
+
+    <p class="legal-note">
+      PoGo TXK is a fan community and is not affiliated with, endorsed by, or sponsored by
+      Niantic, Nintendo, Creatures Inc., GAME FREAK, or The Pokémon Company. Pokémon and
+      Pokémon character names are trademarks of Nintendo. This policy covers only data handled
+      by this site — playing Pokémon GO itself is governed by Niantic's own privacy policy.
+    </p>
+  </article>
+</Base>

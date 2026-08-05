@@ -1,0 +1,135 @@
+/* Shared styling for the Terms and Privacy pages. Long-form reading: generous
+   measure, clear hierarchy, no decoration competing with the text. */
+
+.legal {
+  max-width: 68ch;
+  margin: 0 auto;
+  padding: clamp(28px, 6vw, 64px) 20px 80px;
+}
+
+.legal-eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.legal h1 {
+  margin: 8px 0 4px;
+  font-size: clamp(1.7rem, 5vw, 2.4rem);
+}
+
+.legal-updated {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.legal-summary {
+  margin: 20px 0 32px;
+  padding: 16px 20px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-sunken);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.legal-summary p {
+  margin: 0 0 8px;
+}
+.legal-summary p:last-child {
+  margin-bottom: 0;
+}
+.legal-summary strong {
+  color: var(--text);
+}
+
+.legal h2 {
+  margin: 36px 0 10px;
+  font-size: 1.18rem;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.legal h3 {
+  margin: 22px 0 6px;
+  font-size: 1rem;
+}
+
+.legal p,
+.legal li {
+  color: var(--text);
+}
+
+.legal ul,
+.legal ol {
+  padding-left: 1.3em;
+}
+.legal li {
+  margin-bottom: 6px;
+}
+
+.legal table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0 18px;
+  font-size: 0.9rem;
+  display: block;
+  overflow-x: auto;
+}
+.legal table thead th {
+  text-align: left;
+  padding: 8px 12px;
+  background: var(--bg-sunken);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.legal table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.legal code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-sunken);
+  font-size: 0.9em;
+}
+
+.legal-note {
+  margin: 32px 0 0;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.legal-toc {
+  margin: 0 0 32px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.legal-toc p {
+  margin: 0 0 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.legal-toc ol {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 0.9rem;
+  columns: 2;
+  column-gap: 28px;
+}
+@media (max-width: 560px) {
+  .legal-toc ol {
+    columns: 1;
+  }
+}
