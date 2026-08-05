@@ -1,15 +1,543 @@
 ---
+import { env } from 'cloudflare:workers';
+import Base from '~/layouts/Base.astro';
+import { listPublicMeetups, markdownToText, meetupLocation } from '~/lib/db/meetups';
+import { listPublishedPosts } from '~/lib/db/posts';
+import { formatInZone } from '~/lib/time';
+
 export const prerender = false;
+
+const db = env.DB;
+
+/**
+ * Everything on this page is optional. A brand-new deployment has no POIs, no
+ * meetups and no posts, and the page still has to look deliberate rather than
+ * broken — so each section renders a real fallback instead of an empty shell.
+ */
+const [counts, meetups, posts, photos] = await Promise.all([
+  db
+    .prepare(
+      `SELECT
+         SUM(type = 'pokestop')  AS pokestops,
+         SUM(type = 'gym')       AS gyms,
+         SUM(type = 'powerspot') AS powerspots,
+         SUM(is_campsite)        AS campsite
+       FROM pois WHERE status = 'published'`,
+    )
+    .first<{ pokestops: number; gyms: number; powerspots: number; campsite: number }>()
+    .catch(() => null),
+
+  listPublicMeetups(db).catch(() => []),
+  listPublishedPosts(db, { limit: 3 }).catch(() => ({ posts: [], total: 0 })),
+
+  db
+    .prepare(
+      `SELECT r2_key, alt, credit FROM media
+        WHERE kind = 'community_photo' ORDER BY created_at DESC LIMIT 4`,
+    )
+    .all<{ r2_key: string; alt: string | null; credit: string | null }>()
+    .then((r) => r.results)
+    .catch(() => []),
+]);
+
+const nowIso = new Date().toISOString();
+const nextMeetup = meetups.find((m) => (m.endsAt ?? m.startsAt) >= nowIso) ?? null;
+
+const latestPosts = Array.isArray(posts) ? posts : posts.posts;
+
+const totalPois =
+  (counts?.pokestops ?? 0) + (counts?.gyms ?? 0) + (counts?.powerspots ?? 0);
+
+const socials = [
+  { href: 'https://discord.com/invite/2sYR5YdRpH', label: 'Discord', hint: 'Raids, chat, meetups', cls: 'discord' },
+  {
+    href: 'https://campfire.onelink.me/eBr8?af_dp=campfire%3A%2F%2F&af_force_deeplink=true&deep_link_sub1=cj1jbHVicyZjPTI4Y2Y0NDJjLTg2M2UtNDcwZS1iYmQwLTQwNjdhNDcxMDJjYyZpPXRydWU%3D',
+    label: 'Campfire',
+    hint: 'Check in at meetups',
+    cls: 'campfire',
+  },
+  { href: 'https://www.facebook.com/groups/1792291964630166/', label: 'Facebook', hint: 'Community group', cls: 'facebook' },
+  { href: 'https://www.instagram.com/pogotxk', label: 'Instagram', hint: '@pogotxk', cls: 'instagram' },
+];
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>PoGo TXK</title>
-  </head>
-  <body>
-    <h1>PoGo TXK</h1>
-    <p>Scaffold online.</p>
-  </body>
-</html>
+<Base title="PoGo TXK">
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Texarkana, Texas &amp; Arkansas</p>
+      <h1>Pokémon GO Texarkana</h1>
+      <p class="lede">
+        A community Campsite at Spring Lake Park, run by trainers from all three teams. Find every
+        PokéStop and Gym, catch the next meetup, and raid with people who actually show up.
+      </p>
+
+      <div class="hero-actions">
+        <a class="btn btn--primary" href="/map">Open the map</a>
+        <a
+          class="btn btn--discord"
+          href="https://discord.com/invite/2sYR5YdRpH"
+          rel="noopener noreferrer"
+          target="_blank">Join the Discord</a
+        >
+      </div>
+
+      {
+        totalPois > 0 && (
+          <dl class="stats">
+            <div><dt>PokéStops</dt><dd>{counts?.pokestops ?? 0}</dd></div>
+            <div><dt>Gyms</dt><dd>{counts?.gyms ?? 0}</dd></div>
+            <div><dt>Power Spots</dt><dd>{counts?.powerspots ?? 0}</dd></div>
+            <div><dt>★ Campsite</dt><dd>{counts?.campsite ?? 0}</dd></div>
+          </dl>
+        )
+      }
+    </div>
+
+    <a class="hero-map" href="/map" aria-label="Open the Spring Lake Park map">
+      <span class="hero-map-inner">
+        <span class="hero-map-pin" aria-hidden="true" />
+        <span class="hero-map-label">
+          <strong>Spring Lake Park</strong>
+          <span>{totalPois > 0 ? `${totalPois} locations mapped` : 'Interactive map'}</span>
+        </span>
+      </span>
+    </a>
+  </section>
+
+  <div class="grid">
+    <section class="card card--meetup">
+      <h2>Next meetup</h2>
+      {
+        nextMeetup ? (
+          <>
+            <p class="meetup-title">{nextMeetup.title}</p>
+            <p class="meetup-when">{formatInZone(nextMeetup.startsAt, nextMeetup.tz)}</p>
+            <p class="meetup-where">{meetupLocation(nextMeetup) ?? 'Location to be confirmed'}</p>
+            {nextMeetup.descriptionMd && (
+              <p class="meetup-note">{markdownToText(nextMeetup.descriptionMd)}</p>
+            )}
+            <a class="card-link" href="/events">All events →</a>
+          </>
+        ) : (
+          <>
+            <p class="empty">
+              Nothing on the calendar right now. Meetups get announced in Discord first — the
+              regular slot is Wednesday evenings at the Campsite.
+            </p>
+            <a class="card-link" href="/events">See the event calendar →</a>
+          </>
+        )
+      }
+    </section>
+
+    <section class="card">
+      <h2>Right now</h2>
+      <p class="empty">
+        Raid flares from the community appear on the live board. Fire one when you are at a gym
+        and need people.
+      </p>
+      <a class="card-link" href="/live">Open the live board →</a>
+    </section>
+
+    <section class="card">
+      <h2>In game today</h2>
+      <p class="empty">
+        Current raid bosses, egg pools and field research, updated automatically from Leek Duck.
+      </p>
+      <p class="card-links">
+        <a href="/raids">Raid bosses</a> · <a href="/eggs">Eggs</a> ·
+        <a href="/research">Research</a>
+      </p>
+    </section>
+  </div>
+
+  {
+    latestPosts.length > 0 && (
+      <section class="section">
+        <div class="section-head">
+          <h2>Community news</h2>
+          <a href="/blog">All posts →</a>
+        </div>
+        <ul class="posts">
+          {latestPosts.map((post) => (
+            <li>
+              <a href={`/blog/${post.slug}`}>
+                <strong>{post.title}</strong>
+                {post.excerpt && <span>{post.excerpt}</span>}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  {
+    photos.length > 0 && (
+      <section class="section">
+        <div class="section-head">
+          <h2>The community</h2>
+        </div>
+        <ul class="photos">
+          {photos.map((photo) => (
+            <li>
+              <img
+                src={`/media/${photo.r2_key}`}
+                alt={photo.alt ?? 'PoGo TXK community photo'}
+                loading="lazy"
+                width="400"
+                height="300"
+              />
+              {photo.credit && <span>{photo.credit}</span>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Find us</h2>
+    </div>
+    <ul class="socials">
+      {
+        socials.map((social) => (
+          <li>
+            <a class={`social social--${social.cls}`} href={social.href} rel="noopener noreferrer" target="_blank">
+              <strong>{social.label}</strong>
+              <span>{social.hint}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section class="section campsite">
+    <h2>What is a Community Campsite?</h2>
+    <p>
+      Community Campsites are dedicated in-game areas established by official Community
+      Ambassadors, and they act as local hubs for in-person meetups. They come with perks —
+      exclusive event check-ins, special Timed Research, and enhanced PokéStops and Gyms.
+    </p>
+    <p>
+      Ours covers Spring Lake Park. The ★ markers on the map are the Campsite locations.
+    </p>
+  </section>
+</Base>
+
+<style>
+  .hero {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: clamp(20px, 4vw, 48px);
+    align-items: center;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: clamp(28px, 6vw, 64px) 20px clamp(20px, 4vw, 40px);
+  }
+
+  .eyebrow {
+    margin: 0;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .hero h1 {
+    margin: 6px 0 12px;
+    font-size: clamp(2rem, 6vw, 3.2rem);
+    line-height: 1.05;
+  }
+  .lede {
+    margin: 0 0 22px;
+    font-size: clamp(1rem, 2.2vw, 1.12rem);
+    color: var(--text-muted);
+    max-width: 46ch;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .btn {
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-decoration: none;
+  }
+  .btn--primary {
+    background: var(--accent);
+    color: var(--accent-contrast);
+  }
+  .btn--discord {
+    background: #5865f2;
+    color: #fff;
+  }
+
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 26px;
+    margin: 28px 0 0;
+  }
+  .stats div {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+  .stats dt {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .stats dd {
+    margin: 0;
+    font-size: 1.7rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hero-map {
+    display: block;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background:
+      radial-gradient(circle at 30% 35%, rgb(47 127 212 / 0.18), transparent 55%),
+      radial-gradient(circle at 70% 65%, rgb(226 112 58 / 0.18), transparent 55%),
+      var(--bg-sunken);
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+    position: relative;
+    box-shadow: var(--shadow-md);
+  }
+  .hero-map:hover {
+    border-color: var(--accent);
+  }
+  .hero-map-inner {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    gap: 12px;
+    justify-items: center;
+  }
+  .hero-map-pin {
+    width: 22px;
+    height: 22px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    background: var(--poi-gym);
+    box-shadow: 0 0 0 6px rgb(226 112 58 / 0.18);
+  }
+  .hero-map-label {
+    text-align: center;
+    display: grid;
+    gap: 2px;
+  }
+  .hero-map-label strong {
+    font-size: 1.05rem;
+  }
+  .hero-map-label span {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  .card {
+    padding: 20px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .card h2 {
+    margin: 0 0 10px;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+  }
+  .card--meetup {
+    border-color: var(--poi-campsite);
+  }
+  .meetup-title {
+    margin: 0 0 2px;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+  .meetup-when {
+    margin: 0;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .meetup-where,
+  .meetup-note {
+    margin: 4px 0 0;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+  }
+  .empty {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .card-link,
+  .card-links {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+  .card-links {
+    color: var(--text-muted);
+  }
+
+  .section {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 36px 20px 0;
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+  .section-head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+  .section-head a {
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  .posts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .posts a {
+    display: grid;
+    gap: 3px;
+    padding: 14px 16px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-decoration: none;
+    color: inherit;
+  }
+  .posts a:hover {
+    border-color: var(--accent);
+  }
+  .posts span {
+    font-size: 0.86rem;
+    color: var(--text-muted);
+  }
+
+  .photos {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+  }
+  .photos li {
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .photos img {
+    display: block;
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+  }
+  /* Photo credit is a licensing obligation, not decoration — it stays on the
+     image rather than in a caption that could be cropped out. */
+  .photos span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 14px 10px 5px;
+    font-size: 0.66rem;
+    color: #fff;
+    background: linear-gradient(transparent, rgb(0 0 0 / 0.75));
+  }
+
+  .socials {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .social {
+    display: grid;
+    gap: 2px;
+    padding: 16px 18px;
+    border-radius: var(--radius);
+    text-decoration: none;
+    color: #fff;
+    background: var(--navy-700);
+  }
+  .social span {
+    font-size: 0.8rem;
+    opacity: 0.8;
+  }
+  .social--discord {
+    background: #5865f2;
+  }
+  .social--campfire {
+    background: #e2703a;
+  }
+  .social--facebook {
+    background: #1877f2;
+  }
+  .social--instagram {
+    background: linear-gradient(135deg, #833ab4, #fd1d1d 55%, #fcb045);
+  }
+
+  .campsite {
+    padding-bottom: 56px;
+  }
+  .campsite h2 {
+    font-size: 1.15rem;
+    margin-bottom: 8px;
+  }
+  .campsite p {
+    max-width: 68ch;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
+
+  @media (max-width: 820px) {
+    .hero {
+      grid-template-columns: 1fr;
+    }
+    .hero-map {
+      aspect-ratio: 16 / 9;
+    }
+  }
+</style>

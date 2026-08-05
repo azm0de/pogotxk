@@ -78,7 +78,14 @@ export async function GET(ctx: APIContext): Promise<Response> {
     const guildRoles = await fetchGuildRoles(accessToken, cfg.guildId);
     const role = resolveRole(cfg, discordUser.id, guildRoles);
 
-    const record = await upsertUser(env.DB, discordUser, role);
+    // Discord only gets to set the role when it actually knows something: a
+    // configured guild we could read, or an explicit bootstrap admin. Otherwise
+    // the stored role stands, so a hand-promoted admin is not demoted on their
+    // next sign-in.
+    const authoritative =
+      guildRoles !== null || discordUser.id === cfg.bootstrapAdminId;
+
+    const record = await upsertUser(env.DB, discordUser, role, authoritative);
     if (record.isBanned) return fail('This account is banned', url, 403);
 
     const token = await createSession(env.DB, record.id, request.headers.get('user-agent'));

@@ -164,14 +164,22 @@ export function resolveRole(
 }
 
 /**
- * Insert or refresh the user record. Profile fields and role are re-synced on
- * every login, so a Discord role change takes effect the next time they sign
- * in. Locally-owned fields (team, trainer name/level) are left alone.
+ * Insert or refresh the user record. Profile fields are re-synced on every
+ * login. Locally-owned fields (team, trainer name/level) are left alone.
+ *
+ * The role is only overwritten when Discord is actually authoritative about
+ * it — that is, when a guild is configured and we were able to read the
+ * member's roles there. Without a guild, `resolveRole` can only ever answer
+ * `guest`, and blindly writing that back would silently demote anyone promoted
+ * by hand on their next sign-in. Which is precisely how the first admin gets
+ * created before the guild is wired up.
  */
 export async function upsertUser(
   db: D1Database,
   user: DiscordUser,
   role: Role,
+  /** True when the role was derived from real guild data or the bootstrap id. */
+  authoritative: boolean,
 ): Promise<{ id: number; role: Role; team: Team | null; isBanned: boolean }> {
   await db
     .prepare(
@@ -181,11 +189,11 @@ export async function upsertUser(
          username     = excluded.username,
          global_name  = excluded.global_name,
          avatar_hash  = excluded.avatar_hash,
-         role         = excluded.role,
+         role         = CASE WHEN ?6 = 1 THEN excluded.role ELSE users.role END,
          last_seen_at = excluded.last_seen_at,
          updated_at   = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`,
     )
-    .bind(user.id, user.username, user.global_name, user.avatar, role)
+    .bind(user.id, user.username, user.global_name, user.avatar, role, authoritative ? 1 : 0)
     .run();
 
   const row = await db
