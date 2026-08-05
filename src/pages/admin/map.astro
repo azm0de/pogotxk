@@ -1,0 +1,10 @@
+---
+import Admin from '~/layouts/Admin.astro';
+import MapEditor from '~/components/admin/MapEditor';
+
+export const prerender = false;
+---
+
+<Admin title="Map editor" fullBleed>
+  <MapEditor client:only="react" />
+</Admin>

@@ -1,0 +1,211 @@
+---
+import '~/styles/global.css';
+import { hasRole } from '~/lib/auth/types';
+
+interface Props {
+  title: string;
+  /** Editor pages manage their own scrolling. */
+  fullBleed?: boolean;
+}
+
+const { title, fullBleed = false } = Astro.props;
+
+// Middleware already enforces `ambassador` for /admin/*; this is for rendering.
+const user = Astro.locals.user!;
+
+const nav = [
+  { href: '/admin', label: 'Dashboard', exact: true },
+  { href: '/admin/map', label: 'Map' },
+  { href: '/admin/meetups', label: 'Meetups' },
+  { href: '/admin/posts', label: 'News' },
+  { href: '/admin/media', label: 'Media' },
+  { href: '/admin/settings', label: 'Settings', adminOnly: true },
+];
+
+const path = Astro.url.pathname;
+const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} | PoGo TXK Admin</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+
+  <body class={fullBleed ? 'is-full-bleed' : ''}>
+    <a class="skip-link" href="#admin-main">Skip to content</a>
+
+    <header class="admin-header">
+      <div class="admin-brand">
+        <span class="admin-mark" aria-hidden="true">TXK</span>
+        <div>
+          <strong>Admin</strong>
+          <span>PoGo TXK</span>
+        </div>
+      </div>
+
+      <nav aria-label="Admin sections">
+        <ul>
+          {
+            visible.map((item) => {
+              const current = item.exact ? path === item.href : path.startsWith(item.href);
+              return (
+                <li>
+                  <a href={item.href} aria-current={current ? 'page' : undefined}>
+                    {item.label}
+                  </a>
+                </li>
+              );
+            })
+          }
+        </ul>
+      </nav>
+
+      <div class="admin-user">
+        {user.avatarUrl && <img src={user.avatarUrl} alt="" width="26" height="26" />}
+        <span class="admin-user-name">{user.displayName}</span>
+        <span class={`admin-role admin-role--${user.role}`}>{user.role}</span>
+        <a class="admin-signout" href="/auth/logout">Sign out</a>
+      </div>
+    </header>
+
+    <main id="admin-main">
+      <slot />
+    </main>
+
+    <style>
+      body {
+        background: var(--bg-sunken);
+      }
+      body.is-full-bleed {
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      body.is-full-bleed main {
+        flex: 1;
+        min-height: 0;
+      }
+
+      .admin-header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        height: var(--header-h);
+        padding: 0 16px;
+        background: var(--navy-900);
+        color: #fff;
+        flex: none;
+      }
+
+      .admin-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .admin-brand div {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.15;
+      }
+      .admin-brand strong {
+        font-size: 0.92rem;
+      }
+      .admin-brand span:last-child {
+        font-size: 0.7rem;
+        opacity: 0.6;
+      }
+      .admin-mark {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: rgb(255 255 255 / 0.12);
+        font-size: 0.66rem;
+        font-weight: 800;
+      }
+
+      nav {
+        flex: 1;
+        min-width: 0;
+      }
+      nav ul {
+        display: flex;
+        gap: 3px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      nav ul::-webkit-scrollbar {
+        display: none;
+      }
+      nav a {
+        display: block;
+        padding: 6px 12px;
+        border-radius: 8px;
+        color: rgb(255 255 255 / 0.75);
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      nav a:hover {
+        background: rgb(255 255 255 / 0.09);
+        color: #fff;
+      }
+      nav a[aria-current='page'] {
+        background: rgb(255 255 255 / 0.18);
+        color: #fff;
+      }
+
+      .admin-user {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.8rem;
+      }
+      .admin-user img {
+        border-radius: 50%;
+      }
+      .admin-user-name {
+        font-weight: 600;
+      }
+      .admin-role {
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 0.64rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        background: rgb(255 255 255 / 0.16);
+      }
+      .admin-role--admin {
+        background: var(--poi-campsite);
+        color: #4a2c00;
+      }
+      .admin-signout {
+        color: rgb(255 255 255 / 0.65);
+        text-decoration: none;
+      }
+      .admin-signout:hover {
+        color: #fff;
+        text-decoration: underline;
+      }
+
+      @media (max-width: 720px) {
+        .admin-user-name,
+        .admin-brand div {
+          display: none;
+        }
+      }
+    </style>
+  </body>
+</html>

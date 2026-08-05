@@ -1,0 +1,10 @@
+---
+import Admin from '~/layouts/Admin.astro';
+import MeetupEditor from '~/components/admin/MeetupEditor';
+
+export const prerender = false;
+---
+
+<Admin title="Meetups">
+  <MeetupEditor client:load />
+</Admin>

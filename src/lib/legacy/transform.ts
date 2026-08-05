@@ -15,6 +15,9 @@
  */
 
 import { AMBASSADOR_ICON, type LegacyMarker } from './parse';
+import { slugify } from '../slug';
+
+export { slugify };
 
 export interface PoiRow {
   slug: string;
@@ -53,17 +56,6 @@ export interface TransformResult {
   /** poi slug -> r2 key, for wiring poi_media and hero_media_id afterwards. */
   poiPhotos: Map<string, string>;
   warnings: string[];
-}
-
-export function slugify(input: string): string {
-  return (
-    input
-      .normalize('NFKD')
-      .replace(/[̀-ͯ]/g, '') // strip diacritics: Pokémon -> Pokemon
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'item'
-  );
 }
 
 /** Assign `base`, then `base-2`, `base-3`, … tracking what is already taken. */

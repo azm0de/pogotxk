@@ -1,0 +1,215 @@
+---
+import { env } from 'cloudflare:workers';
+import Admin from '~/layouts/Admin.astro';
+import { formatInZone } from '~/lib/time';
+
+export const prerender = false;
+
+const db = env.DB;
+
+const [counts, nextMeetup, recent] = await Promise.all([
+  db
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM pois WHERE status = 'published')  AS pois_live,
+         (SELECT COUNT(*) FROM pois WHERE status = 'pending')    AS pois_pending,
+         (SELECT COUNT(*) FROM pois WHERE status = 'archived')   AS pois_archived,
+         (SELECT COUNT(*) FROM media)                            AS media,
+         (SELECT COUNT(*) FROM posts WHERE status = 'published') AS posts,
+         (SELECT COUNT(*) FROM meetups WHERE status = 'published'
+            AND starts_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now')) AS meetups_upcoming,
+         (SELECT COUNT(*) FROM poi_reports WHERE status = 'open') AS reports_open,
+         (SELECT COUNT(*) FROM users)                            AS users`,
+    )
+    .first<Record<string, number>>(),
+
+  db
+    .prepare(
+      `SELECT m.title, m.starts_at, m.tz, p.name AS poi_name, m.location_text
+         FROM meetups m LEFT JOIN pois p ON p.id = m.poi_id
+        WHERE m.status = 'published' AND m.starts_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now')
+        ORDER BY m.starts_at LIMIT 1`,
+    )
+    .first<{ title: string; starts_at: string; tz: string; poi_name: string | null; location_text: string | null }>(),
+
+  db
+    .prepare(
+      `SELECT a.action, a.entity, a.entity_id, a.created_at, u.username
+         FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
+        ORDER BY a.id DESC LIMIT 8`,
+    )
+    .all<{ action: string; entity: string; entity_id: string; created_at: string; username: string | null }>(),
+]);
+
+const c = counts ?? {};
+
+const cards = [
+  { label: 'Live locations', value: c.pois_live ?? 0, href: '/admin/map' },
+  { label: 'Awaiting review', value: c.pois_pending ?? 0, href: '/admin/map', warn: (c.pois_pending ?? 0) > 0 },
+  { label: 'Upcoming meetups', value: c.meetups_upcoming ?? 0, href: '/admin/meetups' },
+  { label: 'Published posts', value: c.posts ?? 0, href: '/admin/posts' },
+  { label: 'Media items', value: c.media ?? 0, href: '/admin/media' },
+  { label: 'Open reports', value: c.reports_open ?? 0, href: '/admin/map', warn: (c.reports_open ?? 0) > 0 },
+];
+---
+
+<Admin title="Dashboard">
+  <div class="dash">
+    <h1>Dashboard</h1>
+
+    <div class="cards">
+      {
+        cards.map((card) => (
+          <a class={`card${card.warn ? ' card--warn' : ''}`} href={card.href}>
+            <strong>{card.value}</strong>
+            <span>{card.label}</span>
+          </a>
+        ))
+      }
+    </div>
+
+    <section class="panel">
+      <h2>Next meetup</h2>
+      {
+        nextMeetup ? (
+          <p class="next-meetup">
+            <strong>{nextMeetup.title}</strong>
+            <span>{formatInZone(nextMeetup.starts_at, nextMeetup.tz)}</span>
+            <span>{nextMeetup.poi_name ?? nextMeetup.location_text ?? 'No location set'}</span>
+          </p>
+        ) : (
+          <p class="muted">
+            Nothing published. <a href="/admin/meetups">Schedule one</a> — the home page and the
+            calendar feed both read from here.
+          </p>
+        )
+      }
+    </section>
+
+    <section class="panel">
+      <h2>Recent activity</h2>
+      {
+        recent.results.length ? (
+          <ul class="activity">
+            {recent.results.map((r) => (
+              <li>
+                <code>{r.action}</code>
+                <span>
+                  {r.entity} #{r.entity_id}
+                </span>
+                <span class="muted">by {r.username ?? 'system'}</span>
+                <time datetime={r.created_at}>{r.created_at.replace('T', ' ').replace('Z', '')}</time>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="muted">No changes recorded yet.</p>
+        )
+      }
+    </section>
+  </div>
+
+  <style>
+    .dash {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 20px 64px;
+      display: grid;
+      gap: 20px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .card {
+      display: grid;
+      gap: 2px;
+      padding: 14px 16px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: inherit;
+    }
+    .card:hover {
+      border-color: var(--border-strong);
+    }
+    .card strong {
+      font-size: 1.7rem;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .card span {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .card--warn strong {
+      color: var(--poi-gym);
+    }
+
+    .panel {
+      padding: 16px 18px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .next-meetup {
+      display: grid;
+      gap: 2px;
+      margin: 0;
+    }
+    .next-meetup strong {
+      font-size: 1.05rem;
+    }
+    .next-meetup span {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .activity {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+      font-size: 0.82rem;
+    }
+    .activity li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .activity code {
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--bg-sunken);
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .activity time {
+      margin-left: auto;
+      color: var(--text-muted);
+      font-size: 0.74rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .muted {
+      color: var(--text-muted);
+      margin: 0;
+      font-size: 0.86rem;
+    }
+  </style>
+</Admin>
