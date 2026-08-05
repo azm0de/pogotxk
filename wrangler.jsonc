@@ -6,6 +6,25 @@
 
   "observability": { "enabled": true },
 
+  // Non-secret configuration lives here, NOT in the dashboard.
+  //
+  // `wrangler deploy` deletes every plain-text var not present in this file
+  // before applying the ones that are — and Workers Builds runs a deploy on
+  // every push. A var added through the dashboard therefore survives only
+  // until the next commit. Secrets are exempt and are never deleted.
+  //
+  // The Discord client id is a public identifier: it appears in the OAuth URL
+  // in the user's address bar on every sign-in. Committing it is safe, and it
+  // makes the value deploy-stable. The client SECRET must stay a dashboard
+  // secret and must never appear here.
+  "vars": {
+    "DISCORD_CLIENT_ID": "1534670096256073778"
+  },
+
+  // Belt and braces: preserve any other plain-text var set in the dashboard
+  // (for example DISCORD_GUILD_ID) instead of wiping it on the next deploy.
+  "keep_vars": true,
+
   // D1 — POIs, posts, meetups, users, flares, settings.
   "d1_databases": [
     {
