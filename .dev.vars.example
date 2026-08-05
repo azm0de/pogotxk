@@ -1,0 +1,33 @@
+# Copy to `.dev.vars` for local development. Never commit the real file.
+# In production these are set with `wrangler secret put <NAME>` or in the
+# Cloudflare dashboard under Workers > pogotxk > Settings > Variables.
+
+# --- Discord OAuth (https://discord.com/developers/applications) ---
+# Redirect URI to register: http://localhost:4321/auth/callback (dev)
+#                           https://pokemontxk.com/auth/callback (prod)
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+
+# Bot token — used to read guild member roles so we can map them to site roles.
+# Bot needs to be in the guild; no privileged intents required for this.
+DISCORD_BOT_TOKEN=
+DISCORD_GUILD_ID=
+
+# Role IDs from your Discord server, mapped to site roles.
+DISCORD_ROLE_ADMIN=
+DISCORD_ROLE_AMBASSADOR=
+DISCORD_ROLE_MEMBER=
+
+# Webhook the flare/announcement fan-out posts into.
+DISCORD_WEBHOOK_URL=
+
+# --- Web Push (VAPID) ---
+# Generate with: npx web-push generate-vapid-keys
+# VAPID_SUBJECT must be a mailto: or https:// URL — Apple returns 403 otherwise.
+VAPID_SUBJECT=mailto:admin@pokemontxk.com
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+
+# --- Sessions ---
+# Random 32+ byte secret: openssl rand -base64 48
+SESSION_SECRET=

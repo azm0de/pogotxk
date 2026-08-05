@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pogotxk",
+  "compatibility_date": "2026-08-05",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "observability": { "enabled": true },
+
+  // D1 — POIs, posts, meetups, users, flares, settings.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pogotxk-db",
+      "database_id": "574a5165-3259-4e4a-bb6a-bd87356c8283",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // R2 — photo originals, KMZ uploads, PDFs.
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "pogotxk-media"
+    }
+  ],
+
+  // KV — ScrapedDuck payloads, cached settings.
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "3141511cbac84035a73941fca56449c1"
+    }
+  ],
+
+  // Durable Object — live board (flares + presence) over WebSocket hibernation.
+  // Enabled in the live-board task, once src/do/LiveBoard.ts exists and is
+  // re-exported from the worker entry. Binding a class that isn't exported
+  // fails the build, so it stays commented until then.
+  // "durable_objects": {
+  //   "bindings": [{ "name": "LIVE", "class_name": "LiveBoard" }]
+  // },
+  // "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveBoard"] }],
+
+  // Refresh ScrapedDuck every 30 minutes (~48 requests/day, well under the
+  // 5000/hr GitHub limit, and GitHub caches raw files for 5 minutes anyway).
+  "triggers": { "crons": ["*/30 * * * *"] }
+}

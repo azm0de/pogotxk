@@ -1,0 +1,14 @@
+# Normalize line endings so Windows and the Linux build container agree.
+* text=auto eol=lf
+
+# Binary — never touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.pdf binary
+*.kmz binary
+*.woff binary
+*.woff2 binary

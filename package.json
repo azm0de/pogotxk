@@ -1,0 +1,40 @@
+{
+  "name": "pogotxk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PoGo TXK — Pokémon GO Texarkana community platform",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "wrangler dev",
+    "deploy": "astro build && wrangler deploy",
+    "check": "astro check",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply pogotxk --local",
+    "db:migrate:remote": "wrangler d1 migrations apply pogotxk --remote",
+    "db:studio": "wrangler d1 execute pogotxk --local --command",
+    "import:legacy": "node --experimental-strip-types scripts/import-legacy.ts"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.1.7",
+    "@astrojs/react": "^6.0.2",
+    "astro": "^7.1.6",
+    "leaflet": "^1.9.4",
+    "leaflet.markercluster": "^1.5.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260804.1",
+    "@types/leaflet": "^1.9.22",
+    "@types/leaflet.markercluster": "^1.5.6",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.83.0"
+  }
+}
