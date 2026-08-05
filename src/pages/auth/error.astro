@@ -1,0 +1,85 @@
+---
+import Base from '~/layouts/Base.astro';
+
+export const prerender = false;
+
+const reason = Astro.url.searchParams.get('reason') ?? 'Something went wrong';
+const status = Number(Astro.url.searchParams.get('status')) || 400;
+
+// Discord's own error codes are terse; translate the ones people actually hit.
+const EXPLANATIONS: Record<string, string> = {
+  access_denied: 'You cancelled the Discord sign-in, so nothing was changed.',
+  'State mismatch':
+    'The sign-in request could not be verified. This usually means it was started in another tab or took too long. Try again.',
+  'Sign-in session expired, please try again':
+    'The sign-in took longer than ten minutes. Start again and it should go straight through.',
+  'This account is banned': 'This account has been banned from the site. Contact an ambassador on Discord.',
+  'Discord sign-in is not configured':
+    'Discord sign-in has not been set up on this deployment yet.',
+};
+
+const explanation = EXPLANATIONS[reason];
+---
+
+<Base title="Sign-in problem">
+  <section class="auth-error">
+    <p class="eyebrow">Error {status}</p>
+    <h1>Could not sign you in</h1>
+    <p class="reason">{reason}</p>
+    {explanation && <p class="explanation">{explanation}</p>}
+
+    <div class="actions">
+      <a class="btn" href="/auth/login">Try again</a>
+      <a class="btn btn--ghost" href="/">Back to the map</a>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .auth-error {
+    max-width: 52ch;
+    margin: 0 auto;
+    padding: clamp(32px, 8vw, 80px) 20px;
+  }
+  .eyebrow {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  h1 {
+    margin: 6px 0 16px;
+    font-size: clamp(1.6rem, 5vw, 2.2rem);
+  }
+  .reason {
+    padding: 12px 16px;
+    border-left: 3px solid var(--live);
+    background: var(--bg-sunken);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-weight: 600;
+  }
+  .explanation {
+    color: var(--text-muted);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 24px;
+  }
+  .btn {
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .btn--ghost {
+    background: var(--bg-sunken);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+</style>

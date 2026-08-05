@@ -15,7 +15,9 @@
     "db:migrate:local": "wrangler d1 migrations apply pogotxk-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply pogotxk-db --remote",
     "db:query": "wrangler d1 execute pogotxk-db --local --command",
-    "import:dry-run": "tsx scripts/dry-run-import.ts"
+    "import:dry-run": "tsx scripts/dry-run-import.ts",
+    "test:auth": "tsx scripts/test-auth.ts",
+    "test": "tsx scripts/test-auth.ts && tsx scripts/dry-run-import.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.7",

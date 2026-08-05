@@ -14,9 +14,19 @@ DISCORD_BOT_TOKEN=
 DISCORD_GUILD_ID=
 
 # Role IDs from your Discord server, mapped to site roles.
+# Enable Developer Mode in Discord, then right-click a role > Copy Role ID.
+# All optional. Without them, anyone in the guild becomes a `member` and nobody
+# is an admin — so set DISCORD_BOOTSTRAP_ADMIN_ID at minimum.
 DISCORD_ROLE_ADMIN=
 DISCORD_ROLE_AMBASSADOR=
+# Optional. If set, this specific role is required to count as a member —
+# for servers that gate behind a verification step. If unset, being in the
+# guild at all is enough.
 DISCORD_ROLE_MEMBER=
+
+# Your own Discord user ID. Always resolves to admin regardless of roles, so
+# you can sign in and configure everything else. Right-click yourself > Copy User ID.
+DISCORD_BOOTSTRAP_ADMIN_ID=
 
 # Webhook the flare/announcement fan-out posts into.
 DISCORD_WEBHOOK_URL=

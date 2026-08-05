@@ -1,12 +1,16 @@
 /// <reference types="astro/client" />
+/// <reference types="@astrojs/cloudflare/types.d.ts" />
 
-// Bindings are reached with `import { env } from 'cloudflare:workers'`.
-// `Astro.locals.runtime.env` was removed in Astro v6 and now throws.
+// The adapter's own types.d.ts declares `App.Locals extends Runtime`, which
+// supplies `cfContext` (waitUntil, passThroughOnException). This block merges
+// our own fields into the same interface.
 //
-// `Astro.locals.cfContext` carries the ExecutionContext (waitUntil, passThroughOnException).
+// Bindings are reached with `import { env } from 'cloudflare:workers'` —
+// `Astro.locals.runtime.env` was removed in Astro v6 and now throws.
 // Request metadata (country, colo, TLS) is on `Astro.request.cf`.
 declare namespace App {
-  interface Locals extends import('@astrojs/cloudflare').Runtime {
-    // A `user` field gets added here when Discord auth lands.
+  interface Locals {
+    /** Set by middleware when a valid session cookie is present. */
+    user?: import('~/lib/auth/types').SessionUser;
   }
 }
