@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="PoGo TXK">
+  <rect width="64" height="64" rx="14" fill="#123254"/>
+  <!-- Map pin: the site is a map first. -->
+  <path d="M32 13a13 13 0 0 0-13 13c0 9.75 13 25 13 25s13-15.25 13-25a13 13 0 0 0-13-13z"
+        fill="#f2a33c"/>
+  <circle cx="32" cy="26" r="6" fill="#123254"/>
+</svg>

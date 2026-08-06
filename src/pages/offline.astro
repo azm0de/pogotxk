@@ -1,0 +1,47 @@
+---
+import Base from '~/layouts/Base.astro';
+
+// Prerendered on purpose: the service worker caches this at install time, and
+// it has to be servable when there is no network to render it.
+export const prerender = true;
+---
+
+<Base title="Offline">
+  <section class="offline">
+    <h1>No connection</h1>
+    <p>
+      You are offline, so this page could not load. The park has patchy signal in places — try
+      moving a few metres and reloading.
+    </p>
+    <p>
+      Anything you have already looked at may still open. Raid flares will not: showing you a
+      cached one would be worse than showing you nothing, since it may have ended.
+    </p>
+    <button type="button" onclick="location.reload()">Try again</button>
+  </section>
+</Base>
+
+<style>
+  .offline {
+    max-width: 40ch;
+    margin: 0 auto;
+    padding: clamp(40px, 12vw, 100px) 24px;
+    text-align: center;
+  }
+  h1 {
+    font-size: clamp(1.5rem, 6vw, 2rem);
+  }
+  p {
+    color: var(--text-muted);
+  }
+  button {
+    margin-top: 18px;
+    padding: 12px 26px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-weight: 700;
+    cursor: pointer;
+  }
+</style>

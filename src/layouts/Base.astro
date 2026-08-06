@@ -32,6 +32,7 @@ const nav = [
   { href: '/events', label: 'Events' },
   { href: '/raids', label: 'Raids' },
   { href: '/blog', label: 'News' },
+  { href: '/go', label: 'Go', highlight: true },
   // '/gallery' belongs here once the page exists — the 9 community photos are
   // already imported with their credits. Linking it before then just serves a
   // 404 from the primary nav.
@@ -87,7 +88,11 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           {
             nav.map((item) => (
               <li>
-                <a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>
+                <a
+                  href={item.href}
+                  class={item.highlight ? 'nav-highlight' : undefined}
+                  aria-current={isCurrent(item.href) ? 'page' : undefined}
+                >
                   {item.label}
                 </a>
               </li>
@@ -205,6 +210,16 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         color: #fff;
       }
       nav a[aria-current='page'] {
+        background: #fff;
+        color: var(--navy-800);
+      }
+      /* The quick-action screen is the point of the whole site on a phone;
+         it earns a bit of visual weight in the nav. */
+      nav a.nav-highlight {
+        background: var(--poi-gym);
+        color: #fff;
+      }
+      nav a.nav-highlight[aria-current='page'] {
         background: #fff;
         color: var(--navy-800);
       }

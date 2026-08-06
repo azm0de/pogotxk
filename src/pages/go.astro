@@ -1,0 +1,39 @@
+---
+import Base from '~/layouts/Base.astro';
+import QuickActions from '~/components/go/QuickActions';
+
+export const prerender = false;
+
+// Passed in from the server so the screen knows immediately whether it can post,
+// rather than flashing a sign-in prompt at someone who is already signed in.
+const user = Astro.locals.user ?? null;
+---
+
+<Base
+  title="Quick actions"
+  description="Fire a raid flare, call for remote invites, or check in — one-handed, while you play."
+  fullBleed
+>
+  <Fragment slot="head">
+    <!-- This is the screen people install to their home screen. -->
+    <meta name="robots" content="noindex" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  </Fragment>
+
+  <QuickActions client:load user={user} />
+</Base>
+
+<script>
+  // Registered only from /go: the service worker exists to make the installed
+  // app work on a bad signal, and there is no reason to install it on someone
+  // who just read a blog post.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {
+        /* Non-fatal: the page works fine without it. */
+      });
+    });
+  }
+</script>
