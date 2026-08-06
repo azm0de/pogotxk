@@ -74,6 +74,18 @@ when nothing else does, silently absent — and `Promise.allSettled` swallowed t
 **Filter panel visible while reporting collapsed.** `.panel-body { display: grid }` outranks the
 UA's `[hidden] { display: none }`, so `aria-expanded="false"` and actual visibility disagreed.
 
+## Caused by a fix, caught before shipping
+
+**Dropping `body_md` from the admin post list would have destroyed posts.** The list query was
+hauling every post body to render a list of titles, so it was removed. But the editor populated
+its form from that same list row — so opening a post and pressing Save would have written an
+empty string over the body. The editor now fetches the body on open, with Save disabled and the
+textarea read-only until it lands.
+
+> A performance fix walked straight into data loss. The query change was right; the thing that
+> made it dangerous was a consumer three files away that nobody thought to look at. Verified by
+> actually opening a post and saving it, not by reading the diff.
+
 ## Mine, and instructive
 
 **"markers.js is corrupted."** It was not — a Windows console rendering artifact. The planned

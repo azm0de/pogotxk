@@ -27,17 +27,19 @@ Everything in the original plan is built. This is what is left, roughly by value
 
 ## Known rough edges
 
-- [ ] **Unbounded admin queries.** `listPostsForAdmin` selects full `body_md` with no `LIMIT`,
-      and `listPublicTags` has no cap. Fine at current volume, will degrade
-- [ ] **`--live` (#e8453c) is ~3.9:1 on white** — below AA for small bold text. Used in several
-      components; fixing means touching `global.css`
-- [ ] **The live board is not a live region.** Screen reader users get no announcement when a
-      flare arrives. Announcing every card would be worse than nothing; a polite "3 flares
-      active" summary is probably right
+- [x] ~~Unbounded admin queries~~ — bounded, and the post list no longer carries bodies
+- [x] ~~`--live` contrast below AA~~ — split into `--live` and `--live-text`, both pass
+- [x] ~~Live board not announced to screen readers~~ — announces a count on change
+- [x] ~~`SEQUENCE` can decrease~~ — pinned for global events, still derived for meetups
 - [ ] **Photo carousel** — the API and schema support multiple photos per POI; nothing uploads a
       second one yet, so the UI is unbuilt
-- [ ] **`SEQUENCE` can decrease** in the ICS feed if an event moves earlier. Harmless for
-      `METHOD:PUBLISH`, wrong for iTIP
+- [ ] **`src/lib/scrapedduck.ts` cannot be unit tested.** It imports `cloudflare:workers` at
+      module scope, alongside ~10 pure helpers (`raidTierRank`, `relativeTime`, `formatCp`…).
+      Splitting the presentation helpers into their own module would make them testable, but it
+      rewrites imports across six components — a refactor, not a fix
+- [ ] **Events page uses the local origin in dev, `Astro.site` in prod.** Deliberate, but it
+      means the dev subscribe card offers a `localhost` feed whose `SOURCE` says
+      `pokemontxk.com`
 
 ## Deliberately not doing
 
