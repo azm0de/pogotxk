@@ -12,3 +12,7 @@
 *.kmz binary
 *.woff binary
 *.woff2 binary
+
+# gradlew must stay executable and LF-terminated for CI/Linux.
+gradlew text eol=lf
+*.jar binary
