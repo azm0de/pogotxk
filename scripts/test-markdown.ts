@@ -115,7 +115,17 @@ check(
   renderMarkdown('# Title', { headingOffset: 0 }),
   '<h1 id="title">Title</h1>',
 );
-check('h6 does not overflow', renderMarkdown('###### D'), '<h6 id="d">D</h6>');
+// A document whose only heading is `######` has that as its top level, so
+// normalisation lands it on h2 like any other shallowest heading. This assertion
+// used to expect h6, back when the offset was a fixed +1 from `#`.
+check('a lone h6 is still the top level', renderMarkdown('###### D'), '<h2 id="d">D</h2>');
+// The clamp still matters where the offset is genuinely positive: `#` is
+// shallowest here, so `######` would land on h7 without it.
+check(
+  'h6 does not overflow past h6',
+  renderMarkdown('# A\n\n###### F').includes('<h6 id="f">F</h6>'),
+  true,
+);
 check('rule', renderMarkdown('---'), '<hr />');
 check('emphasis', renderMarkdown('**b** and *i* and ~~s~~'), '<p><strong>b</strong> and <em>i</em> and <del>s</del></p>');
 check('inline code keeps markdown literal', renderMarkdown('`**not bold**`'), '<p><code>**not bold**</code></p>');
@@ -140,6 +150,26 @@ check('drops images', markdownToText('![alt](/a.png) after'), 'after');
 check('cuts on a word boundary', markdownToText('alpha bravo charlie delta', 14), 'alpha bravo…');
 check('reading time has a floor of 1', readingMinutes(''), 1);
 check('reading time at 220 wpm', readingMinutes('word '.repeat(440)), 2);
+
+console.log('\n== heading levels start at h2 whatever the author wrote ==');
+// The post page owns the <h1>. Whether sections are written as `#` or as `##`
+// (the commoner habit, since the title is the `#`), the body must open on <h2>
+// or the outline skips a level under the title.
+// check() compares by reference, so these compare joined strings rather than
+// arrays — an array literal would never match and would silently "fail" green.
+const levels = (md: string, opts?: Parameters<typeof renderMarkdown>[1]) =>
+  (renderMarkdown(md, opts).match(/<h[1-6]/g) ?? []).map((t) => t.slice(2)).join(',');
+
+check('hash-first starts at h2', levels('# Alpha\n\n## Bravo'), '2,3');
+check('hash-hash-first also starts at h2', levels('## Alpha\n\n### Bravo'), '2,3');
+check('deeper-first still starts at h2', levels('### Alpha\n\n#### Bravo'), '2,3');
+check('relative depth is preserved', levels('## A\n\n#### B\n\n## C'), '2,4,2');
+check('single level document', levels('## Only'), '2');
+check('explicit offset still wins', levels('## A', { headingOffset: 0 }), '2');
+// A `#` inside a fence is a comment, not a heading; it must not drag the
+// document's real headings down a level.
+check('hash inside a fence is ignored', levels('## Real\n\n```bash\n# not a heading\n```\n\n### Nested'), '2,3');
+check('no headings at all does not throw', levels('just a paragraph'), '');
 
 console.log(failures ? `\nFAILED (${failures})\n` : '\nAll checks passed.\n');
 process.exit(failures ? 1 : 0);

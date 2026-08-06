@@ -30,8 +30,17 @@ export interface MarkdownOptions {
    */
   baseUrl?: string;
   /**
-   * How far to push `#`. Post pages already own the document's single <h1>,
-   * so by default `#` renders as <h2> and the outline stays valid.
+   * How far to push headings down. Post pages already own the document's single
+   * <h1>, so the shallowest heading in the body becomes <h2>.
+   *
+   * The offset is measured from whatever the author actually used rather than
+   * assumed to be `#`. Writing `##` for top-level sections is the more common
+   * habit — the title is the `#`, so sections start at `##` — and with a fixed
+   * offset of 1 that silently produced <h3> under an <h1>, skipping a level
+   * every time. Now `#`-first and `##`-first documents both start at <h2>, and
+   * relative depth inside the post is preserved either way.
+   *
+   * Set it explicitly to opt out of the normalisation.
    */
   headingOffset?: number;
 }
@@ -257,9 +266,35 @@ const QUOTE_RE = /^ {0,3}>\s?(.*)$/;
 /** A paragraph holding nothing but one image is a figure, not a run of text. */
 const LONE_IMAGE_RE = /^<img [^>]*\/>$/;
 
+/**
+ * Offset that lands the shallowest heading in the document on <h2>.
+ *
+ * Fenced code is skipped so a `# comment` inside a snippet cannot drag every
+ * real heading down a level.
+ */
+function normalisedHeadingOffset(lines: string[]): number {
+  let shallowest = 7;
+  let inFence = false;
+
+  for (const line of lines) {
+    if (FENCE_RE.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
+    const heading = HEADING_RE.exec(line);
+    if (heading) shallowest = Math.min(shallowest, (heading[1] ?? '#').length);
+  }
+
+  // No headings at all: the offset is unused, so any value does.
+  if (shallowest === 7) return 1;
+  return 2 - shallowest;
+}
+
 function renderBlocks(lines: string[], opts: MarkdownOptions): string {
   const out: string[] = [];
-  const headingOffset = opts.headingOffset ?? 1;
+  const headingOffset = opts.headingOffset ?? normalisedHeadingOffset(lines);
   let i = 0;
 
   while (i < lines.length) {
