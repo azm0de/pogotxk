@@ -17,8 +17,16 @@
   // in the user's address bar on every sign-in. Committing it is safe, and it
   // makes the value deploy-stable. The client SECRET must stay a dashboard
   // secret and must never appear here.
+  // The VAPID public key is likewise public by design — it is handed to every
+  // browser as `applicationServerKey` when a push subscription is created, so
+  // it is in the client bundle regardless. Its private half is a Secret.
+  //
+  // Do not rotate this pair casually: a browser binds its subscription to the
+  // key it subscribed with, so a new pair silently orphans every existing
+  // subscription. They keep receiving nothing, with no error anywhere.
   "vars": {
-    "DISCORD_CLIENT_ID": "1534670096256073778"
+    "DISCORD_CLIENT_ID": "1534670096256073778",
+    "VAPID_PUBLIC_KEY": "BHiriS0MKh0cyP6a6frGjAkGnMTJtO-QJqguGei8k9wgA4ffHi6R4L6_LPGJ7NzoD4cwS_G9qD1dia_5_R9i8-c"
   },
 
   // Belt and braces: preserve any other plain-text var set in the dashboard
