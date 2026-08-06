@@ -11,13 +11,40 @@ Everything in the original plan is built. This is what is left, roughly by value
 
 - [x] ~~Web push~~ — VAPID keypair generated and set 2026-08-06;
       `/api/push/subscribe` reports `enabled: true`. See [[Configuration]]
-- [ ] **Discord fan-out** — the last piece of notifications. Create a webhook in the
-      channel (Server Settings → Integrations → Webhooks), then pipe it in without it
-      touching a transcript:
-      `printf '%s' 'PASTE_URL' | npx wrangler secret put DISCORD_WEBHOOK_URL`.
-      Only `discord.com` / `discordapp.com` hosts are accepted — see [[Notifications]]
 - [ ] **Test the bubble on a real phone**, ideally over Pokémon GO. See [[Android App]]
 - [ ] **Rotate the Discord client secret** — it passed through a chat transcript during setup
+
+## Blocked on Discord admin — to raise with Nick
+
+Justin does not have admin on the community Discord. Nick is the Community Ambassador who
+does. Everything here needs **Manage Webhooks** or **Server Settings** access, so it waits
+for that conversation rather than being a task anyone can pick up.
+
+This is also the real reason the guild and role IDs stalled during setup — it was never a
+matter of finding the right menu.
+
+- [ ] **`DISCORD_WEBHOOK_URL`** — needs *Manage Webhooks*. Server Settings → Integrations →
+      Webhooks. Then, keeping it out of any transcript:
+      `printf '%s' 'PASTE_URL' | npx wrangler secret put DISCORD_WEBHOOK_URL`.
+      Only `discord.com` / `discordapp.com` hosts are accepted — see [[Notifications]].
+      This is the last piece of notifications; push itself is already live
+- [ ] **`DISCORD_ROLE_ADMIN` / `_AMBASSADOR` / `_MEMBER`** — needs Server Settings → Roles.
+      Until these are set, nobody is promoted automatically and roles stay hand-assigned in
+      the database. See [[Auth and Roles]]
+- [ ] **A second admin.** Right now the site has exactly one, promoted by hand. If Nick is
+      going to be an ambassador on the site as well, do it in the same sitting
+
+> [!tip] Two of these are *not* actually blocked
+> With Developer Mode on (Settings → Advanced), any member can read:
+> - **`DISCORD_GUILD_ID`** — right-click the server icon → Copy Server ID
+> - **`DISCORD_BOOTSTRAP_ADMIN_ID`** — right-click your own name → Copy User ID
+>
+> And a role ID can be read without Server Settings by typing `\@RoleName` in any channel:
+> the backslash makes Discord send the raw form `<@&123456789>` instead of a mention. Only
+> works for roles you are allowed to mention, but it is often enough.
+>
+> Setting `DISCORD_GUILD_ID` alone already turns on the membership check — people outside
+> the server become guests — without needing any role IDs.
 
 ## Worth doing next
 
