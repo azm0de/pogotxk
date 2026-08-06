@@ -206,7 +206,24 @@ function buildPoiPopup(
   return root;
 }
 
-export default function MapView({ initialPoi }: { initialPoi?: string }) {
+interface MapViewProps {
+  initialPoi?: string;
+  /**
+   * Embedded preview mode, for the home page.
+   *
+   * Same map, same markers, same popups — only the chrome is dropped. It is a
+   * real map rather than a picture of one, because a screenshot that cannot be
+   * panned is a worse answer to "where is this?" than the thing itself.
+   *
+   * Scroll-wheel zoom is off in this mode: an embedded map that swallows page
+   * scroll traps anyone who flicks past it on the way down the page. Ctrl/⌘ +
+   * wheel still zooms, which is the convention people already know from every
+   * other embedded map.
+   */
+  compact?: boolean;
+}
+
+export default function MapView({ initialPoi, compact = false }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
@@ -336,6 +353,9 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
       center: data.zone.center,
       zoom: data.zone.zoom,
       zoomControl: false,
+      // See the `compact` prop: page scroll must not be hijacked by a map the
+      // reader is only scrolling past. Leaflet still zooms on ctrl/⌘ + wheel.
+      scrollWheelZoom: !compact,
     });
     mapRef.current = map;
 
@@ -348,7 +368,11 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     if (data.zone.bounds) {
-      map.fitBounds(data.zone.bounds, { padding: [40, 40] });
+      // Less breathing room in the preview: 40px of padding is a small margin
+      // in a full-viewport map and a third of the frame in a 4:3 card. Not
+      // tighter than this, though — pins are anchored at their point and draw
+      // upward, so a marker on the boundary clips against the top edge.
+      map.fitBounds(data.zone.bounds, { padding: compact ? [26, 26] : [40, 40] });
     }
 
     const cluster = L.markerClusterGroup({
@@ -427,7 +451,8 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
       markersRef.current.clear();
       shapeLayersRef.current.clear();
     };
-  }, [data]);
+    // `compact` is a static prop in practice; listed because the effect reads it.
+  }, [data, compact]);
 
   // --- sync markers to the current filter ---------------------------------
   useEffect(() => {
@@ -685,26 +710,29 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
   }
 
   return (
-    <div className="map-shell">
+    <div className={`map-shell${compact ? ' map-shell--compact' : ''}`}>
       <div ref={containerRef} className="map-canvas" aria-label="Map of Spring Lake Park Pokémon GO locations" role="application" />
 
       {!data && <div className="map-loading">Loading map…</div>}
 
-      <button
-        type="button"
-        className="map-locate"
-        onClick={locate}
-        title="Show my location"
-        aria-label="Show my location"
-      >
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m8.94 3A9 9 0 0 0 13 3.06V1h-2v2.06A9 9 0 0 0 3.06 11H1v2h2.06A9 9 0 0 0 11 20.94V23h2v-2.06A9 9 0 0 0 20.94 13H23v-2ZM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14"
-          />
-        </svg>
-      </button>
+      {!compact && (
+        <button
+          type="button"
+          className="map-locate"
+          onClick={locate}
+          title="Show my location"
+          aria-label="Show my location"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m8.94 3A9 9 0 0 0 13 3.06V1h-2v2.06A9 9 0 0 0 3.06 11H1v2h2.06A9 9 0 0 0 11 20.94V23h2v-2.06A9 9 0 0 0 20.94 13H23v-2ZM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14"
+            />
+          </svg>
+        </button>
+      )}
 
+      {!compact && (
       <section className={`map-panel${panelOpen ? '' : ' map-panel--closed'}`} aria-label="Map filters">
         <button
           type="button"
@@ -769,6 +797,7 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
               here — it has to stay visible whether or not this panel is open. */}
         </div>
       </section>
+      )}
 
       <p className="sr-only" role="status" aria-live="polite">
         {status}

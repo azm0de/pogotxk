@@ -1,9 +1,19 @@
 ---
 import { env } from 'cloudflare:workers';
 import Base from '~/layouts/Base.astro';
-import { listPublicMeetups, markdownToText, meetupLocation } from '~/lib/db/meetups';
+import MapPreview from '~/components/map/MapPreview';
+import SocialIcon from '~/components/SocialIcon.astro';
+import EventCard from '~/components/events/EventCard.astro';
+import {
+  listPublicMeetups,
+  markdownToText,
+  meetupLocation,
+  meetupToCalendarEvent,
+} from '~/lib/db/meetups';
 import { listPublishedPosts } from '~/lib/db/posts';
-import { formatInZone } from '~/lib/time';
+import { gameEventsFromPayload, groupEvents, type CalendarEvent } from '~/lib/ics';
+import { getFeed } from '~/lib/scrapedduck';
+import { DEFAULT_TZ, formatInZone } from '~/lib/time';
 
 export const prerender = false;
 
@@ -48,17 +58,84 @@ const latestPosts = Array.isArray(posts) ? posts : posts.posts;
 const totalPois =
   (counts?.pokestops ?? 0) + (counts?.gyms ?? 0) + (counts?.powerspots ?? 0);
 
+/**
+ * What is happening *right now* — community meetups and Pokémon GO events in
+ * one list, the same way /events builds it.
+ *
+ * Read from the data layer rather than fetched from our own /api route: a
+ * Worker fetching its own origin is a loopback through the edge that works
+ * under `astro dev` and returns nothing in production. That bug already shipped
+ * once — see the vault's Bugs Worth Remembering.
+ */
+const globalEvents = await getFeed('events')
+  .then(gameEventsFromPayload)
+  .catch(() => null);
+
+const happening = groupEvents([
+  ...meetups.map((m) => meetupToCalendarEvent(m, new URL(Astro.url.origin))),
+  ...(globalEvents?.events ?? []),
+]);
+
+// "Live" is a short window (a Raid Hour); "ongoing" is a season that runs for
+// weeks. Both are on right now, so the home page shows them together, live
+// first, and caps the list — this is a teaser for /events, not a second copy.
+const onNow: CalendarEvent[] = [...happening.live, ...happening.ongoing].slice(0, 4);
+const moreOnNow = happening.live.length + happening.ongoing.length - onNow.length;
+
+const dayFmt = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: DEFAULT_TZ,
+});
+const timeFmt = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: DEFAULT_TZ,
+});
+
+/** Compact "when" line for the home page cards. */
+function homeWhen(event: CalendarEvent): string {
+  const start = new Date(event.start);
+  if (event.allDay) return `${dayFmt.format(start)} · all day`;
+  if (!event.end) return `${dayFmt.format(start)} · ${timeFmt.format(start)}`;
+  const end = new Date(event.end);
+  const sameDay = dayFmt.format(start) === dayFmt.format(end);
+  return sameDay
+    ? `${dayFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`
+    : `${dayFmt.format(start)} – ${dayFmt.format(end)}`;
+}
+
 const socials = [
-  { href: 'https://discord.com/invite/2sYR5YdRpH', label: 'Discord', hint: 'Raids, chat, meetups', cls: 'discord' },
+  {
+    href: 'https://discord.com/invite/2sYR5YdRpH',
+    label: 'Discord',
+    hint: 'Raids, chat, meetups',
+    cls: 'discord',
+    icon: 'discord',
+  },
   {
     href: 'https://campfire.onelink.me/eBr8?af_dp=campfire%3A%2F%2F&af_force_deeplink=true&deep_link_sub1=cj1jbHVicyZjPTI4Y2Y0NDJjLTg2M2UtNDcwZS1iYmQwLTQwNjdhNDcxMDJjYyZpPXRydWU%3D',
     label: 'Campfire',
     hint: 'Check in at meetups',
     cls: 'campfire',
+    icon: 'campfire',
   },
-  { href: 'https://www.facebook.com/groups/1792291964630166/', label: 'Facebook', hint: 'Community group', cls: 'facebook' },
-  { href: 'https://www.instagram.com/pogotxk', label: 'Instagram', hint: '@pogotxk', cls: 'instagram' },
-];
+  {
+    href: 'https://www.facebook.com/groups/1792291964630166/',
+    label: 'Facebook',
+    hint: 'Community group',
+    cls: 'facebook',
+    icon: 'facebook',
+  },
+  {
+    href: 'https://www.instagram.com/pogotxk',
+    label: 'Instagram',
+    hint: '@pogotxk',
+    cls: 'instagram',
+    icon: 'instagram',
+  },
+] as const;
 ---
 
 <Base title="PoGo TXK">
@@ -93,15 +170,41 @@ const socials = [
       }
     </div>
 
-    <a class="hero-map" href="/map" aria-label="Open the Spring Lake Park map">
-      <span class="hero-map-inner">
-        <span class="hero-map-pin" aria-hidden="true" />
-        <span class="hero-map-label">
+    {/*
+      The real map, not a picture of one. It is the thing people came for, so
+      making them click through to find out whether their park is on it was the
+      wrong trade.
+
+      `client:visible` keeps Leaflet and the marker data off the critical path —
+      nothing loads until the preview is actually scrolled to, which on a phone
+      is often never. MapPreview exists to make that possible: MapView itself
+      cannot be server-rendered, because Leaflet reads `window` on import.
+    */}
+    <div class="hero-map">
+      <MapPreview client:visible compact />
+
+      <a class="hero-map-open" href="/map">
+        <span>Open the full map</span>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M13.2 5.4 11.8 6.8l4.2 4.2H4v2h12l-4.2 4.2 1.4 1.4 6.6-6.6z"></path>
+        </svg>
+      </a>
+
+      <noscript>
+        <div class="hero-map-fallback">
           <strong>Spring Lake Park</strong>
-          <span>{totalPois > 0 ? `${totalPois} locations mapped` : 'Interactive map'}</span>
-        </span>
-      </span>
-    </a>
+          <span>
+            {
+              totalPois > 0
+                ? `${totalPois} locations mapped — the interactive map needs JavaScript.`
+                : 'The interactive map needs JavaScript.'
+            }
+          </span>
+        </div>
+      </noscript>
+    </div>
   </section>
 
   <div class="grid">
@@ -196,6 +299,54 @@ const socials = [
     )
   }
 
+  {/*
+    What is on right now, community and game side by side. Placed directly under
+    the community photos because that is where the page stops being "who we are"
+    and starts being "come do something".
+  */}
+  <section class="section" aria-labelledby="on-now-heading">
+    <div class="section-head">
+      <h2 id="on-now-heading">
+        {onNow.length > 0 && <span class="on-now-dot" aria-hidden="true" />}
+        Happening now
+      </h2>
+      <a href="/events">Upcoming events →</a>
+    </div>
+
+    {
+      onNow.length > 0 ? (
+        <>
+          <div class="on-now">
+            {onNow.map((event) => (
+              <EventCard
+                event={event}
+                when={homeWhen(event)}
+                state={happening.live.includes(event) ? 'live' : 'ongoing'}
+              />
+            ))}
+          </div>
+          <p class="on-now-more">
+            <a class="btn btn--outline" href="/events">
+              {moreOnNow > 0
+                ? `See ${moreOnNow} more and everything upcoming`
+                : 'See everything upcoming'}
+            </a>
+          </p>
+        </>
+      ) : (
+        <div class="on-now-empty">
+          <p class="empty">
+            Nothing running at this minute. Raid Hours, Community Days and Spotlight Hours all
+            show up here automatically when they start.
+          </p>
+          <a class="btn btn--outline" href="/events">
+            See what is coming up
+          </a>
+        </div>
+      )
+    }
+  </section>
+
   <section class="section">
     <div class="section-head">
       <h2>Find us</h2>
@@ -204,9 +355,25 @@ const socials = [
       {
         socials.map((social) => (
           <li>
-            <a class={`social social--${social.cls}`} href={social.href} rel="noopener noreferrer" target="_blank">
-              <strong>{social.label}</strong>
-              <span>{social.hint}</span>
+            <a
+              class={`social social--${social.cls}`}
+              href={social.href}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <span class="social-mark" aria-hidden="true">
+                <SocialIcon name={social.icon} size={24} />
+              </span>
+              <span class="social-text">
+                <strong>{social.label}</strong>
+                <span>{social.hint}</span>
+              </span>
+              <svg class="social-go" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M13.2 5.4 11.8 6.8l4.2 4.2H4v2h12l-4.2 4.2 1.4 1.4 6.6-6.6z"
+                />
+              </svg>
             </a>
           </li>
         ))
@@ -278,6 +445,15 @@ const socials = [
     background: #5865f2;
     color: #fff;
   }
+  .btn--outline {
+    display: inline-block;
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    color: inherit;
+  }
+  .btn--outline:hover {
+    border-color: var(--accent);
+  }
 
   .stats {
     display: flex;
@@ -303,51 +479,65 @@ const socials = [
     font-variant-numeric: tabular-nums;
   }
 
+  /* Holds the live map island. The island sizes to this box, so the height
+     lives here rather than inside the component. */
   .hero-map {
-    display: block;
+    position: relative;
     aspect-ratio: 4 / 3;
     border-radius: var(--radius-lg);
     border: 1px solid var(--border);
-    background:
-      radial-gradient(circle at 30% 35%, rgb(47 127 212 / 0.18), transparent 55%),
-      radial-gradient(circle at 70% 65%, rgb(226 112 58 / 0.18), transparent 55%),
-      var(--bg-sunken);
-    text-decoration: none;
-    color: inherit;
+    background: var(--bg-sunken);
     overflow: hidden;
-    position: relative;
     box-shadow: var(--shadow-md);
+    isolation: isolate;
   }
-  .hero-map:hover {
-    border-color: var(--accent);
+
+  /* Above Leaflet's panes (z-index 400) and its controls (1000). */
+  .hero-map-open {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    z-index: 1001;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--accent-contrast);
+    background: var(--accent);
+    box-shadow: var(--shadow-md);
+    transition:
+      transform 0.16s ease,
+      filter 0.16s ease;
   }
-  .hero-map-inner {
+  .hero-map-open:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+  }
+  .hero-map-open svg {
+    transition: transform 0.16s ease;
+  }
+  .hero-map-open:hover svg {
+    transform: translateX(2px);
+  }
+
+  .hero-map-fallback {
     position: absolute;
     inset: 0;
     display: grid;
     place-content: center;
-    gap: 12px;
+    gap: 4px;
     justify-items: center;
-  }
-  .hero-map-pin {
-    width: 22px;
-    height: 22px;
-    border-radius: 50% 50% 50% 0;
-    transform: rotate(-45deg);
-    background: var(--poi-gym);
-    box-shadow: 0 0 0 6px rgb(226 112 58 / 0.18);
-  }
-  .hero-map-label {
     text-align: center;
-    display: grid;
-    gap: 2px;
+    padding: 20px;
   }
-  .hero-map-label strong {
-    font-size: 1.05rem;
-  }
-  .hero-map-label span {
-    font-size: 0.82rem;
+  .hero-map-fallback span {
+    font-size: 0.85rem;
     color: var(--text-muted);
+    max-width: 30ch;
   }
 
   .grid {
@@ -494,29 +684,170 @@ const socials = [
     gap: 10px;
   }
   .social {
+    position: relative;
     display: grid;
-    gap: 2px;
-    padding: 16px 18px;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 13px;
+    padding: 15px 16px;
     border-radius: var(--radius);
     text-decoration: none;
     color: #fff;
     background: var(--navy-700);
+    overflow: hidden;
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.18s ease;
   }
-  .social span {
-    font-size: 0.8rem;
-    opacity: 0.8;
+  /* A soft top-left sheen so each tile reads as a surface rather than a
+     flat colour swatch. Sits under the content via the stacking context. */
+  .social::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 12% 0%, rgb(255 255 255 / 0.28), transparent 62%);
+    pointer-events: none;
   }
+  .social > * {
+    position: relative;
+  }
+  .social:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .social-mark {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: rgb(255 255 255 / 0.16);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+  }
+
+  .social-text {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+  .social-text strong {
+    font-size: 0.98rem;
+    line-height: 1.2;
+  }
+  .social-text span {
+    font-size: 0.78rem;
+    line-height: 1.35;
+    opacity: 0.85;
+    /* Allowed to wrap. Truncating instead turned "Raids, chat, meetups" into
+       "Raids, chat, meet…" at two-up widths, which loses the only thing the
+       line was there to say. Grid stretches the tiles to equal height anyway,
+       so a second line costs nothing but a few pixels of row height. */
+  }
+
+  .social-go {
+    opacity: 0.55;
+    transition:
+      transform 0.18s ease,
+      opacity 0.18s ease;
+  }
+  .social:hover .social-go {
+    opacity: 1;
+    transform: translateX(3px);
+  }
+
   .social--discord {
     background: #5865f2;
   }
   .social--campfire {
-    background: #e2703a;
+    background: linear-gradient(135deg, #f0873d, #d1502a);
   }
   .social--facebook {
     background: #1877f2;
   }
   .social--instagram {
     background: linear-gradient(135deg, #833ab4, #fd1d1d 55%, #fcb045);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .social,
+    .social-go,
+    .hero-map-open,
+    .hero-map-open svg {
+      transition: none;
+    }
+    .social:hover,
+    .hero-map-open:hover {
+      transform: none;
+    }
+    .social:hover .social-go,
+    .hero-map-open:hover svg {
+      transform: none;
+    }
+  }
+
+  .on-now {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    align-items: start;
+  }
+
+  /*
+   * Same EventCard as /events, trimmed for a teaser.
+   *
+   * The card is reused rather than reimplemented so "live" and "ongoing" look
+   * identical wherever they appear. What it does not need here is the outbound
+   * "Details" button and the blurb — this block exists to say what is on, and
+   * the section's own button is the one route onward. :global is required to
+   * reach inside a child component's markup from a scoped style block.
+   */
+  .on-now :global(.event-actions),
+  .on-now :global(.event-blurb) {
+    display: none;
+  }
+  .on-now :global(.event-card) {
+    padding: 14px 16px;
+  }
+  .on-now :global(.event-title) {
+    font-size: 1rem;
+  }
+  .on-now-more {
+    margin: 14px 0 0;
+  }
+  .on-now-empty {
+    display: grid;
+    justify-items: start;
+    gap: 14px;
+    padding: 20px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .on-now-empty .empty {
+    max-width: 62ch;
+  }
+
+  /* Same red as the live board, so "on now" means one thing across the site. */
+  .on-now-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 7px;
+    border-radius: 50%;
+    background: var(--live);
+    vertical-align: middle;
+    animation: on-now-pulse 2s ease-in-out infinite;
+  }
+  @keyframes on-now-pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .on-now-dot {
+      animation: none;
+    }
   }
 
   .campsite {

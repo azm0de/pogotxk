@@ -11,6 +11,26 @@
   background: var(--bg-sunken);
 }
 
+/* --- compact / embedded ----------------------------------------------------
+   The home-page preview. The full map fills the viewport; this one fills the
+   box its parent gives it, so `min-height` must not fight that. */
+.map-shell--compact {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Zoom buttons sit above the "open the full map" affordance rather than under
+   it — the overlay is bottom-left, so this only needs to clear the corner. */
+.map-shell--compact .leaflet-control-zoom {
+  margin-bottom: 12px;
+}
+
+/* Smaller attribution in the preview: the obligation is that it stays legible
+   and present, not that it takes the same share of a much smaller frame. */
+.map-shell--compact .leaflet-control-attribution {
+  font-size: 0.62rem;
+}
+
 .map-loading,
 .map-error {
   position: absolute;
