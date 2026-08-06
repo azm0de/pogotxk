@@ -13,10 +13,18 @@
  *   * Navigations: network-first, falling back to the cached shell offline.
  */
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = `shell-${VERSION}`;
 const TILE_CACHE = `tiles-${VERSION}`;
-const OFFLINE_URL = '/offline';
+
+/**
+ * Trailing slash is load-bearing. Prerendered pages are served as static assets
+ * and `/offline` 307s to `/offline/`. Cache.put() rejects a redirected
+ * response, and cache.add() is fetch-then-put — so requesting the unslashed
+ * form makes the install silently fail to cache the one page whose entire job
+ * is to work when nothing else does.
+ */
+const OFFLINE_URL = '/offline/';
 
 /** Enough to open the app and explain itself; not the whole site. */
 const SHELL_ASSETS = [
