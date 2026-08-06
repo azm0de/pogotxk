@@ -9,8 +9,13 @@ Everything in the original plan is built. This is what is left, roughly by value
 
 ## Blocked on the owner
 
-- [ ] **Turn on notifications** — `npm run gen:vapid`, then add the three VAPID secrets and
-      `DISCORD_WEBHOOK_URL`. Code is deployed and tested. See [[Notifications]]
+- [x] ~~Web push~~ — VAPID keypair generated and set 2026-08-06;
+      `/api/push/subscribe` reports `enabled: true`. See [[Configuration]]
+- [ ] **Discord fan-out** — the last piece of notifications. Create a webhook in the
+      channel (Server Settings → Integrations → Webhooks), then pipe it in without it
+      touching a transcript:
+      `printf '%s' 'PASTE_URL' | npx wrangler secret put DISCORD_WEBHOOK_URL`.
+      Only `discord.com` / `discordapp.com` hosts are accepted — see [[Notifications]]
 - [ ] **Test the bubble on a real phone**, ideally over Pokémon GO. See [[Android App]]
 - [ ] **Rotate the Discord client secret** — it passed through a chat transcript during setup
 

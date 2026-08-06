@@ -25,15 +25,35 @@ updated: 2026-08-05
 | `DISCORD_CLIENT_ID` | var | `wrangler.jsonc` | Public — appears in the OAuth URL |
 | `DISCORD_CLIENT_SECRET` | Secret | dashboard | |
 | `IMPORT_TOKEN` | Secret | dashboard | Only needed before anyone can sign in |
+| `VAPID_PUBLIC_KEY` | var | `wrangler.jsonc` | Public — handed to every browser as `applicationServerKey` |
+| `VAPID_PRIVATE_KEY` | Secret | `wrangler secret` | Set 2026-08-06 |
+| `VAPID_SUBJECT` | Secret | `wrangler secret` | `mailto:jeportillo1@gmail.com` |
+
+Confirm the whole push config in one request — `enabled` is only true when all three
+pass, including the subject check:
+
+```bash
+curl -s https://pogotxk.gnomelabz.workers.dev/api/push/subscribe
+```
+
+> [!tip] Generate straight into wrangler, never onto the screen
+> The pair was created so the private key never reached a terminal or shell history:
+> a one-shot script wrote it to a file, `wrangler secret put VAPID_PRIVATE_KEY < file`
+> consumed it, and the file was overwritten before being deleted. Worth repeating for
+> any future secret — a value that is never displayed cannot be leaked by a screenshot
+> or a pasted transcript.
+
+> [!warning] Do not rotate the VAPID pair casually
+> A browser binds its subscription to the `applicationServerKey` it subscribed with.
+> A new pair orphans every existing subscriber — they keep receiving nothing, with no
+> error on either side. It was safe to generate on 2026-08-06 only because `push_subs`
+> was empty. It is not safe once anyone has subscribed.
 
 ## Not set — features that stay off until they are
 
 | Name | Type | Enables |
 |---|---|---|
 | `DISCORD_WEBHOOK_URL` | Secret | Flares into Discord — [[Notifications]] |
-| `VAPID_PUBLIC_KEY` | Secret | Web push |
-| `VAPID_PRIVATE_KEY` | Secret | Web push |
-| `VAPID_SUBJECT` | Secret | Web push — must be `mailto:` or `https://` |
 | `DISCORD_GUILD_ID` | var | Guild membership check — [[Auth and Roles]] |
 | `DISCORD_BOOTSTRAP_ADMIN_ID` | var | First admin without a database edit |
 | `DISCORD_ROLE_ADMIN` / `_AMBASSADOR` / `_MEMBER` | var | Automatic role mapping |
