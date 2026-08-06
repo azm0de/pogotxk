@@ -174,7 +174,7 @@ const credit = global?.attribution ?? null;
           </h2>
           <div class="event-grid">
             {grouped.live.map((event) => (
-              <EventCard event={event} when={formatWhen(event)} state="live" />
+              <EventCard event={event} when={formatWhen(event)} state="live" showImage />
             ))}
           </div>
         </section>
@@ -187,7 +187,7 @@ const credit = global?.attribution ?? null;
           <h2 class="group-heading" id="ongoing-heading">Running now</h2>
           <div class="event-grid">
             {grouped.ongoing.map((event) => (
-              <EventCard event={event} when={formatWhen(event)} state="ongoing" />
+              <EventCard event={event} when={formatWhen(event)} state="ongoing" showImage />
             ))}
           </div>
         </section>
@@ -200,7 +200,7 @@ const credit = global?.attribution ?? null;
         grouped.upcoming.length > 0 ? (
           <div class="event-grid">
             {grouped.upcoming.map((event) => (
-              <EventCard event={event} when={formatWhen(event)} state="upcoming" />
+              <EventCard event={event} when={formatWhen(event)} state="upcoming" showImage />
             ))}
           </div>
         ) : (
@@ -222,7 +222,7 @@ const credit = global?.attribution ?? null;
           <h2 class="group-heading" id="past-heading">Recently finished</h2>
           <div class="event-grid">
             {past.map((event) => (
-              <EventCard event={event} when={formatWhen(event)} state="past" />
+              <EventCard event={event} when={formatWhen(event)} state="past" showImage />
             ))}
           </div>
         </section>

@@ -19,9 +19,9 @@ interface Props {
   when: string;
   state: 'live' | 'ongoing' | 'upcoming' | 'past';
   /**
-   * Render the event's artwork as a banner. Off by default: /events is a long
-   * scannable list where a picture on every row costs more than it gives, while
-   * the home page shows four cards and wants them to look like something.
+   * Render the event's artwork as a banner. Both current callers pass it; the
+   * default stays off so a new caller opts in rather than inheriting a network
+   * request per card by accident.
    */
   showImage?: boolean;
 }

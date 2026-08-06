@@ -1,21 +1,19 @@
 ---
 /**
- * Brand marks for the social links.
+ * The four social marks, as each brand's actual app icon.
  *
- * Inlined as SVG rather than loaded from a CDN icon font: these sit in the
- * page's most-linked section, and an external request that fails leaves four
- * unlabelled squares. They are also single-colour, so they inherit
- * `currentColor` and work on every button background without a second asset.
+ * Inlined as SVG rather than fetched: these sit in the most-linked section on
+ * the site, and an external request that fails leaves four blank squares. Being
+ * vector, they also stay sharp at any size and cost no extra requests.
  *
- * All four are the official marks, used nominatively to link to our own
- * profiles on those services. Discord, Facebook and Instagram come from Simple
- * Icons (CC0); Campfire is traced from Niantic's app icon.
+ * Niantic publishes no vector Campfire logo — campfire.nianticlabs.com is a
+ * Google Sites page serving rasters, and the "Campfire" logos on the vector
+ * aggregator sites are a different company's. So the Campfire icon here is
+ * traced from the app icon: the purple-to-cyan tile, the concentric rings, the
+ * flame, and the white dome at its base.
  *
- * Campfire is the one with a full-colour icon (a purple-to-cyan tile behind an
- * orange flame). It is drawn here as a single-colour silhouette like the other
- * three, because these sit on brand-coloured tiles — one full-colour tile in a
- * row of white marks reads as a rendering bug rather than a brand. The shape is
- * theirs and unmistakable; only the fill is ours.
+ * All four are used nominatively — to link to our own presence on each service.
+ * The marks remain the property of their owners.
  */
 
 interface Props {
@@ -29,27 +27,7 @@ interface Props {
   decorative?: boolean;
 }
 
-const { name, size = 22, decorative = true } = Astro.props;
-
-const PATHS: Record<Props['name'], string> = {
-  discord:
-    'M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286ZM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189Zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z',
-  facebook:
-    'M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z',
-  instagram:
-    'M12 0C8.74 0 8.333.015 7.053.072 5.775.132 4.905.333 4.14.63c-.789.306-1.459.717-2.126 1.384S.935 3.35.63 4.14C.333 4.905.131 5.775.072 7.053.012 8.333 0 8.74 0 12s.015 3.667.072 4.947c.06 1.277.261 2.148.558 2.913a5.885 5.885 0 0 0 1.384 2.126A5.868 5.868 0 0 0 4.14 23.37c.766.296 1.636.499 2.913.558C8.333 23.988 8.74 24 12 24s3.667-.015 4.947-.072c1.277-.06 2.148-.262 2.913-.558a5.898 5.898 0 0 0 2.126-1.384 5.86 5.86 0 0 0 1.384-2.126c.296-.765.499-1.636.558-2.913.06-1.28.072-1.687.072-4.947s-.015-3.667-.072-4.947c-.06-1.277-.262-2.149-.558-2.913a5.89 5.89 0 0 0-1.384-2.126A5.847 5.847 0 0 0 19.86.63c-.765-.297-1.636-.499-2.913-.558C15.667.012 15.26 0 12 0Zm0 2.16c3.203 0 3.585.016 4.85.071 1.17.055 1.805.249 2.227.415.562.217.96.477 1.382.896.419.42.679.819.896 1.381.164.422.36 1.057.413 2.227.057 1.266.07 1.646.07 4.85s-.015 3.585-.074 4.85c-.061 1.17-.256 1.805-.421 2.227a3.81 3.81 0 0 1-.899 1.382 3.744 3.744 0 0 1-1.38.896c-.42.164-1.065.36-2.235.413-1.274.057-1.649.07-4.859.07-3.211 0-3.586-.015-4.859-.074-1.171-.061-1.816-.256-2.236-.421a3.716 3.716 0 0 1-1.379-.899 3.644 3.644 0 0 1-.9-1.38c-.165-.42-.359-1.065-.42-2.235-.045-1.26-.061-1.649-.061-4.844 0-3.196.016-3.586.061-4.861.061-1.17.255-1.814.42-2.234.21-.57.479-.96.9-1.381.419-.419.81-.689 1.379-.898.42-.166 1.051-.361 2.221-.421 1.275-.045 1.65-.06 4.859-.06l.045.03Zm0 3.678a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324ZM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm7.846-10.405a1.441 1.441 0 0 1-2.88 0 1.44 1.44 0 0 1 2.88 0Z',
-  // Niantic's Campfire mark: a pointed arch with a domed opening at its base.
-  // Two subpaths + evenodd, so the dome is a hole the tile shows through —
-  // filling it white would only work on a background that happens to be white.
-  // Proportions follow the app icon: the arch is wider than it is tall, and the
-  // dome spans about a third of the base. Getting that ratio wrong makes it
-  // read as a generic triangle, which is the whole thing this replaced.
-  campfire:
-    'M12 3.8C14 8.2 22.2 16.5 22.2 21H1.8C1.8 16.5 10 8.2 12 3.8Z M8.5 21a3.5 3.5 0 0 1 7 0Z',
-};
-
-/** Icons whose shape is defined by holes rather than a single outline. */
-const EVENODD = new Set<Props['name']>(['campfire']);
+const { name, size = 44, decorative = true } = Astro.props;
 
 const LABEL: Record<Props['name'], string> = {
   discord: 'Discord',
@@ -57,10 +35,15 @@ const LABEL: Record<Props['name'], string> = {
   facebook: 'Facebook',
   instagram: 'Instagram',
 };
+
+// Namespaces the gradient/clip ids. Derived from the name rather than randomised
+// so the markup is byte-stable across renders; each icon appears once per page,
+// and were one repeated the duplicate defs would be identical anyway.
+const uid = `si-${name}`;
 ---
 
 <svg
-  viewBox="0 0 24 24"
+  viewBox="0 0 48 48"
   width={size}
   height={size}
   role={decorative ? undefined : 'img'}
@@ -68,9 +51,112 @@ const LABEL: Record<Props['name'], string> = {
   aria-label={decorative ? undefined : LABEL[name]}
   focusable="false"
 >
-  <path
-    fill="currentColor"
-    fill-rule={EVENODD.has(name) ? 'evenodd' : undefined}
-    d={PATHS[name]}
-  />
+  {
+    name === 'discord' && (
+      <>
+        <rect width="48" height="48" rx="11" fill="#5865F2" />
+        <g transform="translate(9.6 9.6) scale(1.2)">
+          <path
+            fill="#fff"
+            d="M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286ZM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189Zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"
+          />
+        </g>
+      </>
+    )
+  }
+
+  {
+    name === 'facebook' && (
+      <>
+        <rect width="48" height="48" rx="11" fill="#0866FF" />
+        {/* The f sits on the baseline and bleeds off the bottom, as on the real icon. */}
+        <path
+          fill="#fff"
+          d="M32.6 30.9 33.65 24.3H27.3v-4.28c0-1.8.89-3.56 3.72-3.56h2.9v-5.62s-2.63-.45-5.15-.45c-5.25 0-8.69 3.18-8.69 8.95v5.07h-5.81v6.6h5.81V48h7.15V30.9Z"
+        />
+      </>
+    )
+  }
+
+  {
+    name === 'instagram' && (
+      <>
+        <defs>
+          <radialGradient id={`${uid}-g`} cx="0.3" cy="1.07" r="1.2">
+            <stop offset="0%" stop-color="#FDF497" />
+            <stop offset="5%" stop-color="#FDF497" />
+            <stop offset="45%" stop-color="#FD5949" />
+            <stop offset="60%" stop-color="#D6249F" />
+            <stop offset="90%" stop-color="#285AEB" />
+          </radialGradient>
+        </defs>
+        <rect width="48" height="48" rx="11" fill={`url(#${uid}-g)`} />
+        <rect
+          x="13"
+          y="13"
+          width="22"
+          height="22"
+          rx="6.4"
+          fill="none"
+          stroke="#fff"
+          stroke-width="2.7"
+        />
+        <circle cx="24" cy="24" r="5.6" fill="none" stroke="#fff" stroke-width="2.7" />
+        <circle cx="30.9" cy="17.1" r="1.7" fill="#fff" />
+      </>
+    )
+  }
+
+  {
+    name === 'campfire' && (
+      <>
+        <defs>
+          {/* Purple at the top through blue to cyan at the base. */}
+          <linearGradient id={`${uid}-bg`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#8B5CF6" />
+            <stop offset="42%" stop-color="#5AA6F8" />
+            <stop offset="100%" stop-color="#5CF6EE" />
+          </linearGradient>
+          {/* Red at the tip falling to yellow where it meets the dome. */}
+          <linearGradient id={`${uid}-fl`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FF2D3B" />
+            <stop offset="55%" stop-color="#FF8A1E" />
+            <stop offset="100%" stop-color="#FFD447" />
+          </linearGradient>
+          {/* The rings are drawn full-width and clipped to the tile. */}
+          <clipPath id={`${uid}-clip`}>
+            <rect width="48" height="48" rx="11" />
+          </clipPath>
+        </defs>
+
+        <g clip-path={`url(#${uid}-clip)`}>
+          <rect width="48" height="48" fill={`url(#${uid}-bg)`} />
+
+          {/* Concentric lighter arcs sweeping up from the base. Drawn oversized
+              and clipped, which is what gives them the flat-bottomed sweep. */}
+          <ellipse cx="24" cy="58" rx="44" ry="40" fill="#fff" opacity="0.17" />
+          <ellipse cx="24" cy="60" rx="32" ry="30" fill="#fff" opacity="0.2" />
+
+          {/* The flame reaches the bottom edge and is clipped by the tile, so
+              the cyan only shows at the rounded corners — as on the real icon.
+              Sides are near-straight below the tip and flare out toward the
+              base; a plain triangle reads as a generic mountain. */}
+          {/* Stroked in its own fill with a round join purely to soften the
+              tip — the real tip has a small radius, and rounding the join is
+              far less brittle than hand-fitting an arc onto the apex. */}
+          <path
+            fill={`url(#${uid}-fl)`}
+            stroke={`url(#${uid}-fl)`}
+            stroke-width="1.8"
+            stroke-linejoin="round"
+            d="M24 10.4C28.2 20.6 42.8 33.8 42.8 47.2H5.2C5.2 33.8 19.8 20.6 24 10.4Z"
+          />
+
+          {/* Solid white, not a hole. The dome on the real icon is white against
+              a cyan base — punching through would tint it with the gradient. */}
+          <circle cx="24" cy="45.6" r="7.1" fill="#fff" />
+        </g>
+      </>
+    )
+  }
 </svg>

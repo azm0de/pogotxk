@@ -370,7 +370,7 @@ const socials = [
               target="_blank"
             >
               <span class="social-mark" aria-hidden="true">
-                <SocialIcon name={social.icon} size={24} />
+                <SocialIcon name={social.icon} size={42} />
               </span>
               <span class="social-text">
                 <strong>{social.label}</strong>
@@ -727,14 +727,22 @@ const socials = [
     box-shadow: var(--shadow-md);
   }
 
+  /* The mark is now each brand's real app icon, so it brings its own background.
+     A translucent chip behind it would be a second tile behind a tile. The ring
+     is what keeps Discord's blurple icon from dissolving into the blurple
+     panel — the one pairing where icon and tile are the same colour. */
   .social-mark {
     display: grid;
     place-items: center;
-    width: 42px;
-    height: 42px;
+    line-height: 0;
     border-radius: 12px;
-    background: rgb(255 255 255 / 0.16);
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.35),
+      0 2px 6px rgb(0 0 0 / 0.22);
+  }
+  .social-mark svg {
+    display: block;
+    border-radius: 11px;
   }
 
   .social-text {

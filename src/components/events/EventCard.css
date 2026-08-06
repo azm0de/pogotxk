@@ -14,10 +14,9 @@
   box-shadow: var(--shadow-md);
 }
 
-/* Running, but for weeks — present, not urgent. */
-.event-card[data-state='ongoing'] {
-  border-left: 3px solid var(--poi-powerspot);
-}
+/* Running, but for weeks — present, not urgent. Carried by the section heading
+   ("Running now") and the badge rather than a coloured rule on the card: with
+   artwork on every card the extra edge was just noise. */
 
 .event-card[data-state='past'] {
   background: var(--bg-sunken);
