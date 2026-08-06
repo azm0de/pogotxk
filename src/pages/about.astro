@@ -1,0 +1,187 @@
+---
+import { env } from 'cloudflare:workers';
+import Base from '~/layouts/Base.astro';
+import '~/styles/legal.css';
+
+export const prerender = false;
+
+const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
+const CAMPFIRE =
+  'https://campfire.onelink.me/eBr8?af_dp=campfire%3A%2F%2F&af_force_deeplink=true&deep_link_sub1=cj1jbHVicyZjPTI4Y2Y0NDJjLTg2M2UtNDcwZS1iYmQwLTQwNjdhNDcxMDJjYyZpPXRydWU%3D';
+
+const counts = await env.DB.prepare(
+  `SELECT SUM(type = 'pokestop') AS pokestops, SUM(type = 'gym') AS gyms,
+          SUM(type = 'powerspot') AS powerspots, SUM(is_campsite) AS campsite
+     FROM pois WHERE status = 'published'`,
+)
+  .first<{ pokestops: number; gyms: number; powerspots: number; campsite: number }>()
+  .catch(() => null);
+
+const hero = await env.DB.prepare(
+  `SELECT r2_key, alt, credit FROM media
+    WHERE kind = 'community_photo' ORDER BY COALESCE(source_date, created_at) DESC LIMIT 1`,
+)
+  .first<{ r2_key: string; alt: string | null; credit: string | null }>()
+  .catch(() => null);
+---
+
+<Base
+  title="About"
+  description="PoGo TXK is the Pokémon GO community for Texarkana, Texas and Arkansas, with a Community Campsite at Spring Lake Park."
+>
+  <article class="legal">
+    <p class="legal-eyebrow">PoGo TXK</p>
+    <h1>About the community</h1>
+
+    {
+      hero && (
+        <figure class="about-hero">
+          <img
+            src={`/media/${hero.r2_key}`}
+            alt={hero.alt ?? 'PoGo TXK community members at Spring Lake Park'}
+            loading="eager"
+          />
+          {hero.credit && <figcaption>{hero.credit}</figcaption>}
+        </figure>
+      )
+    }
+
+    <p class="lede">
+      PoGo Texarkana — PoGo TXK — is a local Pokémon GO community serving Texarkana, Texas and
+      Arkansas, and the surrounding area. Members of Team Valor, Team Mystic and Team Instinct
+      work together to take over opposing Gyms, defend their team's Gyms, trade, battle, and
+      turn up to community meetups.
+    </p>
+
+    <h2>The Community Campsite</h2>
+    <p>
+      Community Campsites are dedicated, localised in-game areas for Pokémon GO. They are
+      established by official Community Ambassadors and serve as local hubs for in-person player
+      meetups. They come with perks: exclusive event Check-Ins, special Timed Research tasks, and
+      enhanced PokéStops and Gyms.
+    </p>
+    <p>
+      Ours covers <strong>Spring Lake Park</strong> in Texarkana. On
+      <a href="/map">the map</a>, Campsite locations carry a ★.
+    </p>
+
+    {
+      counts && (counts.pokestops ?? 0) > 0 && (
+        <dl class="about-stats">
+          <div>
+            <dt>PokéStops</dt>
+            <dd>{counts.pokestops}</dd>
+          </div>
+          <div>
+            <dt>Gyms</dt>
+            <dd>{counts.gyms}</dd>
+          </div>
+          <div>
+            <dt>Power Spots</dt>
+            <dd>{counts.powerspots}</dd>
+          </div>
+          <div>
+            <dt>★ Campsite</dt>
+            <dd>{counts.campsite}</dd>
+          </div>
+        </dl>
+      )
+    }
+
+    <h2>Getting involved</h2>
+    <p>
+      Everyone is welcome — any team, any level, and you do not need to be good at the game.
+      Check the <strong>#announcements</strong> channel in either Niantic Campfire or Discord to
+      stay up to date on meetups and Pokémon GO news.
+    </p>
+    <ul>
+      <li>
+        <a href={DISCORD} rel="noopener noreferrer" target="_blank">Discord</a> — raid
+        coordination, chat, and where meetups get announced first
+      </li>
+      <li>
+        <a href={CAMPFIRE} rel="noopener noreferrer" target="_blank">Niantic Campfire</a> — check
+        in at meetups for in-game rewards
+      </li>
+      <li><a href="/events">Events</a> — community meetups and the global Pokémon GO calendar</li>
+      <li><a href="/go">Quick actions</a> — fire a raid flare from your phone while you play</li>
+    </ul>
+
+    <h2>This website</h2>
+    <p>
+      Built and run by volunteers. The map, the news, and the event calendar are all maintained by
+      Community Ambassadors — nobody is paid, and there is no advertising. Raid boss, egg and
+      research data updates itself from
+      <a href="https://leekduck.com" rel="noopener noreferrer" target="_blank">Leek Duck</a> via
+      <a href="https://github.com/bigfoott/ScrapedDuck" rel="noopener noreferrer" target="_blank">
+        ScrapedDuck</a
+      >.
+    </p>
+    <p>
+      Read our <a href="/conduct">Code of Conduct</a>, <a href="/terms">Terms of Service</a> and
+      <a href="/privacy">Privacy Policy</a>.
+    </p>
+
+    <p class="legal-note">
+      PoGo TXK is a fan community and is not affiliated with, endorsed by, or sponsored by
+      Niantic, Nintendo, Creatures Inc., GAME FREAK, or The Pokémon Company. Pokémon and its
+      trademarks are ©1995–2026 Nintendo, Creatures, and GAMEFREAK. All images and names owned and
+      trademarked by Nintendo, Niantic, The Pokémon Company, and GAMEFREAK are property of their
+      respective owners.
+    </p>
+  </article>
+</Base>
+
+<style>
+  .about-hero {
+    margin: 0 0 24px;
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .about-hero img {
+    display: block;
+    width: 100%;
+    max-height: 320px;
+    object-fit: cover;
+  }
+  .about-hero figcaption {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 22px 12px 7px;
+    font-size: 0.68rem;
+    color: #fff;
+    background: linear-gradient(transparent, rgb(0 0 0 / 0.78));
+  }
+
+  .lede {
+    font-size: 1.05rem;
+  }
+
+  .about-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 26px;
+    margin: 20px 0 8px;
+    padding: 16px 18px;
+    background: var(--bg-sunken);
+    border-radius: var(--radius);
+  }
+  .about-stats div {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+  .about-stats dt {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .about-stats dd {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+</style>

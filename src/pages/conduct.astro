@@ -1,0 +1,109 @@
+---
+import Base from '~/layouts/Base.astro';
+import '~/styles/legal.css';
+
+export const prerender = true;
+
+// The authoritative document is the PDF the ambassadors published. This page
+// reproduces it as accessible, linkable HTML — searchable, readable on a phone,
+// and usable by a screen reader, none of which a scanned PDF is.
+const PDF = 'https://pokemontxk.com/docs/pogo-txk-code-of-conduct.pdf';
+const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
+---
+
+<Base
+  title="Code of Conduct"
+  description="The PoGo TXK Code of Conduct — the standards expected of everyone in the community, online and at in-person events."
+>
+  <article class="legal">
+    <p class="legal-eyebrow">PoGo TXK</p>
+    <h1>Code of Conduct</h1>
+
+    <div class="legal-summary">
+      <p>
+        All participants of PoGo TXK are expected to abide by our Code of Conduct, both online
+        and during in-person events that are hosted and/or associated with PoGo TXK.
+      </p>
+    </div>
+
+    <h2>The Pledge</h2>
+    <blockquote>
+      In the interest of fostering an open and welcoming environment, we pledge to make
+      participation in our project and our community a harassment-free experience for everyone.
+    </blockquote>
+
+    <h2>The Standards</h2>
+    <h3>Behaviour that contributes to a positive environment</h3>
+    <ul>
+      <li>Using welcoming and inclusive language</li>
+      <li>Being respectful of differing viewpoints and experiences</li>
+      <li>Gracefully accepting constructive criticism</li>
+    </ul>
+
+    <h3>Unacceptable behaviour</h3>
+    <ul>
+      <li>Trolling, insulting/derogatory comments, public or private harassment</li>
+      <li>
+        Publishing others' private information, such as a physical or electronic address,
+        without explicit permission
+      </li>
+      <li>
+        Not being respectful to reasonable communication boundaries, such as 'leave me alone,'
+        'go away,' or 'I'm not discussing this with you.'
+      </li>
+      <li>The usage of sexualised language or imagery and unwelcome sexual attention or advances</li>
+      <li>Demonstrating the graphics or any other content you know may be considered disturbing</li>
+      <li>Starting and/or participating in arguments related to politics</li>
+      <li>Attacking personal tastes</li>
+      <li>
+        Other conduct which you know could reasonably be considered inappropriate in a
+        professional setting
+      </li>
+    </ul>
+
+    <h2>Reporting</h2>
+    <p>
+      Make an official report by messaging <strong>“Yanja”</strong> on Campfire. All reports will
+      be reviewed and investigated and will result in a response that is deemed necessary and
+      appropriate to the circumstances. Further details of specific enforcement policies may be
+      posted separately.
+    </p>
+    <p>
+      We hold the right and responsibility to remove comments or other contributions that are not
+      aligned to this Code of Conduct, or to ban temporarily or permanently any members for other
+      behaviors that they deem inappropriate, threatening, offensive, or harmful. Any dispute,
+      controversy or claim arising out of or relating to this contract, or the breach, termination
+      or invalidity thereof, shall be settled by arbitration.
+    </p>
+
+    <h2>Safety at meetups</h2>
+    <p>
+      Beyond the Code of Conduct: meetups happen in a public park, next to roads. Watch where you
+      are walking, obey park hours and signage, never trespass, and do not play while driving.
+      Under-18s should have a parent or guardian's permission before attending.
+    </p>
+
+    <p class="legal-note">
+      This page reproduces the Code of Conduct published by the PoGo TXK Community Ambassadors.
+      The <a href={PDF} rel="noopener noreferrer" target="_blank">original PDF</a> remains the
+      authoritative version. Questions go to any ambassador on
+      <a href={DISCORD} rel="noopener noreferrer" target="_blank">Discord</a>.
+    </p>
+
+    <p class="legal-note">
+      See also our <a href="/terms">Terms of Service</a> and
+      <a href="/privacy">Privacy Policy</a>.
+    </p>
+  </article>
+</Base>
+
+<style>
+  .legal blockquote {
+    margin: 0 0 8px;
+    padding: 12px 18px;
+    border-left: 3px solid var(--poi-campsite);
+    background: var(--bg-sunken);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-style: italic;
+  }
+</style>
