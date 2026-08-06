@@ -15,6 +15,19 @@ const initialPoi = Astro.url.searchParams.get('poi') ?? undefined;
 >
   <MapView client:only="react" initialPoi={initialPoi} />
 
+  <script>
+    // The service worker caches map tiles, which is what makes this usable in
+    // the parts of the park with no signal. Registered here as well as on /go
+    // because the map is where people actually hit that.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {
+          /* Non-fatal — the map just refetches tiles each visit. */
+        });
+      });
+    }
+  </script>
+
   <noscript>
     <div class="noscript-note">
       <h1>Spring Lake Park Map</h1>

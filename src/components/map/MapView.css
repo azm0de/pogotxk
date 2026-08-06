@@ -140,6 +140,47 @@
   }
 }
 
+/* Walking order badge on the raid route. */
+.route-step {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--poi-campsite);
+  color: #3b2200;
+  font-size: 0.72rem;
+  font-weight: 800;
+  border: 2px solid #fff;
+  box-shadow: var(--shadow-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Live flare banner inside a popup. */
+.popup-live {
+  display: grid;
+  gap: 1px;
+  margin: 0 0 8px;
+  padding: 9px 14px;
+  background: var(--live);
+  color: #fff;
+}
+.popup-live strong {
+  font-size: 0.92rem;
+}
+.popup-live span {
+  font-size: 0.74rem;
+  opacity: 0.92;
+}
+.popup-live-note {
+  font-style: italic;
+}
+/* The figure sits above this when there is a photo, so only round the top when
+   the banner is genuinely first. */
+.popup > .popup-live:first-child {
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
 .cluster-wrap {
   background: none;
   border: 0;

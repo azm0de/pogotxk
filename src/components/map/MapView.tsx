@@ -10,6 +10,56 @@ import './MapView.css';
 
 const TYPES: PoiType[] = ['pokestop', 'gym', 'powerspot'];
 
+/** Remembers filter choices between visits — see loadPrefs. */
+const PREFS_KEY = 'pogotxk.map.prefs';
+
+interface LiveFlare {
+  id: number;
+  kind: string;
+  boss: string | null;
+  needed: number | null;
+  note: string | null;
+  expiresAt: string;
+  poi: { id: number } | null;
+}
+
+interface Prefs {
+  types: PoiType[];
+  shapes: string[];
+  campsiteOnly: boolean;
+}
+
+/**
+ * Filter state survives a reload, because the common case is someone who always
+ * wants the same view — gyms only, route on — and re-picking it every visit is
+ * a small tax paid forever.
+ */
+function loadPrefs(): Prefs | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Prefs>;
+    const types = (parsed.types ?? []).filter((t): t is PoiType => TYPES.includes(t as PoiType));
+    return {
+      // Never restore a state with everything hidden — that reads as a broken map.
+      types: types.length ? types : TYPES,
+      shapes: Array.isArray(parsed.shapes) ? parsed.shapes.filter((s) => typeof s === 'string') : [],
+      campsiteOnly: parsed.campsiteOnly === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function savePrefs(prefs: Prefs): void {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* Private browsing, quota, or a locked-down browser. Not worth surfacing. */
+  }
+}
+
 /** Great-circle distance in metres. */
 function distanceMeters(a: [number, number], b: [number, number]): number {
   const R = 6371000;
@@ -58,8 +108,28 @@ function add(parent: Node, ...children: (Node | string)[]): void {
  * text (names, captions, credits) is set via textContent and cannot inject
  * markup.
  */
-function buildPoiPopup(poi: MapPoi, userPos: [number, number] | null): HTMLElement {
+function buildPoiPopup(
+  poi: MapPoi,
+  userPos: [number, number] | null,
+  flare: LiveFlare | null,
+): HTMLElement {
   const root = el('div', 'popup');
+
+  // Live activity goes above everything else — if something is happening here
+  // right now, that is the only thing the reader cares about.
+  if (flare) {
+    const banner = el('div', 'popup-live');
+    const minutes = Math.max(0, Math.round((Date.parse(flare.expiresAt) - Date.now()) / 60000));
+    const headline = flare.boss
+      ? `${flare.boss} raid`
+      : flare.kind === 'remote_invites'
+        ? `Remote invites${flare.needed ? ` — needs ${flare.needed}` : ''}`
+        : 'Active now';
+    add(banner, el('strong', undefined, `● ${headline}`));
+    add(banner, el('span', undefined, `${minutes} min left`));
+    if (flare.note) add(banner, el('span', 'popup-live-note', flare.note));
+    add(root, banner);
+  }
 
   if (poi.photo) {
     const figure = el('figure', 'popup-figure');
@@ -143,14 +213,36 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
   const markersRef = useRef(new Map<string, L.Marker>());
   const shapeLayersRef = useRef(new Map<string, L.Layer>());
   const userMarkerRef = useRef<L.Marker | null>(null);
+  /** Numbered badges shown along the raid route. */
+  const routeOrderRef = useRef<L.LayerGroup | null>(null);
   /** Slug awaiting focus from a ?poi= deep link; cleared once opened. */
   const pendingFocusRef = useRef<string | null>(initialPoi ?? null);
 
   const [data, setData] = useState<MapData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTypes, setActiveTypes] = useState<Set<PoiType>>(new Set(TYPES));
+
+  // Restored synchronously on first render so the map never flashes the default
+  // filters before switching to the saved ones.
+  const savedPrefs = useRef<Prefs | null>(typeof window === 'undefined' ? null : loadPrefs());
+  const [activeTypes, setActiveTypes] = useState<Set<PoiType>>(
+    new Set(savedPrefs.current?.types ?? TYPES),
+  );
   const [activeShapes, setActiveShapes] = useState<Set<string>>(new Set());
-  const [showCampsiteOnly, setShowCampsiteOnly] = useState(false);
+  const [showCampsiteOnly, setShowCampsiteOnly] = useState(
+    savedPrefs.current?.campsiteOnly ?? false,
+  );
+
+  /** poiId -> the active flare on it, for the pulsing pins. */
+  const [liveFlares, setLiveFlares] = useState<Map<number, LiveFlare>>(new Map());
+  /**
+   * Mirror of the above, read by popup builders.
+   *
+   * The popup callback closes over this ref rather than the state so that
+   * marker bindings never need re-creating when flares change — rebuilding a
+   * marker destroys any popup open on it, and flares refresh on a timer.
+   */
+  const liveFlaresRef = useRef(liveFlares);
+  liveFlaresRef.current = liveFlares;
   const [query, setQuery] = useState('');
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [status, setStatus] = useState('');
@@ -172,6 +264,58 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
       cancelled = true;
     };
   }, []);
+
+  // --- live flares -----------------------------------------------------------
+  // Polled as the baseline, with a WebSocket on top for immediacy. The poll is
+  // not redundant: it is what makes expiry show up, since nothing broadcasts
+  // when a flare simply runs out of time.
+  useEffect(() => {
+    let cancelled = false;
+
+    const applyFlares = (flares: LiveFlare[]) => {
+      if (cancelled) return;
+      const next = new Map<number, LiveFlare>();
+      for (const flare of flares) {
+        if (flare.poi?.id != null) next.set(flare.poi.id, flare);
+      }
+      setLiveFlares(next);
+    };
+
+    const refresh = () =>
+      fetch('/api/flares')
+        .then((r) => (r.ok ? (r.json() as Promise<{ flares: LiveFlare[] }>) : null))
+        .then((d) => d && applyFlares(d.flares ?? []))
+        .catch(() => undefined);
+
+    void refresh();
+    const poll = window.setInterval(refresh, 60_000);
+
+    let socket: WebSocket | null = null;
+    try {
+      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      socket = new WebSocket(`${scheme}://${window.location.host}/api/flares/socket`);
+      // Any board activity is a cue to re-read the authoritative list rather
+      // than trying to merge deltas by hand.
+      socket.onmessage = () => void refresh();
+    } catch {
+      /* Falls back to the poll. */
+    }
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(poll);
+      socket?.close();
+    };
+  }, []);
+
+  // Persist filters whenever they change.
+  useEffect(() => {
+    savePrefs({
+      types: [...activeTypes],
+      shapes: [...activeShapes],
+      campsiteOnly: showCampsiteOnly,
+    });
+  }, [activeTypes, activeShapes, showCampsiteOnly]);
 
   const visiblePois = useMemo(() => {
     if (!data) return [];
@@ -223,6 +367,8 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
     clusterRef.current = cluster;
     map.addLayer(cluster);
 
+    routeOrderRef.current = L.layerGroup();
+
     // Community photo pins sit outside the cluster — there are only nine and
     // they are a different kind of thing.
     for (const photo of data.communityPhotos) {
@@ -263,7 +409,11 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
         interactive: false,
       });
       shapeLayersRef.current.set(shape.slug, layer);
-      if (shape.visibleByDefault) {
+
+      // A saved choice beats the zone default, including a deliberate "off".
+      const saved = savedPrefs.current?.shapes;
+      const visible = saved ? saved.includes(shape.slug) : shape.visibleByDefault;
+      if (visible) {
         layer.addTo(map);
         setActiveShapes((prev) => new Set(prev).add(shape.slug));
       }
@@ -273,6 +423,7 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
+      routeOrderRef.current = null;
       markersRef.current.clear();
       shapeLayersRef.current.clear();
     };
@@ -288,18 +439,27 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
 
     const layers: L.Marker[] = [];
     for (const poi of visiblePois) {
+      const flare = liveFlaresRef.current.get(poi.id) ?? null;
       const marker = L.marker([poi.lat, poi.lng], {
         icon: poiIcon({
           type: poi.type,
           isCampsite: poi.isCampsite,
           isMeetupSpot: poi.isMeetupSpot,
+          isLive: flare !== null,
         }),
         // Screen readers announce this; keyboard users can tab to the marker.
         alt: `${poi.name} — ${TYPE_LABEL[poi.type]}`,
         keyboard: true,
         riseOnHover: true,
+        // A gym with something happening on it should sit above its neighbours.
+        zIndexOffset: flare ? 1000 : 0,
       });
-      marker.bindPopup(() => buildPoiPopup(poi, userPos), { maxWidth: 320, minWidth: 240 });
+      // Reads the ref, so the popup is current without re-binding on every
+      // flare refresh.
+      marker.bindPopup(() => buildPoiPopup(poi, userPos, liveFlaresRef.current.get(poi.id) ?? null), {
+        maxWidth: 320,
+        minWidth: 240,
+      });
       markersRef.current.set(poi.slug, marker);
       layers.push(marker);
     }
@@ -332,7 +492,109 @@ export default function MapView({ initialPoi }: { initialPoi?: string }) {
       if (poi) map?.setView([poi.lat, poi.lng], Math.max(map.getZoom(), 18));
       setStatus(`Showing ${poi?.name ?? wanted}.`);
     });
+    // Deliberately NOT depending on liveFlares: rebuilding markers destroys any
+    // popup open on them, and flares refresh on a timer. Icon updates are
+    // handled by the effect below instead.
   }, [visiblePois, data, userPos]);
+
+  // --- reflect flare changes without rebuilding markers ----------------------
+  useEffect(() => {
+    if (!data) return;
+    const poiById = new Map(data.pois.map((p) => [p.id, p]));
+
+    for (const [slug, marker] of markersRef.current) {
+      const poi = data.pois.find((p) => p.slug === slug);
+      if (!poi) continue;
+
+      const isLive = liveFlares.has(poi.id);
+      // `_pogoLive` tracks what the icon currently shows, so an unchanged
+      // marker is left completely alone — setIcon would otherwise replace the
+      // DOM element and close its popup.
+      const marked = marker as L.Marker & { _pogoLive?: boolean };
+      if (marked._pogoLive === isLive) continue;
+
+      marked._pogoLive = isLive;
+      const source = poiById.get(poi.id) ?? poi;
+      marker.setIcon(
+        poiIcon({
+          type: source.type,
+          isCampsite: source.isCampsite,
+          isMeetupSpot: source.isMeetupSpot,
+          isLive,
+        }),
+      );
+      marker.setZIndexOffset(isLive ? 1000 : 0);
+
+      // A popup already on screen was built before this flare was known — a
+      // deep link opens one before the first fetch resolves. Re-run its content
+      // function so the banner appears rather than requiring a close/reopen.
+      if (marker.isPopupOpen()) marker.getPopup()?.update();
+    }
+  }, [liveFlares, data, visiblePois]);
+
+  // --- numbered walking order along the raid route --------------------------
+  // The route is a bare polyline: it shows you the shape of the walk but not
+  // which gym comes next, which is the thing you actually want while walking
+  // it. Numbering each gym by how far along the route it sits turns the line
+  // into an itinerary.
+  useEffect(() => {
+    const map = mapRef.current;
+    const orderLayer = routeOrderRef.current;
+    if (!map || !orderLayer || !data) return;
+
+    orderLayer.clearLayers();
+    if (!activeShapes.has('raid-route')) {
+      map.removeLayer(orderLayer);
+      return;
+    }
+
+    const route = data.shapes.find((s) => s.slug === 'raid-route');
+    const geo = route?.geojson as { coordinates?: [number, number][] } | undefined;
+    const path = geo?.coordinates;
+    if (!path?.length) return;
+
+    // Position along the route = index of the nearest vertex. Crude versus true
+    // arc-length projection, but the vertices are metres apart so it orders
+    // identically and costs nothing.
+    const positionOf = (lat: number, lng: number): { index: number; distance: number } => {
+      let bestIndex = 0;
+      let best = Infinity;
+      path.forEach(([plng, plat], index) => {
+        const d = (plat - lat) ** 2 + (plng - lng) ** 2;
+        if (d < best) {
+          best = d;
+          bestIndex = index;
+        }
+      });
+      return { index: bestIndex, distance: Math.sqrt(best) };
+    };
+
+    // ~120 m in degrees. Gyms further than this from the line are not on the
+    // walk and should not be numbered into it.
+    const MAX_OFFSET = 0.0012;
+
+    const ordered = visiblePois
+      .filter((p) => p.type === 'gym')
+      .map((poi) => ({ poi, ...positionOf(poi.lat, poi.lng) }))
+      .filter((entry) => entry.distance <= MAX_OFFSET)
+      .sort((a, b) => a.index - b.index);
+
+    ordered.forEach((entry, i) => {
+      L.marker([entry.poi.lat, entry.poi.lng], {
+        icon: L.divIcon({
+          className: 'pin-wrap',
+          html: `<span class="route-step">${i + 1}</span>`,
+          iconSize: [22, 22],
+          // Offset up-left so it badges the pin rather than covering it.
+          iconAnchor: [30, 46],
+        }),
+        interactive: false,
+        keyboard: false,
+      }).addTo(orderLayer);
+    });
+
+    orderLayer.addTo(map);
+  }, [activeShapes, data, visiblePois]);
 
   // --- deep link: /map?poi=slug -------------------------------------------
   // Only clears a filter that would hide the target; the focus itself happens
