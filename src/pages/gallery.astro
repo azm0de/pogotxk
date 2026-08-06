@@ -168,11 +168,28 @@ const isPortrait = (p: Photo) => (p.width && p.height ? p.height > p.width * 1.1
   figcaption {
     position: absolute;
     inset: auto 0 0 0;
-    padding: 26px 12px 10px;
+    padding: 46px 13px 11px;
     /* The credit is a licensing obligation. It sits on the image so it cannot
-       be separated from it by a layout change or a screenshot. */
-    background: linear-gradient(transparent, rgb(0 0 0 / 0.82));
+       be separated from it by a layout change or a screenshot.
+
+       Which makes legibility the scrim's job, and a two-stop
+       `transparent -> 0.82` was not doing it: the gradient only reached full
+       strength at the very bottom edge, so every line above the last one sat on
+       bare photograph. Over the bright foliage shots the white text all but
+       disappeared. These stops hold the scrim near-opaque for the whole height
+       the text occupies and only fade across the top third. */
+    background: linear-gradient(
+      to top,
+      rgb(0 0 0 / 0.93) 0%,
+      rgb(0 0 0 / 0.89) 38%,
+      rgb(0 0 0 / 0.74) 62%,
+      rgb(0 0 0 / 0.36) 84%,
+      transparent 100%
+    );
     color: #fff;
+    /* Belt and braces for the brightest images, where even a heavy scrim leaves
+       thin white type fighting a high-frequency background. */
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
   }
   .caption {
     margin: 0 0 4px;
