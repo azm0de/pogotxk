@@ -124,22 +124,30 @@ export async function fetchUser(accessToken: string): Promise<DiscordUser> {
  * Read the caller's membership in our guild. A 404 means "not a member", which
  * is an expected outcome rather than an error — those users become guests.
  */
+export type GuildLookup =
+  /** No guild configured — Discord knows nothing, so the stored role stands. */
+  | { known: false }
+  /** Discord answered. `roles: null` means this person is not a member. */
+  | { known: true; roles: string[] | null };
+
 export async function fetchGuildRoles(
   accessToken: string,
   guildId: string | undefined,
-): Promise<string[] | null> {
-  // No guild configured yet — treat as "not a member" rather than calling the
-  // API with an empty id, which would 400.
-  if (!guildId) return null;
+): Promise<GuildLookup> {
+  // Distinguishing these two matters: collapsing them to one null meant someone
+  // who LEFT the Discord kept their site role forever, because "Discord says
+  // they are not a member" was indistinguishable from "we did not ask".
+  if (!guildId) return { known: false };
 
   const res = await fetch(`${API}/users/@me/guilds/${guildId}/member`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
-  if (res.status === 404) return null;
+  // 404 is Discord telling us they are not in the guild — an answer, not a gap.
+  if (res.status === 404) return { known: true, roles: null };
   if (!res.ok) throw new Error(`Discord guild member lookup failed (${res.status})`);
 
   const body = (await res.json()) as { roles?: string[] };
-  return body.roles ?? [];
+  return { known: true, roles: body.roles ?? [] };
 }
 
 /**

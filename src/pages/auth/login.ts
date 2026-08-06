@@ -9,15 +9,11 @@
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
 import { authorizeUrl, discordConfig, pkceChallenge } from '~/lib/auth/discord';
+import { safeNext } from '~/lib/auth/next';
 import { randomToken, stateCookie } from '~/lib/auth/session';
 
 export const prerender = false;
 
-/** Only same-origin paths, so `next` can never become an open redirect. */
-function safeNext(raw: string | null): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
-  return raw;
-}
 
 /**
  * Names which specific variable is absent rather than saying "not configured".

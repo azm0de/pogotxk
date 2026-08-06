@@ -29,12 +29,17 @@ import { DEFAULT_TZ } from '~/lib/time';
 export const prerender = false;
 
 /**
- * Calendar links point at the canonical site in production, but at whatever host
- * you are actually on when developing — a "copy link" button that hands you a
- * pokemontxk.com URL from localhost is a trap.
+ * Calendar links are built from the host you are actually reading this on, not
+ * from the configured canonical site.
+ *
+ * A subscribe URL is only useful if it resolves, and the host serving this page
+ * demonstrably does. Preferring the canonical value is what produced six dead
+ * subscribe links when `site` still named a domain that had not been pointed at
+ * the Worker — and ICS is subscribe-once, so a dead URL is an empty calendar
+ * forever rather than a visible error. Once the custom domain is live the two
+ * agree anyway.
  */
-const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(Astro.url.hostname);
-const base = new URL(isLocal ? Astro.url.origin : (Astro.site?.toString() ?? Astro.url.origin));
+const base = new URL(Astro.url.origin);
 
 // Independent sources, so they run together.
 //

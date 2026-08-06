@@ -16,6 +16,7 @@ import {
   resolveRole,
   upsertUser,
 } from '~/lib/auth/discord';
+import { safeNext } from '~/lib/auth/next';
 import {
   clearedStateCookie,
   createSession,
@@ -75,15 +76,18 @@ export async function GET(ctx: APIContext): Promise<Response> {
   try {
     const accessToken = await exchangeCode(cfg, url, code, stored.verifier);
     const discordUser = await fetchUser(accessToken);
-    const guildRoles = await fetchGuildRoles(accessToken, cfg.guildId);
-    const role = resolveRole(cfg, discordUser.id, guildRoles);
+    const guild = await fetchGuildRoles(accessToken, cfg.guildId);
+    const role = resolveRole(cfg, discordUser.id, guild.known ? guild.roles : null);
 
     // Discord only gets to set the role when it actually knows something: a
-    // configured guild we could read, or an explicit bootstrap admin. Otherwise
-    // the stored role stands, so a hand-promoted admin is not demoted on their
-    // next sign-in.
-    const authoritative =
-      guildRoles !== null || discordUser.id === cfg.bootstrapAdminId;
+    // configured guild it answered for, or an explicit bootstrap admin.
+    // Otherwise the stored role stands, so a hand-promoted admin is not demoted
+    // on their next sign-in.
+    //
+    // `guild.known` is true even when Discord says "not a member" — that is an
+    // answer, and it must be authoritative, or leaving the server would never
+    // cost anyone their role.
+    const authoritative = guild.known || discordUser.id === cfg.bootstrapAdminId;
 
     const record = await upsertUser(env.DB, discordUser, role, authoritative);
     if (record.isBanned) return fail('This account is banned', url, 403);
@@ -93,7 +97,11 @@ export async function GET(ctx: APIContext): Promise<Response> {
     const headers = new Headers({ 'cache-control': 'no-store' });
     headers.append('set-cookie', sessionCookie(token, url));
     headers.append('set-cookie', clearedStateCookie(url));
-    headers.set('location', stored.next || '/');
+    // Re-validated on the way out, not trusted from the cookie. The cookie is
+    // ours and HttpOnly, but a redirect target is exactly the kind of value
+    // that should be checked at the point it becomes a Location header rather
+    // than only where it was minted.
+    headers.set('location', safeNext(stored.next));
 
     return new Response(null, { status: 302, headers });
   } catch (err) {

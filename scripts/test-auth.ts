@@ -6,6 +6,7 @@
  */
 
 import { pkceChallenge, resolveRole, type DiscordConfig } from '../src/lib/auth/discord';
+import { safeNext } from '../src/lib/auth/next';
 import { hasRole, type Role, type SessionUser } from '../src/lib/auth/types';
 
 let failures = 0;
@@ -82,6 +83,49 @@ const rfcExpected = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
 check('matches the RFC test vector', await pkceChallenge(rfcVerifier), rfcExpected);
 const challenge = await pkceChallenge('a'.repeat(43));
 check('challenge is base64url, unpadded', /^[A-Za-z0-9\-_]+$/.test(challenge), true);
+
+console.log('\n== safeNext (open-redirect guard) ==');
+// Every hostile case below was captured against production before the fix.
+// `/auth/login?next=%2F%5Cevil.example` minted a cookie holding "/\evil.example",
+// which the callback then wrote straight into its Location header.
+const TAB = String.fromCharCode(9);
+const CR = String.fromCharCode(13);
+const NUL = String.fromCharCode(0);
+const BS = String.fromCharCode(92); // backslash, spelled out to survive tooling
+
+check('plain path passes through', safeNext('/map'), '/map');
+check('hyphens are not rejected', safeNext('/blog/some-post-slug'), '/blog/some-post-slug');
+check('query and hash survive', safeNext('/map?poi=x#y'), '/map?poi=x#y');
+check('null becomes root', safeNext(null), '/');
+check('empty becomes root', safeNext(''), '/');
+
+check('protocol-relative //host blocked', safeNext('//evil.example'), '/');
+check('backslash /\\host blocked', safeNext('/' + BS + 'evil.example'), '/');
+check('tab-smuggled //host blocked', safeNext('/' + TAB + '//evil.example'), '/');
+check('CR-smuggled //host blocked', safeNext('/' + CR + '//evil.example'), '/');
+check('tab-smuggled backslash blocked', safeNext('/' + TAB + BS + 'evil.example'), '/');
+check('NUL in path blocked', safeNext('/map' + NUL + 'x'), '/');
+check('absolute URL blocked', safeNext('https://evil.example'), '/');
+check('scheme-only blocked', safeNext('javascript:alert(1)'), '/');
+
+// The invariant that actually matters, asserted the way the browser sees it:
+// whatever safeNext returns must resolve back to our own origin. This is the
+// same style of check that replaced the weaker markdown URL test.
+const ORIGIN = 'https://pogotxk.gnomelabz.workers.dev';
+const hostile = [
+  '//evil.example',
+  '/' + BS + 'evil.example',
+  '/' + TAB + '//evil.example',
+  '/' + TAB + BS + 'evil.example',
+  '/' + CR + '//evil.example',
+  '/' + NUL + '//evil.example',
+  'https://evil.example/x',
+  'javascript:alert(1)',
+];
+for (const raw of hostile) {
+  const resolved = new URL(safeNext(raw), ORIGIN);
+  check(`resolves to our origin: ${JSON.stringify(raw)}`, resolved.origin, ORIGIN);
+}
 
 console.log(failures ? `\nFAILED (${failures})\n` : '\nAll checks passed.\n');
 process.exit(failures ? 1 : 0);
