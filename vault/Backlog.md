@@ -34,17 +34,19 @@ matter of finding the right menu.
 - [ ] **A second admin.** Right now the site has exactly one, promoted by hand. If Nick is
       going to be an ambassador on the site as well, do it in the same sitting
 
-> [!tip] Two of these are *not* actually blocked
-> With Developer Mode on (Settings → Advanced), any member can read:
-> - **`DISCORD_GUILD_ID`** — right-click the server icon → Copy Server ID
-> - **`DISCORD_BOOTSTRAP_ADMIN_ID`** — right-click your own name → Copy User ID
->
-> And a role ID can be read without Server Settings by typing `\@RoleName` in any channel:
-> the backslash makes Discord send the raw form `<@&123456789>` instead of a mention. Only
-> works for roles you are allowed to mention, but it is often enough.
->
-> Setting `DISCORD_GUILD_ID` alone already turns on the membership check — people outside
-> the server become guests — without needing any role IDs.
+- [x] ~~`DISCORD_GUILD_ID` + `DISCORD_BOOTSTRAP_ADMIN_ID`~~ — set 2026-08-06. Neither needed
+      admin: Developer Mode plus right-click → Copy ID. The membership check is now **on**,
+      so people outside the Discord sign in as guests
+
+> [!tip] A role id can be read without Server Settings
+> Type `\@RoleName` in any channel — the backslash makes Discord send the raw form
+> `<@&123456789>` instead of a mention. Only works for roles you are allowed to mention,
+> but it may save waiting on the meeting.
+
+> [!warning] Everyone in the guild is a plain `member` until the role ids land
+> That is the intended interim state, not a bug. `DISCORD_BOOTSTRAP_ADMIN_ID` is the only
+> thing keeping Justin an admin — see the ordering warning in [[Configuration]] before
+> changing any of this.
 
 ## Worth doing next
 

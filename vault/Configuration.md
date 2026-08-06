@@ -28,6 +28,20 @@ updated: 2026-08-05
 | `VAPID_PUBLIC_KEY` | var | `wrangler.jsonc` | Public — handed to every browser as `applicationServerKey` |
 | `VAPID_PRIVATE_KEY` | Secret | `wrangler secret` | Set 2026-08-06 |
 | `VAPID_SUBJECT` | Secret | `wrangler secret` | `mailto:jeportillo1@gmail.com` |
+| `DISCORD_GUILD_ID` | var | `wrangler.jsonc` | Public — membership check is ON; outsiders are guests |
+| `DISCORD_BOOTSTRAP_ADMIN_ID` | Secret | `wrangler secret` | Kept out of the public repo — see below |
+
+> [!danger] Set the bootstrap admin BEFORE the guild id, never after
+> Configuring a guild makes Discord **authoritative** over roles. With no
+> `DISCORD_ROLE_*` ids set, every guild member resolves to `member` — and that gets
+> written on sign-in, silently demoting a hand-promoted admin and locking everyone out
+> of `/admin`. `DISCORD_BOOTSTRAP_ADMIN_ID` short-circuits `resolveRole` to `admin` and
+> is the only thing preventing it. Verified against `resolveRole` before the 2026-08-06
+> deploy: with it he resolves to `admin` either way; without it, `member`.
+>
+> It is a Secret rather than a var because the repo is public: it is a personal Discord
+> user id, and it marks one account as permanently admin. Secrets survive deploys just
+> as reliably.
 
 Confirm the whole push config in one request — `enabled` is only true when all three
 pass, including the subject check:
