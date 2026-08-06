@@ -16,12 +16,15 @@
     "db:migrate:remote": "wrangler d1 migrations apply pogotxk-db --remote",
     "db:query": "wrangler d1 execute pogotxk-db --local --command",
     "import:dry-run": "tsx scripts/dry-run-import.ts",
-    "test": "tsx scripts/test-auth.ts && tsx scripts/test-time.ts && tsx scripts/test-markdown.ts && tsx scripts/test-markdown-urls.ts && tsx scripts/test-ics.ts && tsx scripts/dry-run-import.ts",
-    "dev:session": "tsx scripts/dev-session.ts"
+    "test": "tsx scripts/test-auth.ts && tsx scripts/test-time.ts && tsx scripts/test-markdown.ts && tsx scripts/test-markdown-urls.ts && tsx scripts/test-ics.ts && tsx scripts/test-notify.ts && tsx scripts/dry-run-import.ts",
+    "dev:session": "tsx scripts/dev-session.ts",
+    "gen:vapid": "tsx scripts/generate-vapid.ts",
+    "gen:icons": "tsx scripts/build-icons.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.7",
     "@astrojs/react": "^6.0.2",
+    "@block65/webcrypto-web-push": "^1.0.2",
     "astro": "^7.1.6",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",

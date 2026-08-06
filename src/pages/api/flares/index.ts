@@ -26,8 +26,26 @@ import {
   MIN_TTL_MINUTES,
 } from '~/lib/db/flares';
 import { notifyLiveBoard } from '~/do/LiveBoard';
+import { postFlareToDiscord, type FlareNotification } from '~/lib/notify/discord';
+import { sendPush } from '~/lib/notify/push';
+import { FLARE_KIND_LABEL } from '~/lib/db/flares';
 
 export const prerender = false;
+
+/** Notification copy. Kept next to the send so the two never drift apart. */
+function pushTitle(flare: FlareNotification): string {
+  if (flare.kind === 'raid') return flare.boss ? `🔥 ${flare.boss} raid` : '🔥 Raid starting';
+  if (flare.kind === 'remote_invites') {
+    return flare.needed ? `📣 ${flare.needed} remote invites` : '📣 Remote invites';
+  }
+  return `${FLARE_KIND_LABEL[flare.kind]} at the park`;
+}
+
+function pushBody(flare: FlareNotification): string {
+  const where = flare.poi?.name ?? 'Spring Lake Park';
+  const who = flare.author ? ` — ${flare.author.name}` : '';
+  return flare.note ? `${where}: ${flare.note}` : `${where}${who}`;
+}
 
 export const flareInput = z.object({
   kind: z.enum(FLARE_KINDS),
@@ -89,9 +107,11 @@ export const POST = handler(async (ctx: APIContext) => {
       zoneId,
       poiId,
       input.kind,
-      // Raid details only make sense on a raid; storing them elsewhere would
-      // put a boss name on a trade card.
-      input.kind === 'raid' ? (input.boss ?? null) : null,
+      // A boss name belongs on a raid and on an invite call ("spare invites for
+      // Mewtwo") but nowhere else — it would be noise on a trade card. The /go
+      // screen asks for it on both, so dropping it for invites would silently
+      // discard something the user typed.
+      input.kind === 'raid' || input.kind === 'remote_invites' ? (input.boss ?? null) : null,
       input.kind === 'raid' ? (input.tier ?? null) : null,
       input.kind === 'remote_invites' ? (input.needed ?? null) : null,
       input.note ?? null,
@@ -105,11 +125,35 @@ export const POST = handler(async (ctx: APIContext) => {
   const flare = await getFlare(env.DB, inserted.id);
   if (!flare) throw new ApiError(500, 'Flare vanished after insert');
 
-  // D1 has the flare; the broadcast is a courtesy to whoever is already
-  // watching. Off the response path so a slow or absent Durable Object never
-  // delays the trainer who is standing at the gym.
+  // D1 has the flare; everything below is delivery. All of it runs off the
+  // response path so a slow Discord, a wedged push service or an absent Durable
+  // Object never delays the trainer standing at the gym waiting for the button
+  // to respond.
+  const origin = new URL(ctx.request.url).origin;
+  const fanOut = Promise.allSettled([
+    notifyLiveBoard({ type: 'flare', flare }),
+    postFlareToDiscord(env, flare as unknown as FlareNotification, origin).then((messageId) =>
+      messageId
+        ? env.DB.prepare('UPDATE flares SET discord_message_id = ?2 WHERE id = ?1')
+            .bind(flare.id, messageId)
+            .run()
+        : undefined,
+    ),
+    sendPush(
+      env,
+      'raid',
+      {
+        title: pushTitle(flare),
+        body: pushBody(flare),
+        url: `${origin}/live`,
+        // One notification per flare, replaced rather than stacked.
+        tag: `flare-${flare.id}`,
+      },
+      user.id,
+    ),
+  ]);
+
   const background = ctx.locals.cfContext;
-  const fanOut = notifyLiveBoard({ type: 'flare', flare });
   if (background) background.waitUntil(fanOut);
   else await fanOut;
 

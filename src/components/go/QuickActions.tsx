@@ -95,6 +95,12 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const toastTimer = useRef<number | null>(null);
 
+  const [pushKey, setPushKey] = useState<string | null>(null);
+  const [pushState, setPushState] = useState<'unknown' | 'off' | 'on' | 'blocked' | 'unsupported'>(
+    'unknown',
+  );
+  const [pushBusy, setPushBusy] = useState(false);
+
   const say = useCallback((kind: 'ok' | 'err', text: string) => {
     setToast({ kind, text });
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
@@ -128,6 +134,89 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
     const id = window.setInterval(loadFlares, 20000);
     return () => window.clearInterval(id);
   }, [loadFlares]);
+
+  // --- push notifications ---------------------------------------------------
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setPushState('unsupported');
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const cfg = await fetch('/api/push/subscribe')
+        .then((r) => r.json() as Promise<{ publicKey: string | null; enabled: boolean }>)
+        .catch(() => null);
+      if (cancelled) return;
+
+      if (!cfg?.enabled || !cfg.publicKey) {
+        setPushState('unsupported');
+        return;
+      }
+      setPushKey(cfg.publicKey);
+
+      if (Notification.permission === 'denied') {
+        setPushState('blocked');
+        return;
+      }
+      const reg = await navigator.serviceWorker.getRegistration();
+      const existing = await reg?.pushManager.getSubscription();
+      if (!cancelled) setPushState(existing ? 'on' : 'off');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const togglePush = useCallback(async () => {
+    if (!pushKey) return;
+    setPushBusy(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+
+      if (existing) {
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ endpoint: existing.endpoint }),
+        }).catch(() => undefined);
+        await existing.unsubscribe();
+        setPushState('off');
+        say('ok', 'Notifications off.');
+        return;
+      }
+
+      // Must be inside this click handler: iOS silently refuses a permission
+      // request that is not driven by a user gesture, and reports nothing.
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPushState(permission === 'denied' ? 'blocked' : 'off');
+        say('err', 'Notifications were not allowed.');
+        return;
+      }
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: pushKey,
+      });
+
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(sub.toJSON()),
+      });
+      if (!res.ok) throw new Error('Could not save the subscription');
+
+      setPushState('on');
+      say('ok', "Notifications on. We'll ping you when someone flares.");
+    } catch (err) {
+      say('err', err instanceof Error ? err.message : 'Could not change notifications');
+    } finally {
+      setPushBusy(false);
+    }
+  }, [pushKey, say]);
 
   // Ask for location on mount: every action is "what is near me", and a prompt
   // the moment they open it is less disruptive than one mid-flow.
@@ -230,14 +319,38 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
                   : 'Location unavailable'}
           </p>
         </div>
-        {user ? (
-          <span className="go-user">{user.displayName}</span>
-        ) : (
-          <a className="go-signin" href="/auth/login?next=%2Fgo">
-            Sign in
-          </a>
-        )}
+        <div className="go-head-right">
+          {canPost && (pushState === 'on' || pushState === 'off') && (
+            <button
+              type="button"
+              className={`go-bell${pushState === 'on' ? ' is-on' : ''}`}
+              onClick={() => void togglePush()}
+              disabled={pushBusy}
+              aria-pressed={pushState === 'on'}
+              title={pushState === 'on' ? 'Notifications on' : 'Turn on notifications'}
+            >
+              <span aria-hidden="true">{pushState === 'on' ? '🔔' : '🔕'}</span>
+              <span className="sr-only">
+                {pushState === 'on' ? 'Turn notifications off' : 'Turn notifications on'}
+              </span>
+            </button>
+          )}
+          {user ? (
+            <span className="go-user">{user.displayName}</span>
+          ) : (
+            <a className="go-signin" href="/auth/login?next=%2Fgo">
+              Sign in
+            </a>
+          )}
+        </div>
       </header>
+
+      {pushState === 'blocked' && canPost && (
+        <p className="go-note">
+          Notifications are blocked for this site. Turn them back on in your browser settings if
+          you want a ping when someone flares.
+        </p>
+      )}
 
       <section className="go-board" aria-label="Active flares">
         {flares.length === 0 ? (

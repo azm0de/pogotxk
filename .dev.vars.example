@@ -40,15 +40,27 @@ DISCORD_ROLE_MEMBER=
 # you can sign in and configure everything else. Right-click yourself > Copy User ID.
 DISCORD_BOOTSTRAP_ADMIN_ID=
 
-# --- Not read by any code yet ---
-# Listed so the eventual names are agreed, but setting them today does nothing.
-# Delete this block if it is still here once the features land.
+# --- Discord fan-out (optional) ---
+# Server Settings > Integrations > Webhooks > New Webhook, then Copy Webhook URL.
+# Flares post here as rich embeds. Only discord.com / discordapp.com hosts are
+# accepted — anything else is refused rather than forwarding your community's
+# flares to someone else's server.
+DISCORD_WEBHOOK_URL=
+
+# --- Web Push (optional) ---
+# Generate a keypair with:  npm run gen:vapid
+# Set ALL THREE or push stays off; the site degrades quietly without them.
 #
-#   DISCORD_WEBHOOK_URL   flare/announcement fan-out into a Discord channel
-#   VAPID_SUBJECT         web push; must be a mailto: or https:// URL, or Apple 403s
-#   VAPID_PUBLIC_KEY      generate with: npx web-push generate-vapid-keys
-#   VAPID_PRIVATE_KEY
+# The public key is served to browsers from /api/push/subscribe rather than
+# committed, so neither half of the pair needs to live in git.
 #
+# VAPID_SUBJECT must be mailto: or https:// — Apple's push service returns 403
+# for anything else, which breaks iOS only and looks like "push just doesn't
+# work on iPhones".
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:you@example.com
+
 # Sessions need no secret: tokens are random and stored as SHA-256 hashes
 # rather than signed, so there is nothing to sign with.
 

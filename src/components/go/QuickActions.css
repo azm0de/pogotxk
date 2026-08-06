@@ -30,6 +30,41 @@
   font-size: 0.78rem;
   color: var(--text-muted);
 }
+.go-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.go-bell {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-sunken);
+  font-size: 1.1rem;
+  cursor: pointer;
+  flex: none;
+}
+.go-bell.is-on {
+  border-color: var(--poi-campsite);
+  background: color-mix(in srgb, var(--poi-campsite) 18%, transparent);
+}
+.go-bell:disabled {
+  opacity: 0.5;
+}
+
+.go-note {
+  flex: none;
+  margin: 0 12px 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  border-left: 3px solid var(--poi-gym);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 .go-user {
   font-size: 0.8rem;
   font-weight: 600;
