@@ -13,13 +13,29 @@ const { title, fullBleed = false } = Astro.props;
 // Middleware already enforces `ambassador` for /admin/*; this is for rendering.
 const user = Astro.locals.user!;
 
-const nav = [
+/**
+ * Every entry here must resolve. `/admin/media` and `/admin/settings` were
+ * listed for pages that were never built, so both tabs led to a 404 — the
+ * console advertised two sections it did not have.
+ *
+ * The media API does exist (`/api/admin/media`), so that page is a page away
+ * from working; settings has neither. Both are in the backlog. Put the tab back
+ * in the same change that adds the route, not before.
+ */
+interface NavItem {
+  href: string;
+  label: string;
+  /** Match the path exactly rather than by prefix — only /admin needs it. */
+  exact?: boolean;
+  /** Hidden from ambassadors. Nothing uses it today; Settings will. */
+  adminOnly?: boolean;
+}
+
+const nav: NavItem[] = [
   { href: '/admin', label: 'Dashboard', exact: true },
   { href: '/admin/map', label: 'Map' },
   { href: '/admin/meetups', label: 'Meetups' },
   { href: '/admin/posts', label: 'News' },
-  { href: '/admin/media', label: 'Media' },
-  { href: '/admin/settings', label: 'Settings', adminOnly: true },
 ];
 
 const path = Astro.url.pathname;

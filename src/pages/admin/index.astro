@@ -50,7 +50,10 @@ const cards = [
   { label: 'Awaiting review', value: c.pois_pending ?? 0, href: '/admin/map', warn: (c.pois_pending ?? 0) > 0 },
   { label: 'Upcoming meetups', value: c.meetups_upcoming ?? 0, href: '/admin/meetups' },
   { label: 'Published posts', value: c.posts ?? 0, href: '/admin/posts' },
-  { label: 'Media items', value: c.media ?? 0, href: '/admin/media' },
+  // No href: /admin/media was never built, and a stat card that 404s on click
+  // is worse than one that simply reports a number. Give it back its link in
+  // the change that adds the page.
+  { label: 'Media items', value: c.media ?? 0 },
   { label: 'Open reports', value: c.reports_open ?? 0, href: '/admin/map', warn: (c.reports_open ?? 0) > 0 },
 ];
 ---
@@ -70,12 +73,22 @@ const cards = [
 
     <div class="cards">
       {
-        cards.map((card) => (
-          <a class={`card${card.warn ? ' card--warn' : ''}`} href={card.href}>
-            <strong>{card.value}</strong>
-            <span>{card.label}</span>
-          </a>
-        ))
+        /* A card without a destination renders as a div, not an <a> with no
+           href — the latter looks identical, is not focusable, and does
+           nothing when clicked, which is the worst of both. */
+        cards.map((card) =>
+          card.href ? (
+            <a class={`card${card.warn ? ' card--warn' : ''}`} href={card.href}>
+              <strong>{card.value}</strong>
+              <span>{card.label}</span>
+            </a>
+          ) : (
+            <div class={`card card--static${card.warn ? ' card--warn' : ''}`}>
+              <strong>{card.value}</strong>
+              <span>{card.label}</span>
+            </div>
+          ),
+        )
       }
     </div>
 
@@ -163,6 +176,13 @@ const cards = [
     }
     .card:hover {
       border-color: var(--border-strong);
+    }
+    /* A card with nowhere to go should not invite a click. */
+    .card--static {
+      cursor: default;
+    }
+    .card--static:hover {
+      border-color: var(--border);
     }
     .card strong {
       font-size: 1.7rem;

@@ -58,6 +58,14 @@ matter of finding the right menu.
       subscribe link (see [[Bugs Worth Remembering]])
 - [ ] **Announce posts and meetups to Discord.** `announceToDiscord` exists and has no caller —
       wire the "also announce" toggle in the post editor to it
+- [ ] **Media library page (`/admin/media`).** The tab and a dashboard card both linked here
+      and both 404'd — the console advertised a section that was never built. Links removed
+      2026-08-06 rather than left pointing at nothing. `/api/admin/media` already exists, so
+      this is a page away from working: an R2 browser with alt text, credit, and the
+      source-attribution fields. Put the tab back in the same change that adds the route
+- [ ] **Settings page (`/admin/settings`).** Same story, but with no API either. Social links,
+      hero copy, theme colours, Code of Conduct PDF. It is the only `adminOnly` nav entry the
+      layout was built for
 - [ ] **Community POI submissions.** `poi_reports` and the moderation queue exist in the schema;
       no UI yet
 - [ ] **KMZ import in admin.** Their source of truth is Google Earth. `lib/kml.ts` was planned
