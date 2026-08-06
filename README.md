@@ -49,6 +49,14 @@ deploys automatically. One-time setup in the dashboard:
 
 Manual deploy, if you need one: `npm run deploy`.
 
+## Documentation
+
+`vault/` is an [Obsidian](https://obsidian.md) vault — open that folder as a vault, or just read
+the Markdown. Start at [`vault/Home.md`](vault/Home.md).
+
+It covers the architecture and data model, runbooks for deploying and configuration, the
+decisions worth knowing (and why), the platform traps that cost time, and the backlog.
+
 ## Data sources and attribution
 
 Live event, raid boss, egg, and research data comes from

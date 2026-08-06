@@ -1,0 +1,6 @@
+# Per-machine Obsidian state — layout, open panes, caches. Not shared.
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.obsidian/plugins/
+.trash/
