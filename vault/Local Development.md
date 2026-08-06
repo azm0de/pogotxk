@@ -47,10 +47,16 @@ It writes a real `users` + `sessions` row using the same SHA-256-of-token scheme
 |---|---|
 | `test-auth.ts` | Role resolution, bootstrap admin, role hierarchy, PKCE vs RFC 7636 |
 | `test-time.ts` | Timezone conversion across both DST transitions |
+| `test-tags.ts` | Server tag normalisation agrees with the client's slugify |
 | `test-markdown.ts` | Markdown rendering |
 | `test-markdown-urls.ts` | URL allowlist — resolves each emitted URL and asserts the origin |
-| `test-ics.ts` | RFC 5545: CRLF, 75-octet folding, escaping, stable UIDs |
+| `test-ics.ts` | RFC 5545: CRLF, 75-octet folding, escaping, stable UIDs, SEQUENCE |
 | `test-notify.ts` | Discord webhook host allowlist, VAPID config validation |
+| `dry-run-import.ts` | Parses the live legacy site and asserts every count |
+
+Several of these exist because a specific bug got through — `test-tags.ts` and the URL-origin
+assertions in `test-markdown-urls.ts` both replaced checks that passed while the thing they
+were checking was broken. See [[Bugs Worth Remembering]].
 
 ## Gotchas
 
