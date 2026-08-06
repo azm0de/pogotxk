@@ -322,14 +322,22 @@ const socials = [
                 event={event}
                 when={homeWhen(event)}
                 state={happening.live.includes(event) ? 'live' : 'ongoing'}
+                showImage
               />
             ))}
           </div>
           <p class="on-now-more">
             <a class="btn btn--outline" href="/events">
-              {moreOnNow > 0
-                ? `See ${moreOnNow} more and everything upcoming`
-                : 'See everything upcoming'}
+              <span>
+                {moreOnNow > 0
+                  ? `See ${moreOnNow} more and everything upcoming`
+                  : 'See everything upcoming'}
+              </span>
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M13.2 5.4 11.8 6.8l4.2 4.2H4v2h12l-4.2 4.2 1.4 1.4 6.6-6.6z"></path>
+              </svg>
             </a>
           </p>
         </>
@@ -368,12 +376,6 @@ const socials = [
                 <strong>{social.label}</strong>
                 <span>{social.hint}</span>
               </span>
-              <svg class="social-go" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M13.2 5.4 11.8 6.8l4.2 4.2H4v2h12l-4.2 4.2 1.4 1.4 6.6-6.6z"
-                />
-              </svg>
             </a>
           </li>
         ))
@@ -446,13 +448,22 @@ const socials = [
     color: #fff;
   }
   .btn--outline {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     border: 1px solid var(--border);
     background: var(--bg-panel);
     color: inherit;
   }
   .btn--outline:hover {
     border-color: var(--accent);
+  }
+  .btn--outline svg {
+    flex: none;
+    transition: transform 0.16s ease;
+  }
+  .btn--outline:hover svg {
+    transform: translateX(3px);
   }
 
   .stats {
@@ -686,7 +697,7 @@ const socials = [
   .social {
     position: relative;
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr;
     align-items: center;
     gap: 13px;
     padding: 15px 16px;
@@ -745,17 +756,6 @@ const socials = [
        so a second line costs nothing but a few pixels of row height. */
   }
 
-  .social-go {
-    opacity: 0.55;
-    transition:
-      transform 0.18s ease,
-      opacity 0.18s ease;
-  }
-  .social:hover .social-go {
-    opacity: 1;
-    transform: translateX(3px);
-  }
-
   .social--discord {
     background: #5865f2;
   }
@@ -771,17 +771,17 @@ const socials = [
 
   @media (prefers-reduced-motion: reduce) {
     .social,
-    .social-go,
     .hero-map-open,
-    .hero-map-open svg {
+    .hero-map-open svg,
+    .btn--outline svg {
       transition: none;
     }
     .social:hover,
     .hero-map-open:hover {
       transform: none;
     }
-    .social:hover .social-go,
-    .hero-map-open:hover svg {
+    .hero-map-open:hover svg,
+    .btn--outline:hover svg {
       transform: none;
     }
   }
@@ -806,12 +806,12 @@ const socials = [
   .on-now :global(.event-blurb) {
     display: none;
   }
-  .on-now :global(.event-card) {
-    padding: 14px 16px;
-  }
   .on-now :global(.event-title) {
     font-size: 1rem;
   }
+  /* The card's own padding is left alone here: .event-image cancels it with a
+     matching negative margin to bleed the artwork edge to edge, so changing it
+     in one place and not the other leaves a sliver of panel down the sides. */
   .on-now-more {
     margin: 14px 0 0;
   }

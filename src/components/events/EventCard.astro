@@ -9,6 +9,7 @@
 
 import type { CalendarEvent } from '~/lib/ics';
 import { describeRecurrence } from '~/lib/db/meetups';
+import { proxiedImageUrl } from '~/lib/game-image';
 import Countdown from './Countdown.astro';
 import './EventCard.css';
 
@@ -17,9 +18,18 @@ interface Props {
   /** Pre-formatted local time, e.g. "Wed, Aug 5 · 6:00 PM – 7:00 PM CDT". */
   when: string;
   state: 'live' | 'ongoing' | 'upcoming' | 'past';
+  /**
+   * Render the event's artwork as a banner. Off by default: /events is a long
+   * scannable list where a picture on every row costs more than it gives, while
+   * the home page shows four cards and wants them to look like something.
+   */
+  showImage?: boolean;
 }
 
-const { event, when, state } = Astro.props;
+const { event, when, state, showImage = false } = Astro.props;
+
+// Leek Duck artwork is served through our own origin — see lib/game-image.ts.
+const image = showImage ? proxiedImageUrl(event.imageUrl) : null;
 
 const recurrence = describeRecurrence(event.rrule ?? null);
 const cancelled = event.status === 'CANCELLED';
@@ -46,6 +56,16 @@ const externalUrl = event.url && !event.url.includes('/events#') ? event.url : n
   data-cancelled={cancelled ? '' : undefined}
   aria-labelledby={`${anchor}-title`}
 >
+  {
+    image && (
+      <div class="event-image">
+        {/* Decorative: the title right below says the same thing, and upstream
+            gives us no alt text — inventing one would be worse than none. */}
+        <img src={image} alt="" loading="lazy" decoding="async" width="640" height="360" />
+      </div>
+    )
+  }
+
   <p class="event-badges">
     <span class={`event-badge event-badge--${event.source}`}>{badge}</span>
     {cancelled && <span class="event-badge event-badge--cancelled">Cancelled</span>}

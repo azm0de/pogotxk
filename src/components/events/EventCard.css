@@ -27,6 +27,32 @@
   color: var(--text-muted);
 }
 
+/* --- artwork (opt-in via showImage) ---------------------------------------
+   Bleeds to the card's inner edges by cancelling its padding. The fixed
+   aspect-ratio reserves the space before the image arrives, so a card does not
+   jump as artwork loads in — the layout is the same whether the CDN answers
+   in 20ms or never. */
+.event-image {
+  margin: -16px -18px 13px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  /* Also the fallback if the image 404s: a flat panel, not a broken-icon box. */
+  background: var(--bg-sunken);
+}
+
+.event-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Artwork on a finished event is decoration for something that is over. */
+.event-card[data-state='past'] .event-image {
+  opacity: 0.55;
+}
+
 .event-badges {
   display: flex;
   flex-wrap: wrap;
