@@ -9,6 +9,7 @@
  */
 import Base from '~/layouts/Base.astro';
 import Attribution from '~/components/game/Attribution.astro';
+import GameNav from '~/components/game/GameNav.astro';
 import FeedStatus from '~/components/game/FeedStatus.astro';
 import ResearchCard from '~/components/game/ResearchCard.astro';
 import '~/components/game/game.css';
@@ -49,6 +50,7 @@ const shinyTasks = feed.data.filter((task) =>
         lists every possible encounter, its CP range at the fixed research level, and whether the
         shiny is available.
       </p>
+      <GameNav />
     </header>
 
     <FeedStatus

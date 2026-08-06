@@ -1,0 +1,73 @@
+---
+/**
+ * Sibling navigation for the three auto-updating game-data pages.
+ *
+ * Raids, eggs and research are one body of content split across three routes,
+ * but only /raids was reachable from the primary nav — the other two existed
+ * solely behind a line of text on the home page. Rather than push a
+ * seven-item nav to nine, the set links to itself: land on any one of them and
+ * the other two are one tap away.
+ *
+ * All three refresh from the same feed, so this is also the honest place to say
+ * they are a set rather than three unrelated pages.
+ */
+
+const PAGES = [
+  { href: '/raids', label: 'Raid bosses' },
+  { href: '/eggs', label: 'Eggs' },
+  { href: '/research', label: 'Research' },
+] as const;
+
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+---
+
+<nav class="game-nav" aria-label="Game data">
+  <ul>
+    {
+      PAGES.map((page) => (
+        <li>
+          <a href={page.href} aria-current={path === page.href ? 'page' : undefined}>
+            {page.label}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</nav>
+
+<style>
+  .game-nav {
+    margin: 14px 0 0;
+  }
+  .game-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .game-nav a {
+    display: block;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    color: var(--text-muted);
+    font-size: 0.86rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .game-nav a:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+  /* Wraps rather than scrolls: three short chips always fit, even at 320px,
+     and a scroll container here would hide items for no reason. */
+  .game-nav a[aria-current='page'] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-contrast);
+  }
+</style>

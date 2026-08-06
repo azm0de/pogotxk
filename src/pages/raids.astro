@@ -9,6 +9,7 @@
  */
 import Base from '~/layouts/Base.astro';
 import Attribution from '~/components/game/Attribution.astro';
+import GameNav from '~/components/game/GameNav.astro';
 import FeedStatus from '~/components/game/FeedStatus.astro';
 import RaidCard from '~/components/game/RaidCard.astro';
 import TierBadge from '~/components/game/TierBadge.astro';
@@ -53,6 +54,7 @@ function tierNote(tier: string): string | null {
         Every boss in rotation right now, grouped by tier, with the CP you will see on the catch
         screen and the weather that boosts it.
       </p>
+      <GameNav />
     </header>
 
     <FeedStatus

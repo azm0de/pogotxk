@@ -8,6 +8,7 @@
  */
 import Base from '~/layouts/Base.astro';
 import Attribution from '~/components/game/Attribution.astro';
+import GameNav from '~/components/game/GameNav.astro';
 import EggCard from '~/components/game/EggCard.astro';
 import FeedStatus from '~/components/game/FeedStatus.astro';
 import '~/components/game/game.css';
@@ -53,6 +54,7 @@ function poolNote(eggType: string, adventureSync: number, gift: number): string 
         on each card is the entire range you can get — handy for spotting a perfect before you
         spend dust on it.
       </p>
+      <GameNav />
     </header>
 
     <FeedStatus

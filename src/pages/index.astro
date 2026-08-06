@@ -597,10 +597,15 @@ const socials = [
     font-size: 0.9rem;
     color: var(--text-muted);
   }
+  /* `padding-block` rather than a bare line of text: at 22px tall these fell
+     under the 24px minimum target size (WCAG 2.2 SC 2.5.8). They are standalone
+     calls to action, not links inside a sentence, so the inline exemption does
+     not cover them. The negative margin keeps the visual spacing unchanged. */
   .card-link,
   .card-links {
     display: inline-block;
-    margin-top: 12px;
+    margin-top: 7px;
+    padding-block: 5px;
     font-size: 0.88rem;
     font-weight: 600;
   }
@@ -627,6 +632,9 @@ const socials = [
   .section-head a {
     font-size: 0.86rem;
     font-weight: 600;
+    /* Same reason as .card-link: a standalone action, so it needs a real target. */
+    display: inline-block;
+    padding-block: 5px;
   }
 
   .posts {

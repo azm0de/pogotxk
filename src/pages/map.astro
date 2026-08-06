@@ -13,6 +13,16 @@ const initialPoi = Astro.url.searchParams.get('poi') ?? undefined;
   description="Every PokéStop, Gym, and Power Spot in the PoGo TXK Community Campsite at Spring Lake Park, Texarkana — with photos, the raid route, and the meetup spot."
   fullBleed
 >
+  {/*
+    The map fills the viewport, so there is nowhere to put a visible heading
+    without stealing space from the thing itself. It still needs one: this was
+    the only page on the site with no <h1> outside <noscript>, which leaves
+    screen-reader users with an unnamed document and search engines guessing.
+    Visually hidden, not display:none — the latter is skipped by screen readers,
+    which would leave it exactly as absent as before.
+  */}
+  <h1 class="sr-only">Spring Lake Park map</h1>
+
   <MapView client:only="react" initialPoi={initialPoi} />
 
   <script>

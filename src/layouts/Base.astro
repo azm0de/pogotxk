@@ -26,10 +26,22 @@ const {
 const fullTitle = title === 'PoGo TXK' ? title : `${title} | PoGo TXK`;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
 
+/**
+ * Primary navigation.
+ *
+ * `/live` earns a slot: it is the realtime flare board, one of the reasons the
+ * site exists, and it was previously reachable only from a card on the home
+ * page. `/eggs` and `/research` deliberately do NOT get slots — they link to
+ * each other and to `/raids` through GameNav, which covers the set without
+ * pushing this list to nine items.
+ *
+ * Order follows the day: where we are, when we meet, what is happening now.
+ */
 const nav = [
   { href: '/', label: 'Home' },
   { href: '/map', label: 'Map' },
   { href: '/events', label: 'Events' },
+  { href: '/live', label: 'Live' },
   { href: '/raids', label: 'Raids' },
   { href: '/blog', label: 'News' },
   { href: '/gallery', label: 'Gallery' },
