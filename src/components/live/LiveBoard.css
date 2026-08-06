@@ -214,7 +214,7 @@
 }
 .live .chip--close {
   margin-left: auto;
-  color: var(--live);
+  color: var(--live-text);
   border-color: color-mix(in srgb, var(--live) 45%, transparent);
   background: transparent;
 }

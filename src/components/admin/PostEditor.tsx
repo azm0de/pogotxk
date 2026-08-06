@@ -93,6 +93,8 @@ export default function PostEditor() {
   const [tagDraft, setTagDraft] = useState('');
   const [pane, setPane] = useState<PaneMode>('split');
   const [busy, setBusy] = useState(false);
+  /** True while a post's body is being fetched for the editor. */
+  const [bodyLoading, setBodyLoading] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -129,23 +131,49 @@ export default function PostEditor() {
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const startEdit = (post: AdminPost) => {
+  /**
+   * Opens a post for editing.
+   *
+   * The body is fetched here rather than read off the list row: the list query
+   * deliberately does not select `body_md`, because hauling every post body to
+   * render a list of titles is a multi-megabyte response once there is a year
+   * of them. Populating the form from the list row would put an empty string in
+   * the textarea and destroy the post on save.
+   */
+  const startEdit = async (post: AdminPost) => {
+    setEditingId(post.id);
+    setSlugTouched(true); // An existing post has a URL; never rewrite it from the title.
+    setTagDraft('');
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
     setForm({
       title: post.title,
       slug: post.slug,
       excerpt: post.excerpt ?? '',
-      bodyMd: post.bodyMd,
+      bodyMd: '',
       status: post.status,
       pinned: post.pinned,
       tags: post.tags,
       heroMediaId: post.heroMediaId,
       publishedAtLocal: post.publishedAt ? utcToZoned(post.publishedAt) : '',
     });
-    // An existing post already has a URL; never rewrite it from the title.
-    setSlugTouched(true);
-    setTagDraft('');
-    setEditingId(post.id);
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    setBodyLoading(true);
+    try {
+      const { post: full } = await api<{ post: AdminPost }>(`/api/admin/posts/${post.id}`);
+      // Guard against a slow response landing after the user opened another
+      // post — otherwise this would drop one post's body into another's form.
+      setEditingId((current) => {
+        if (current === post.id) setForm((f) => ({ ...f, bodyMd: full.bodyMd }));
+        return current;
+      });
+    } catch (err) {
+      notify('err', err instanceof Error ? err.message : 'Could not load the post body');
+      // Leave edit mode rather than offer an empty textarea that would wipe it.
+      setEditingId(null);
+    } finally {
+      setBodyLoading(false);
+    }
   };
 
   const onTitle = (value: string) => {
@@ -445,7 +473,15 @@ export default function PostEditor() {
                 className="body-input"
                 value={form.bodyMd}
                 onChange={(e) => set('bodyMd', e.target.value)}
-                placeholder={'## What happened\n\nWe had **42 trainers** turn out…'}
+                /* The body arrives a moment after the rest of the form — the
+                   list query does not carry it. Typing into the textarea before
+                   it lands would be typing into something about to be replaced. */
+                readOnly={bodyLoading}
+                placeholder={
+                  bodyLoading
+                    ? 'Loading the post…'
+                    : '## What happened\n\nWe had **42 trainers** turn out…'
+                }
                 spellCheck
                 aria-label="Post body, Markdown"
               />
@@ -463,7 +499,9 @@ export default function PostEditor() {
           </div>
 
           <div className="form-actions">
-            <button type="submit" className="btn" disabled={busy}>
+            {/* Saving mid-fetch would write the empty placeholder body over
+                the real one. */}
+            <button type="submit" className="btn" disabled={busy || bodyLoading}>
               {busy ? 'Saving…' : editingId === 'new' ? 'Create post' : 'Save changes'}
             </button>
             <button
@@ -522,7 +560,7 @@ export default function PostEditor() {
                 <span className={`post-state post-state--${state}`}>{state}</span>
 
                 <div className="post-row-actions">
-                  <button type="button" onClick={() => startEdit(post)}>
+                  <button type="button" onClick={() => void startEdit(post)}>
                     Edit
                   </button>
                   <button

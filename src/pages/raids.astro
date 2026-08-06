@@ -55,7 +55,12 @@ function tierNote(tier: string): string | null {
       </p>
     </header>
 
-    <FeedStatus fetchedAt={feed.fetchedAt} stale={feed.stale} label="raid list" />
+    <FeedStatus
+      fetchedAt={feed.fetchedAt}
+      stale={feed.stale}
+      error={feed.error}
+      label="raid list"
+    />
 
     {
       total > 0 && (

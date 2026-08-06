@@ -55,7 +55,12 @@ function poolNote(eggType: string, adventureSync: number, gift: number): string 
       </p>
     </header>
 
-    <FeedStatus fetchedAt={feed.fetchedAt} stale={feed.stale} label="egg pool" />
+    <FeedStatus
+      fetchedAt={feed.fetchedAt}
+      stale={feed.stale}
+      error={feed.error}
+      label="egg pool"
+    />
 
     {
       total === 0 ? (

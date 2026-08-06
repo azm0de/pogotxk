@@ -199,58 +199,58 @@
 
 /* Type hues. Used only as a tint + border via color-mix, so text stays on the
    theme's own foreground colour and contrast holds in light and dark. */
-[data-type='normal'] {
+.g-chip[data-type='normal'] {
   --chip-color: #9fa19f;
 }
-[data-type='fire'] {
+.g-chip[data-type='fire'] {
   --chip-color: #e62829;
 }
-[data-type='water'] {
+.g-chip[data-type='water'] {
   --chip-color: #2980ef;
 }
-[data-type='electric'] {
+.g-chip[data-type='electric'] {
   --chip-color: #d9a400;
 }
-[data-type='grass'] {
+.g-chip[data-type='grass'] {
   --chip-color: #3fa129;
 }
-[data-type='ice'] {
+.g-chip[data-type='ice'] {
   --chip-color: #3dcef3;
 }
-[data-type='fighting'] {
+.g-chip[data-type='fighting'] {
   --chip-color: #ff8000;
 }
-[data-type='poison'] {
+.g-chip[data-type='poison'] {
   --chip-color: #9141cb;
 }
-[data-type='ground'] {
+.g-chip[data-type='ground'] {
   --chip-color: #915121;
 }
-[data-type='flying'] {
+.g-chip[data-type='flying'] {
   --chip-color: #81b9ef;
 }
-[data-type='psychic'] {
+.g-chip[data-type='psychic'] {
   --chip-color: #ef4179;
 }
-[data-type='bug'] {
+.g-chip[data-type='bug'] {
   --chip-color: #91a119;
 }
-[data-type='rock'] {
+.g-chip[data-type='rock'] {
   --chip-color: #afa981;
 }
-[data-type='ghost'] {
+.g-chip[data-type='ghost'] {
   --chip-color: #704170;
 }
-[data-type='dragon'] {
+.g-chip[data-type='dragon'] {
   --chip-color: #5060e1;
 }
-[data-type='dark'] {
+.g-chip[data-type='dark'] {
   --chip-color: #6b5a57;
 }
-[data-type='steel'] {
+.g-chip[data-type='steel'] {
   --chip-color: #60a1b8;
 }
-[data-type='fairy'] {
+.g-chip[data-type='fairy'] {
   --chip-color: #ef70ef;
 }
 
@@ -275,27 +275,27 @@
   background: var(--tier-color, var(--accent));
 }
 
-[data-tier^='1-star'] {
+.g-tier[data-tier^='1-star'] {
   --tier-color: var(--text-muted);
 }
-[data-tier^='2-star'],
-[data-tier^='3-star'] {
+.g-tier[data-tier^='2-star'],
+.g-tier[data-tier^='3-star'] {
   --tier-color: var(--poi-pokestop);
 }
-[data-tier^='4-star'],
-[data-tier^='5-star'],
-[data-tier^='6-star'] {
+.g-tier[data-tier^='4-star'],
+.g-tier[data-tier^='5-star'],
+.g-tier[data-tier^='6-star'] {
   --tier-color: var(--poi-campsite);
 }
-[data-tier^='mega'],
-[data-tier^='primal'] {
+.g-tier[data-tier^='mega'],
+.g-tier[data-tier^='primal'] {
   --tier-color: var(--poi-powerspot);
 }
-[data-tier^='elite'],
-[data-tier^='ultra'] {
+.g-tier[data-tier^='elite'],
+.g-tier[data-tier^='ultra'] {
   --tier-color: var(--poi-gym);
 }
-[data-tier*='shadow'] {
+.g-tier[data-tier*='shadow'] {
   --tier-color: var(--team-valor);
 }
 

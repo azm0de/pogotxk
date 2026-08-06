@@ -59,6 +59,12 @@ interface MeetupRow {
 /** How far back the public page and the ICS feed look. */
 export const PAST_WINDOW_DAYS = 90;
 
+/** How far back a recurring meetup's anchor date may sit and still be listed. */
+export const RECURRING_WINDOW_DAYS = 730;
+
+/** Hard ceiling on one read of the meetup list. */
+const MEETUP_LIMIT = 500;
+
 /**
  * Every meetup the public is allowed to see, oldest first.
  *
@@ -74,6 +80,14 @@ export async function listPublicMeetups(
   const since =
     opts.since ?? new Date(Date.now() - PAST_WINDOW_DAYS * 86_400_000).toISOString();
 
+  // Recurring meetups were exempt from the window entirely, so every one ever
+  // created stayed in the result set forever. They still get a far longer
+  // horizon than one-offs — a weekly meetup anchored two years ago is still the
+  // weekly meetup — but the set is now bounded.
+  const recurringSince = new Date(
+    Date.now() - RECURRING_WINDOW_DAYS * 86_400_000,
+  ).toISOString();
+
   const rows = await db
     .prepare(
       `SELECT m.id, m.slug, m.title, m.description_md, m.starts_at, m.ends_at, m.tz,
@@ -85,10 +99,11 @@ export async function listPublicMeetups(
          LEFT JOIN pois p ON p.id = m.poi_id
          LEFT JOIN media med ON med.id = m.hero_media_id
         WHERE m.status IN ('published', 'cancelled')
-          AND (m.starts_at >= ?1 OR m.recurrence_rule IS NOT NULL)
-        ORDER BY m.starts_at`,
+          AND (m.starts_at >= ?1 OR (m.recurrence_rule IS NOT NULL AND m.starts_at >= ?2))
+        ORDER BY m.starts_at
+        LIMIT ${MEETUP_LIMIT}`,
     )
-    .bind(since)
+    .bind(since, recurringSince)
     .all<MeetupRow>();
 
   return rows.results.map(toMeetup);

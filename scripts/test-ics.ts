@@ -522,5 +522,39 @@ const empty = buildIcs({ name: 'PoGo TXK Meetups' }, [], NOW);
 ok('still a valid calendar', empty.startsWith('BEGIN:VCALENDAR\r\n') && empty.endsWith('END:VCALENDAR\r\n'));
 ok('contains no VEVENT', !empty.includes('BEGIN:VEVENT'));
 
+console.log('\n== SEQUENCE monotonicity ==');
+{
+  // Global events carry their *start* as `updatedAt`, chosen so the feed's ETag
+  // stays stable across refreshes. Niantic moves events, so deriving SEQUENCE
+  // from that would make it go backwards when one is pulled earlier — which
+  // RFC 5545 forbids for a revision. Those events pin `sequence: 0` instead.
+  const seqOf = (ics: string) => Number(/^SEQUENCE:(\d+)$/m.exec(unfold(ics))?.[1] ?? -1);
+  const base = { uid: 'seq-test', summary: 'Moves around' };
+
+  /** A global event pins sequence, so moving its start must not move SEQUENCE. */
+  const globalSeq = (start: string) =>
+    seqOf(
+      buildIcs({ name: 'x' }, [
+        { ...base, source: 'global' as const, start, updatedAt: start, sequence: 0 },
+      ]),
+    );
+
+  const later = globalSeq('2026-09-01T18:00:00Z');
+  const earlier = globalSeq('2026-08-01T18:00:00Z');
+  ok('pinned sequence survives an event moving earlier', later === 0 && earlier === 0);
+
+  // A meetup's updated_at only ever moves forward, so deriving from it is fine.
+  const meetupSeq = (updatedAt: string) =>
+    seqOf(
+      buildIcs({ name: 'x' }, [
+        { ...base, source: 'meetup' as const, start: '2026-08-01T18:00:00Z', updatedAt },
+      ]),
+    );
+  ok(
+    'derived sequence still increases when a meetup is edited',
+    meetupSeq('2026-08-02T10:00:00Z') > meetupSeq('2026-08-01T10:00:00Z'),
+  );
+}
+
 console.log(failures ? `\nFAILED (${failures})\n` : '\nAll ICS checks passed.\n');
 process.exit(failures ? 1 : 0);

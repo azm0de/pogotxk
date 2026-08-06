@@ -16,15 +16,33 @@ interface Props {
   stale: boolean;
   /** What the feed is called in prose, e.g. "raid list". */
   label: string;
+  /** Why the refresh failed, when we know. Carried on the feed payload. */
+  error?: string | null;
 }
 
-const { fetchedAt, stale, label } = Astro.props;
+const { fetchedAt, stale, label, error = null } = Astro.props;
+
+/**
+ * `stale` covers two different failures and they deserve different words.
+ * getFeed lands here both when upstream was unreachable *and* when it answered
+ * 200 with a body we refused — a truncated scrape, an empty array. Blaming Leek
+ * Duck for the second is wrong, and sends anyone debugging it to the wrong
+ * place.
+ */
+const reachedButUnusable = Boolean(error && /parse|empty|array|shape|invalid/i.test(error));
+const staleReason = reachedButUnusable
+  ? 'The last update did not look right, so we kept the previous data rather than showing you something wrong.'
+  : 'Leek Duck could not be reached on the last try — we kept the previous data rather than showing you nothing.';
 
 const relative = relativeTime(fetchedAt);
 const absolute = fetchedAt ? formatInZone(fetchedAt, DEFAULT_TZ) : null;
 ---
 
-<p class:list={['g-status', stale && 'g-status--stale']} role="status">
+<!--
+  No role="status": this is server-rendered and never updates, so announcing it
+  as a live region only competes with the genuine one on /raids.
+-->
+<p class:list={['g-status', stale && 'g-status--stale']}>
   {
     fetchedAt ? (
       <>
@@ -33,7 +51,7 @@ const absolute = fetchedAt ? formatInZone(fetchedAt, DEFAULT_TZ) : null;
           <strong>{relative}</strong>
           {absolute ? <> (<time datetime={fetchedAt}>{absolute}</time>)</> : null}.
         </span>
-        {stale ? <span>Leek Duck could not be reached on the last try — we kept the previous data rather than showing you nothing.</span> : null}
+        {stale ? <span>{staleReason}</span> : null}
       </>
     ) : (
       <span><strong>Live data unavailable.</strong> We have not been able to reach the {label} source yet.</span>

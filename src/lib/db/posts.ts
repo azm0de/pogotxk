@@ -262,6 +262,13 @@ export async function getPostNeighbours(
 }
 
 /** Tag cloud for the index, counting only posts a reader can actually open. */
+/**
+ * Cap on the tag cloud. Every distinct tag ever used renders as a chip on
+ * /blog, and at 12 tags per post across a few hundred posts that is a wall
+ * rather than a filter. Ordered by use, so the cap drops the long tail.
+ */
+const TAG_CLOUD_LIMIT = 24;
+
 export async function listPublicTags(db: D1Database): Promise<{ tag: string; count: number }[]> {
   const rows = await db
     .prepare(
@@ -269,7 +276,8 @@ export async function listPublicTags(db: D1Database): Promise<{ tag: string; cou
          FROM post_tags t JOIN posts p ON p.id = t.post_id
         WHERE ${VISIBLE}
         GROUP BY t.tag
-        ORDER BY count DESC, t.tag`,
+        ORDER BY count DESC, t.tag
+        LIMIT ${TAG_CLOUD_LIMIT}`,
     )
     .all<{ tag: string; count: number }>();
 
@@ -299,7 +307,8 @@ interface AdminRow {
   slug: string;
   title: string;
   excerpt: string | null;
-  body_md: string;
+  /** Absent on list rows — only the detail query selects it. */
+  body_md?: string;
   status: PostStatus;
   pinned: number;
   hero_media_id: number | null;
@@ -311,10 +320,26 @@ interface AdminRow {
   tags: string | null;
 }
 
+/** Everything except the body — see ADMIN_COLUMNS. */
+const ADMIN_LIST_COLUMNS = `p.id, p.slug, p.title, p.excerpt, p.status, p.pinned,
+        p.hero_media_id, m.r2_key AS hero_key, p.published_at,
+        COALESCE(u.global_name, u.username) AS author_name,
+        p.created_at, p.updated_at, ${TAGS_SQL}`;
+
+/**
+ * The detail query, which is the only one that pulls the body.
+ *
+ * The list above deliberately omits `body_md`: selecting every post body to
+ * render a list of titles is a multi-megabyte response by the time a community
+ * has a year of posts, and the admin editor fetches it on mount.
+ */
 const ADMIN_COLUMNS = `p.id, p.slug, p.title, p.excerpt, p.body_md, p.status, p.pinned,
         p.hero_media_id, m.r2_key AS hero_key, p.published_at,
         COALESCE(u.global_name, u.username) AS author_name,
         p.created_at, p.updated_at, ${TAGS_SQL}`;
+
+/** Generous for a community blog, and bounded. */
+const ADMIN_LIST_LIMIT = 200;
 
 function toAdmin(row: AdminRow): AdminPost {
   return {
@@ -322,7 +347,8 @@ function toAdmin(row: AdminRow): AdminPost {
     slug: row.slug,
     title: row.title,
     excerpt: row.excerpt,
-    bodyMd: row.body_md,
+    // Absent on list rows, which do not select it.
+    bodyMd: row.body_md ?? '',
     status: row.status,
     pinned: row.pinned === 1,
     heroMediaId: row.hero_media_id,
@@ -341,10 +367,11 @@ export async function listPostsForAdmin(
 ): Promise<AdminPost[]> {
   const rows = await db
     .prepare(
-      `SELECT ${ADMIN_COLUMNS}
+      `SELECT ${ADMIN_LIST_COLUMNS}
          FROM posts p ${HERO_JOIN} ${AUTHOR_JOIN}
         WHERE (?1 IS NULL OR p.status = ?1)
-        ORDER BY p.pinned DESC, COALESCE(p.published_at, p.updated_at) DESC, p.id DESC`,
+        ORDER BY p.pinned DESC, COALESCE(p.published_at, p.updated_at) DESC, p.id DESC
+        LIMIT ${ADMIN_LIST_LIMIT}`,
     )
     .bind(status ?? null)
     .all<AdminRow>();
@@ -368,12 +395,19 @@ export async function getPostForAdmin(db: D1Database, id: number): Promise<Admin
  * queries above join them into one string.
  */
 export function normalizeTag(raw: string): string {
-  return raw
-    .normalize('NFKD')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
+  return (
+    raw
+      .normalize('NFKD')
+      // Drop the combining marks NFKD just separated out. Without this a tag
+      // like "Pokemon" spelled with an accent normalises to "poke-mon" on the
+      // server while the client's slugify produces "pokemon", so ?tag= links
+      // built by the UI match nothing.
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+  );
 }
 
 /**

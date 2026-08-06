@@ -334,7 +334,7 @@
 }
 .btn--danger {
   background: transparent;
-  color: var(--live);
+  color: var(--live-text);
   border: 1px solid var(--live);
   margin-left: auto;
 }

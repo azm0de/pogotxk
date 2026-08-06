@@ -52,8 +52,13 @@ export interface CalendarEvent {
   geo?: { lat: number; lng: number } | null;
   categories?: string[];
   status?: 'CONFIRMED' | 'TENTATIVE' | 'CANCELLED';
-  /** Drives DTSTAMP/LAST-MODIFIED/SEQUENCE. See `sequenceFor` below. */
+  /** Drives DTSTAMP and LAST-MODIFIED. Also SEQUENCE, unless `sequence` is set. */
   updatedAt?: string | null;
+  /**
+   * Explicit SEQUENCE, for sources whose `updatedAt` is not monotonic.
+   * RFC 5545 forbids SEQUENCE going backwards for a revision.
+   */
+  sequence?: number;
   /** RFC 5545 RRULE, passed straight through for the client to expand. */
   rrule?: string | null;
   source: CalendarSource;
@@ -149,10 +154,19 @@ export function toIcsDate(value: string | Date): string {
  * hence the round up to the following midnight.
  */
 export function allDayEndExclusive(event: CalendarEvent): number {
+  const DAY = 86_400_000;
   const start = Date.parse(event.start);
   const end = event.end ? Date.parse(event.end) : NaN;
-  if (!Number.isFinite(end) || end <= start) return start + 86_400_000;
-  return Math.ceil(end / 86_400_000) * 86_400_000;
+
+  // A single day when there is no usable end.
+  if (!Number.isFinite(end) || end <= start) return start + DAY;
+
+  // `event.end` is EXCLUSIVE, matching ICS DTEND and `effectiveEnd`. So an end
+  // already sitting on a midnight boundary is the answer; anything mid-day
+  // rounds up to the next boundary. Stating the contract is the fix here — the
+  // ambiguity over whether `end` was inclusive is what made this look like an
+  // off-by-one waiting to happen.
+  return Math.ceil(end / DAY) * DAY;
 }
 
 /** Milliseconds at which `event` stops being "happening now". */
@@ -300,7 +314,7 @@ function writeEvent(lines: Lines, event: CalendarEvent, stamp: string): void {
 
   lines.raw('STATUS', event.status ?? 'CONFIRMED');
   lines.raw('TRANSP', 'OPAQUE');
-  lines.raw('SEQUENCE', String(sequenceFor(event.updatedAt)));
+  lines.raw('SEQUENCE', String(event.sequence ?? sequenceFor(event.updatedAt)));
   lines.raw('LAST-MODIFIED', event.updatedAt ? toIcsUtc(event.updatedAt) : stamp);
   lines.raw('END', 'VEVENT');
 }
@@ -421,6 +435,13 @@ export function normalizeGameEvents(payload: unknown): CalendarEvent[] {
       // Upstream has no revision timestamp; anchoring DTSTAMP to the start keeps
       // the body byte-stable so the ETag does not churn on every poll.
       updatedAt: start.iso,
+      // SEQUENCE is pinned rather than derived. `updatedAt` here is the event's
+      // *start*, chosen so the feed's ETag stays stable across refreshes — but
+      // Niantic moves events, and an event pulled earlier would make SEQUENCE
+      // decrease, which RFC 5545 forbids for a revision. We have no revision
+      // counter for upstream data, and 0 forever is honest where a number that
+      // can go down is not.
+      sequence: 0,
       source: 'global',
       heading,
       imageUrl: pickString(row, ['image', 'imageUrl', 'image_url']),

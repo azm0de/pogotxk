@@ -347,7 +347,26 @@ const ENTITIES: Record<string, string> = {
 export function stripTags(html: string): string {
   return html
     .replace(/<[^>]*>/g, '')
-    .replace(/&[#a-z0-9]+;/gi, (entity) => ENTITIES[entity.toLowerCase()] ?? entity)
+    .replace(/&(#x?[0-9a-f]+|[a-z][a-z0-9]*);/gi, (entity, body: string) => {
+      // Numeric forms are not in the table and there are too many to enumerate,
+      // so decode them arithmetically. A named entity we do not know is left
+      // as-is: showing "&hellip;" is honest, showing a wrong glyph is not.
+      if (body.startsWith('#')) {
+        const hex = body[1] === 'x' || body[1] === 'X';
+        const code = Number.parseInt(hex ? body.slice(2) : body.slice(1), hex ? 16 : 10);
+        // Reject non-characters and anything out of range rather than emitting
+        // a replacement char.
+        if (Number.isFinite(code) && code > 0 && code <= 0x10ffff) {
+          try {
+            return String.fromCodePoint(code);
+          } catch {
+            return entity;
+          }
+        }
+        return entity;
+      }
+      return ENTITIES[entity.toLowerCase()] ?? entity;
+    })
     .replace(/\s+/g, ' ')
     .trim();
 }

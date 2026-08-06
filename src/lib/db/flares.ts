@@ -151,7 +151,12 @@ const SELECT_FLARE = `
          COALESCE(SUM(CASE WHEN r.state = 'here'   THEN 1 END), 0) AS rsvp_here,
          COALESCE(SUM(CASE WHEN r.state = 'done'   THEN 1 END), 0) AS rsvp_done
     FROM flares f
-    LEFT JOIN pois p ON p.id = f.poi_id
+    -- The status predicate belongs in the JOIN, not a WHERE: this is a LEFT
+    -- JOIN, and moving it out would turn "flare at a POI that has since been
+    -- archived" into "flare dropped from the board entirely". Here it degrades
+    -- to a flare with no location, which is the honest answer — the flare is
+    -- still real, we just should not link to a POI that is no longer public.
+    LEFT JOIN pois p ON p.id = f.poi_id AND p.status = 'published'
     LEFT JOIN users u ON u.id = f.created_by
     LEFT JOIN flare_rsvps r ON r.flare_id = f.id
 `;

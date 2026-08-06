@@ -26,7 +26,7 @@
  */
 
 import { DurableObject, env } from 'cloudflare:workers';
-import type { Flare } from '~/lib/db/flares';
+import { isoNow, type Flare } from '~/lib/db/flares';
 
 /**
  * One board for the whole community today. Named rather than unique-id'd so any
@@ -83,7 +83,7 @@ export class LiveBoard extends DurableObject {
     this.send(server, {
       type: 'welcome',
       connections,
-      serverTime: new Date().toISOString(),
+      serverTime: isoNow(),
     });
     this.broadcast({ type: 'presence', connections }, server);
 
@@ -114,10 +114,24 @@ export class LiveBoard extends DurableObject {
     }
   }
 
-  override async webSocketClose(ws: WebSocket): Promise<void> {
+  override async webSocketClose(
+    ws: WebSocket,
+    code: number,
+    reason: string,
+  ): Promise<void> {
     // The closing socket can still be in getWebSockets() at this point, so it is
     // excluded explicitly rather than trusted to have dropped out already.
     this.broadcast({ type: 'presence', connections: this.openSockets(ws).length }, ws);
+
+    // Complete the closing handshake. Cloudflare's hibernation guidance asks
+    // for this; skipping it leaves the peer waiting on a close it never gets.
+    // 1006 is "abnormal closure" and is never valid on the wire, so it is
+    // translated to 1000 rather than echoed back.
+    try {
+      ws.close(code === 1006 ? 1000 : code, reason);
+    } catch {
+      // Already closed by the runtime. Nothing to do, and nothing worth logging.
+    }
   }
 
   override async webSocketError(_ws: WebSocket, error: unknown): Promise<void> {

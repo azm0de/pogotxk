@@ -512,6 +512,31 @@ export default function LiveBoard({
     [flares, nowMs],
   );
 
+  /**
+   * Screen reader announcement for the board itself.
+   *
+   * A summary, not the cards. Announcing every arriving flare on a busy evening
+   * would talk over whatever the user is actually doing — worse than silence.
+   * A count tells them something changed and invites them to go look, which is
+   * the useful signal. Only fires when the number actually moves.
+   */
+  const [announcement, setAnnouncement] = useState('');
+  const lastCount = useRef<number | null>(null);
+
+  useEffect(() => {
+    const count = visible.length;
+    if (lastCount.current === count) return;
+    const first = lastCount.current === null;
+    lastCount.current = count;
+    // Say nothing on first paint; the heading already describes the page.
+    if (first) return;
+    setAnnouncement(
+      count === 0
+        ? 'No flares active.'
+        : `${count} ${count === 1 ? 'flare' : 'flares'} active.`,
+    );
+  }, [visible.length]);
+
   const statusText =
     status === 'live'
       ? watching !== null && watching > 1
@@ -684,6 +709,10 @@ export default function LiveBoard({
           )}
         </p>
       )}
+
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </p>
 
       {visible.length === 0 ? (
         <p className="live-empty">

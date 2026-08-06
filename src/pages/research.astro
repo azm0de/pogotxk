@@ -51,7 +51,12 @@ const shinyTasks = feed.data.filter((task) =>
       </p>
     </header>
 
-    <FeedStatus fetchedAt={feed.fetchedAt} stale={feed.stale} label="research list" />
+    <FeedStatus
+      fetchedAt={feed.fetchedAt}
+      stale={feed.stale}
+      error={feed.error}
+      label="research list"
+    />
 
     {
       total > 0 && (

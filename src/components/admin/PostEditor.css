@@ -495,8 +495,8 @@
   cursor: pointer;
 }
 .post-row-actions .danger {
-  color: var(--live);
-  border-color: var(--live);
+  color: var(--live-text);
+  border-color: var(--live-text);
   background: transparent;
 }
 

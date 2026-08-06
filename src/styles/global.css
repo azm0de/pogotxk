@@ -33,7 +33,20 @@
   /* Semantic */
   --accent: var(--navy-800);
   --accent-contrast: #ffffff;
-  --live: #e8453c;
+
+  /*
+   * Two tokens, because one colour cannot do both jobs accessibly.
+   *
+   * --live       a filled surface, always paired with white text
+   * --live-text  the same idea rendered as text on the page background
+   *
+   * They pull in opposite directions: a surface must be dark enough for white
+   * to sit on it, while text must contrast with a *light* page in one theme and
+   * a *dark* page in the other. The previous single #e8453c managed 3.93:1 both
+   * ways — under the 4.5:1 AA needs for the small bold text it was used for.
+   */
+  --live: #d93a31; /* white on this: 4.57:1 */
+  --live-text: #c9342c; /* on white:      5.24:1 */
 
   --bg: var(--cream);
   --bg-panel: #ffffff;
@@ -77,6 +90,11 @@
     --poi-pokestop: #55a2ec;
     --poi-gym: #f08a53;
     --poi-powerspot: #a17ceb;
+
+    /* The surface stays dark enough for white text; the text form has to go
+       lighter instead, because here it sits on a dark panel. */
+    --live: #c9342c; /* white on this: 5.24:1 */
+    --live-text: #ff8080; /* on #16212f:    6.69:1 */
   }
 }
 
