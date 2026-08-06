@@ -56,6 +56,39 @@ the stored role. It now returns a discriminated `GuildLookup`; only a real answe
 authoritative. The two nulls were introduced by an earlier correct fix — the one that stopped
 hand-promoted admins being demoted — which is how a careful change quietly created a hole.
 
+## Layout
+
+**Every page scrolled sideways on a phone, and the fix was one property.** At 375px the
+document was 544px across — 169px of overhang, on all twelve public routes, in production,
+for months.
+
+`nav ul` already had `overflow-x: auto` and a hidden scrollbar. The scrolling nav was
+designed correctly from the start. But `nav` is a flex item, flex items default to
+`min-width: auto`, and that refuses to shrink below content — so the row stayed its full
+433px and shoved the header past the viewport instead of ever scrolling.
+
+```css
+.site-header nav { min-width: 0; }   /* the whole fix */
+```
+
+> A correct design can be completely inert because of a default two levels away. The nav
+> looked right in code review and in every desktop screenshot; nothing short of measuring
+> `scrollWidth` against `clientWidth` at a phone width would have caught it.
+
+Worth repeating on any flex child that is supposed to scroll or truncate: `min-width: 0`
+(or `min-height: 0` in a column) is almost always required, and its absence fails silently
+by growing the parent rather than by erroring.
+
+**Truncating by six pixels.** With `flex: 0 1 auto` the brand gave up six pixels and
+rendered "PoGo …" — truncated enough to look like a bug, not enough to save room. Shrinking
+that yields nothing legible is worse than not shrinking; the element should be shown in full
+or hidden outright.
+
+**A gradient scrim that only reached full strength at the very bottom edge.**
+`linear-gradient(transparent, rgb(0 0 0 / 0.82))` behind gallery captions left every line
+above the last one sitting on bare photograph, invisible over the brighter shots. A scrim has
+to be near-opaque for the whole height the text occupies, not just at its final pixel.
+
 ## Silent wrongness
 
 **Empty calendar feeds in production.** `/api/game/events.json` served 39 events while
