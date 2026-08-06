@@ -37,6 +37,16 @@ updated: 2026-08-05
 | `DISCORD_GUILD_ID` | var | Guild membership check — [[Auth and Roles]] |
 | `DISCORD_BOOTSTRAP_ADMIN_ID` | var | First admin without a database edit |
 | `DISCORD_ROLE_ADMIN` / `_AMBASSADOR` / `_MEMBER` | var | Automatic role mapping |
+| `SITE_URL` | **build** var | Canonical host. Only needed at the domain cutover — see below |
+
+> [!important] `SITE_URL` is a build variable, not a runtime one
+> It is read by `astro.config.mjs` at build time, so it belongs in the **Workers Builds**
+> environment, not the Worker's own variables. Setting it as a runtime variable does nothing.
+>
+> It defaults to `https://pogotxk.gnomelabz.workers.dev` — the host that actually serves the
+> site. Do not point it at `pokemontxk.com` until that domain resolves to the Worker: it feeds
+> canonical URLs, RSS and the ICS `SOURCE` field, and aiming it at a 404 is what silently broke
+> every calendar subscribe link. See [[Bugs Worth Remembering]].
 
 Everything above is optional. Unconfigured, the feature degrades quietly rather than erroring.
 

@@ -22,9 +22,39 @@ missed the backslash one.
 > replacement test resolves each emitted URL and asserts its origin, rather than
 > pattern-matching the markup.
 
+**The same backslash bypass, a second time — in `safeNext`.** Found by a production audit
+*after* the markdown one was fixed. `/auth/login?next=` rejected `//host` and let `/\host`
+through, and did not strip the tab/CR/LF the URL parser removes before resolving. Captured
+against live production:
+
+```
+next=%2F%5Cevil.example        ->  cookie next "/\evil.example"
+next=%2F%09%2F%2Fevil.example  ->  cookie next "/\t//evil.example"
+next=%2F%2Fevil.example        ->  "/"            (blocked, as intended)
+```
+
+`callback.ts` wrote that value straight into `Location` with no second check, and `authorizeUrl`
+sends `prompt=none`, so anyone who had already authorised the app completed the entire bounce
+with no interaction — a one-click silent redirect off the community's own trusted domain.
+
+> This is the lesson. The bug class was found, understood, fixed and commented in
+> `markdown.ts` — and the fix was never carried to the other place the codebase does the same
+> thing. Fixing an instance is not fixing a class. When you close one, grep for its siblings.
+
+`safeNext` now lives in `src/lib/auth/next.ts` so both routes share one implementation, the
+callback re-validates on the way out rather than trusting its own cookie, and `test-auth.ts`
+asserts every captured payload resolves back to our origin.
+
 **ICS `raw()` did not strip control characters**, so a meetup's `campfire_url` could inject
 property lines. One malformed line makes a calendar client reject the *whole* feed — so a single
 bad meetup would silently break every subscriber.
+
+**Leaving the Discord never cost anyone their role.** `fetchGuildRoles` returned `null` both for
+"no guild is configured" and for "Discord answered 404, this person is not a member". The
+callback could not tell those apart, so it treated a definitive *no* as *we did not ask* and kept
+the stored role. It now returns a discriminated `GuildLookup`; only a real answer is
+authoritative. The two nulls were introduced by an earlier correct fix — the one that stopped
+hand-promoted admins being demoted — which is how a careful change quietly created a hole.
 
 ## Silent wrongness
 
@@ -34,6 +64,25 @@ origin — a loopback that works against `astro dev` and returns nothing live. T
 `catch` swallowed it, so the feed was well-formed, correctly attributed, and empty.
 
 > Every local check passed. Some classes of bug only exist in production.
+
+**Every calendar subscribe link pointed at a 404.** `site` in `astro.config.mjs` was set to
+`https://pokemontxk.com` — the domain the project is *aiming* at — while the site was actually
+served from `pogotxk.gnomelabz.workers.dev` and `pokemontxk.com` still ran the old Apache site.
+So all six subscribe/webcal links on `/events`, the `SOURCE` line inside every feed, and the
+canonical URL on every page named a host that returned 404.
+
+> ICS is subscribe-once. A dead feed URL does not error — it is an empty calendar, forever,
+> for anyone who added it. The failure mode is silence.
+
+`site` must name the host that actually serves the site, never the one you intend to move to.
+It is now overridable with `SITE_URL` so the cutover is a build variable, and `/events` builds
+its links from the request origin, which is guaranteed to resolve. See [[Configuration]].
+
+> [!note] Edge cache will lie to you while verifying
+> The first post-deploy check showed the old host and an unblocked payload, and the canonical
+> tag showed the new value — on the same deployment. Cache-busted requests showed both fixes
+> live. Verify with `Cache-Control: no-cache` and a unique query string before concluding a
+> deploy failed.
 
 **A cron with no handler.** `*/30 * * * *` was declared before any `scheduled()` export existed.
 Cloudflare would have invoked it and failed every thirty minutes, forever, into an

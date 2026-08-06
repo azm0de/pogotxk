@@ -21,7 +21,7 @@ account is needed.
 |---|---|
 | `npm run dev` | Dev server (daemonises — `npx astro dev stop` to kill) |
 | `npm run build` | Production build |
-| `npm test` | All six suites — ~244 assertions |
+| `npm test` | All eight suites — ~310 assertions |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:query "SQL"` | Query local D1 |
 | `npm run dev:session` | Mint a local admin session, no Discord needed |
@@ -45,7 +45,7 @@ It writes a real `users` + `sessions` row using the same SHA-256-of-token scheme
 
 | File | Covers |
 |---|---|
-| `test-auth.ts` | Role resolution, bootstrap admin, role hierarchy, PKCE vs RFC 7636 |
+| `test-auth.ts` | Role resolution, bootstrap admin, role hierarchy, PKCE vs RFC 7636, `safeNext` open-redirect guard |
 | `test-time.ts` | Timezone conversion across both DST transitions |
 | `test-tags.ts` | Server tag normalisation agrees with the client's slugify |
 | `test-markdown.ts` | Markdown rendering |
@@ -54,9 +54,9 @@ It writes a real `users` + `sessions` row using the same SHA-256-of-token scheme
 | `test-notify.ts` | Discord webhook host allowlist, VAPID config validation |
 | `dry-run-import.ts` | Parses the live legacy site and asserts every count |
 
-Several of these exist because a specific bug got through — `test-tags.ts` and the URL-origin
-assertions in `test-markdown-urls.ts` both replaced checks that passed while the thing they
-were checking was broken. See [[Bugs Worth Remembering]].
+Several of these exist because a specific bug got through — `test-tags.ts`, the URL-origin
+assertions in `test-markdown-urls.ts`, and the `safeNext` block in `test-auth.ts` all replaced
+or filled gaps left by checks that passed while the thing they were checking was broken. See [[Bugs Worth Remembering]].
 
 ## Gotchas
 

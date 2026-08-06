@@ -44,8 +44,8 @@ Replaces the hand-maintained static site at [pokemontxk.com](https://pokemontxk.
 
 ## Status
 
-Everything in the original plan is built and deployed, and the defects found in review are
-fixed.
+Everything in the original plan is built and deployed, and every defect found so far is fixed.
+Two of five production auditors never reported — see [[Backlog]].
 
 - [x] Map with all 104 locations, both overlays, 63 photos
 - [x] Admin console — map editor, meetups, posts, one-click import
@@ -56,8 +56,10 @@ fixed.
 - [x] Installable web app at `/go`
 - [x] Android floating bubble
 - [x] 16 review defects fixed — see [[Bugs Worth Remembering]]
+- [x] 3 more found by a production audit and fixed: an open redirect, six dead calendar
+      subscribe links, and a role that survived leaving the Discord
 - [ ] Push + Discord fan-out — code done, **needs secrets**, see [[Configuration]]
 - [ ] Bubble tested on real hardware — see [[Android App]]
 
 Production runs whatever is on `main`; a push deploys in 60–90 seconds. `npm test` is 8 suites
-and roughly 270 assertions.
+and roughly 310 assertions.

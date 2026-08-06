@@ -16,8 +16,12 @@ Everything in the original plan is built. This is what is left, roughly by value
 
 ## Worth doing next
 
-- [ ] **Custom domain.** Point `pokemontxk.com` at the Worker and retire the old site. Redirect
-      URIs and the ICS `SOURCE` field both need updating
+- [ ] **Custom domain.** Point `pokemontxk.com` at the Worker and retire the old site, then set
+      `SITE_URL=https://pokemontxk.com` in the Workers Builds environment — that one variable
+      moves canonical URLs, RSS and the ICS `SOURCE` field together. The Discord redirect URI
+      needs adding separately in the Developer Portal. Until then `site` deliberately names the
+      `workers.dev` host, because pointing it at a domain that 404s is exactly what broke every
+      subscribe link (see [[Bugs Worth Remembering]])
 - [ ] **Announce posts and meetups to Discord.** `announceToDiscord` exists and has no caller —
       wire the "also announce" toggle in the post editor to it
 - [ ] **Community POI submissions.** `poi_reports` and the moderation queue exist in the schema;
@@ -37,9 +41,24 @@ Everything in the original plan is built. This is what is left, roughly by value
       module scope, alongside ~10 pure helpers (`raidTierRank`, `relativeTime`, `formatCp`…).
       Splitting the presentation helpers into their own module would make them testable, but it
       rewrites imports across six components — a refactor, not a fix
-- [ ] **Events page uses the local origin in dev, `Astro.site` in prod.** Deliberate, but it
-      means the dev subscribe card offers a `localhost` feed whose `SOURCE` says
-      `pokemontxk.com`
+- [x] ~~Events page uses `Astro.site` in prod~~ — it now always builds calendar links from the
+      request origin. The old behaviour shipped six subscribe links that 404'd
+- [x] ~~Open redirect via `next=`~~ — `/\host` and tab-smuggled variants are blocked, the
+      callback re-validates, and 21 assertions cover it
+- [x] ~~Leaving the Discord kept your role~~ — `fetchGuildRoles` now distinguishes
+      "not configured" from "not a member"
+
+## Audit still owed
+
+Three of five production auditors reported before the run was stopped on 2026-08-05. Their
+findings are fixed and deployed. **Two never reported** — the remaining surfaces have not had an
+adversarial read:
+
+- [ ] Admin console and moderation authorisation boundaries
+- [ ] Durable Object / live board under concurrency
+
+Worth finishing before the site is announced to the community, given that the three that did run
+found a security defect apiece.
 
 ## Deliberately not doing
 

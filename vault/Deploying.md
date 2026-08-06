@@ -25,10 +25,20 @@ version. Poll for something the new version has rather than checking once:
 ```bash
 B=https://pogotxk.gnomelabz.workers.dev
 for i in $(seq 1 20); do
-  curl -s -m 10 "$B/" | grep -q "some new string" && echo deployed && break
+  curl -s -m 10 -H 'Cache-Control: no-cache' "$B/?v=$i" | grep -q "some new string" && echo deployed && break
   sleep 15
 done
 ```
+
+> [!warning] Bust the cache or the check will lie to you
+> A verification run on 2026-08-05 reported the *old* subscribe host and an *unblocked* redirect
+> payload while the canonical tag on the same deployment already showed the *new* value. Both
+> fixes were in fact live; the stale responses were cached. Always send
+> `Cache-Control: no-cache` **and** a unique query string before concluding a deploy failed —
+> the alternative is re-fixing something that was never broken.
+
+Different edges can disagree for a while, so a single failing check right after a push is not
+evidence of anything.
 
 ## Health sweep
 
