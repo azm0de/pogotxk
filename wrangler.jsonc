@@ -24,8 +24,23 @@
   // Do not rotate this pair casually: a browser binds its subscription to the
   // key it subscribed with, so a new pair silently orphans every existing
   // subscription. They keep receiving nothing, with no error anywhere.
+  // The guild id is a public identifier too — any member can read it off the
+  // server icon with Developer Mode on. Setting it turns ON the membership
+  // check: from here, people outside the Discord sign in as guests.
+  //
+  // DISCORD_BOOTSTRAP_ADMIN_ID is deliberately NOT here. It is a personal
+  // Discord user id in a public repo, and it marks an account as permanently
+  // admin — no reason to advertise which one. It lives as a Secret, which
+  // survives deploys just as reliably.
+  //
+  // Order matters if this is ever re-done from scratch: set the bootstrap
+  // secret BEFORE the guild id. Once a guild is configured Discord becomes
+  // authoritative over roles, and with no DISCORD_ROLE_* ids set yet every
+  // member resolves to `member` — which would overwrite a hand-promoted admin
+  // on their next sign-in.
   "vars": {
     "DISCORD_CLIENT_ID": "1534670096256073778",
+    "DISCORD_GUILD_ID": "1249232349972004897",
     "VAPID_PUBLIC_KEY": "BHiriS0MKh0cyP6a6frGjAkGnMTJtO-QJqguGei8k9wgA4ffHi6R4L6_LPGJ7NzoD4cwS_G9qD1dia_5_R9i8-c"
   },
 
