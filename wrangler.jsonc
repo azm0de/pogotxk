@@ -49,19 +49,21 @@
       "binding": "CACHE",
       "id": "3141511cbac84035a73941fca56449c1"
     }
-  ]
+  ],
 
   // Durable Object — live board (flares + presence) over WebSocket hibernation.
-  // src/do/LiveBoard.ts exists and uses the hibernation API correctly, but
-  // binding a class the worker entry does not export fails the deploy, and the
-  // Astro adapter emits an entry exporting only `default`. Wiring it needs a
-  // Vite transform against the adapter's virtual entry module. Until that is
-  // done and verified, the binding stays off — /live degrades to polling
-  // /api/flares, which is implemented and works.
-  // "durable_objects": {
-  //   "bindings": [{ "name": "LIVE", "class_name": "LiveBoard" }]
-  // },
-  // "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveBoard"] }],
+  //
+  // The class is re-exported onto the Worker entry by the `exportDurableObjects`
+  // Vite plugin in astro.config.mjs: Cloudflare resolves a binding by looking
+  // for a named export on the deployed script, and the Astro adapter's entry
+  // only exports `default` on its own. Verified in dist/server/entry.mjs.
+  //
+  // SQLite-backed (`new_sqlite_classes`) rather than the legacy key-value
+  // storage — it is the current default and the only option on the free plan.
+  "durable_objects": {
+    "bindings": [{ "name": "LIVE", "class_name": "LiveBoard" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveBoard"] }]
 
   // NO CRON. Deliberately.
   //
