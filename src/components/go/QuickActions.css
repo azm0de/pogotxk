@@ -89,6 +89,21 @@
   padding: 4px 12px 8px;
   -webkit-overflow-scrolling: touch;
 }
+
+/*
+ * With no flares the board is still the tallest thing on the screen — it takes
+ * whatever the head and the action grid leave, around 430px on a phone. A
+ * single top-aligned sentence in that space reads as a page that failed to
+ * load rather than a board with nothing on it, so the empty state is centred
+ * in the space it has.
+ *
+ * Scoped with :has so it applies only while empty; once flares arrive the
+ * board must stay top-aligned and scroll from the top.
+ */
+.go-board:has(.go-empty) {
+  display: grid;
+  align-content: center;
+}
 .go-board ul {
   list-style: none;
   margin: 0;
@@ -191,8 +206,15 @@
 .go-action:active {
   transform: scale(0.97);
 }
+/*
+ * 0.62, not 0.4. Disabled controls are exempt from the contrast minimum, so
+ * 0.4 was not a violation — but this grid is the only thing on screen that
+ * says what the app actually does, and to a signed-out first-time visitor it
+ * was barely legible. The gate message above already explains why they are
+ * inactive; the buttons themselves should still read as an offer.
+ */
 .go-action:disabled {
-  opacity: 0.4;
+  opacity: 0.62;
   cursor: not-allowed;
 }
 .go-action-emoji {

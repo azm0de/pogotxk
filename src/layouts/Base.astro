@@ -151,6 +151,29 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     }
 
     <style>
+      /*
+       * Sticky footer. On a short page the footer was rendering immediately
+       * after the content and leaving bare background beneath it — 115px on
+       * /live, 220px on /blog — which reads as the page having been cut off.
+       *
+       * `flex: 1 0 auto` on main, not `1 1 auto`: main must grow to fill a
+       * short page but must never shrink below its content on a long one.
+       *
+       * vh first, dvh second, so browsers without dvh still get the behaviour
+       * and those with it avoid the mobile URL-bar jump.
+       */
+      body {
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+      }
+      body > main {
+        flex: 1 0 auto;
+      }
+
+      /* Overrides the min-height above with a hard height: these screens own
+         the viewport and scroll internally rather than as a document. */
       body.is-full-bleed {
         height: 100dvh;
         display: flex;
