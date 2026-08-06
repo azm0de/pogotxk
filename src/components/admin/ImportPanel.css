@@ -1,0 +1,167 @@
+.import-panel {
+  padding: 18px 20px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+}
+
+.import-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.import-head h2 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  color: var(--text);
+}
+.import-head p {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+.import-head code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-sunken);
+  font-size: 0.9em;
+}
+
+.import-state {
+  display: flex;
+  gap: 18px;
+  flex: none;
+}
+.import-state span {
+  display: grid;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.import-state strong {
+  font-size: 1.5rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.import-callout {
+  margin: 0;
+  padding: 11px 14px;
+  border-left: 3px solid var(--poi-campsite);
+  background: var(--bg-sunken);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 0.88rem;
+}
+
+.import-progress {
+  display: grid;
+  gap: 6px;
+}
+.import-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+.import-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.import-progress p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.import-warn {
+  padding: 12px 15px;
+  border: 1px solid var(--live);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--live) 8%, transparent);
+  display: grid;
+  gap: 8px;
+}
+.import-warn p {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.import-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--live);
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.import-done {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--navy-800);
+  color: #fff;
+  font-size: 0.88rem;
+}
+.import-done a {
+  color: #fff;
+  font-weight: 700;
+}
+
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.import-panel .btn {
+  padding: 9px 16px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+.import-panel .btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+.import-panel .btn--ghost {
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.import-panel .btn--danger {
+  background: var(--live);
+  color: #fff;
+  justify-self: start;
+}
+
+.import-log {
+  margin: 0;
+  padding: 12px 14px 12px 34px;
+  background: var(--bg-sunken);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  max-height: 220px;
+  overflow-y: auto;
+  font-variant-numeric: tabular-nums;
+}
+.import-log li {
+  margin-bottom: 3px;
+}

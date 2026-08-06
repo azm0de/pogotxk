@@ -1,6 +1,8 @@
 ---
 import { env } from 'cloudflare:workers';
 import Admin from '~/layouts/Admin.astro';
+import ImportPanel from '~/components/admin/ImportPanel';
+import { hasRole } from '~/lib/auth/types';
 import { formatInZone } from '~/lib/time';
 
 export const prerender = false;
@@ -57,6 +59,15 @@ const cards = [
   <div class="dash">
     <h1>Dashboard</h1>
 
+    {
+      /* Admin-only: it rewrites map data wholesale, which is more than an
+         ambassador's editing remit. Shown first while the site is empty,
+         since seeding is the only useful thing to do at that point. */
+      hasRole(Astro.locals.user, 'admin') && (c.pois_live ?? 0) === 0 && (
+        <ImportPanel client:load poiCount={c.pois_live ?? 0} mediaCount={c.media ?? 0} />
+      )
+    }
+
     <div class="cards">
       {
         cards.map((card) => (
@@ -107,6 +118,14 @@ const cards = [
         )
       }
     </section>
+
+    {
+      /* Once the map has data, the importer stops being the headline action —
+         but it still needs to be reachable to re-sync from the old site. */
+      hasRole(Astro.locals.user, 'admin') && (c.pois_live ?? 0) > 0 && (
+        <ImportPanel client:load poiCount={c.pois_live ?? 0} mediaCount={c.media ?? 0} />
+      )
+    }
   </div>
 
   <style>

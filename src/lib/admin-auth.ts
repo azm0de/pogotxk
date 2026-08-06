@@ -1,10 +1,16 @@
 /**
- * Bearer-token guard for the maintenance endpoints.
+ * Guards for the maintenance endpoints.
  *
- * This is a stopgap until Discord OAuth lands, at which point these routes move
- * behind the `admin` role. It exists so the one-off legacy import can run
- * against production without opening an unauthenticated write endpoint.
+ * Two ways in, because they serve different moments:
+ *
+ *   * A signed-in admin. This is the normal path now that Discord OAuth works —
+ *     it means the import can be run from a button rather than a terminal.
+ *   * A bearer token. Still needed for the very first run on a fresh
+ *     deployment, before anyone can sign in, and for scripting.
  */
+
+import type { APIContext } from 'astro';
+import { hasRole } from '~/lib/auth/types';
 
 /** Constant-time comparison so a wrong token cannot be recovered by timing. */
 function timingSafeEqual(a: string, b: string): boolean {
@@ -37,6 +43,18 @@ export function requireImportToken(request: Request, env: Env): Response | null 
   }
 
   return null;
+}
+
+/**
+ * Accepts either a signed-in admin or a valid bearer token.
+ *
+ * The session is checked first so an admin never needs IMPORT_TOKEN configured
+ * at all — which matters, because the whole point of the button is to avoid
+ * making someone generate and paste a secret to seed their own site.
+ */
+export function requireImportAuth(ctx: APIContext, env: Env): Response | null {
+  if (hasRole(ctx.locals.user, 'admin')) return null;
+  return requireImportToken(ctx.request, env);
 }
 
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {

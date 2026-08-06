@@ -15,7 +15,7 @@
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
-import { json, requireImportToken } from '~/lib/admin-auth';
+import { json, requireImportAuth } from '~/lib/admin-auth';
 import {
   parseCoordArray,
   parseMarkers,
@@ -48,7 +48,7 @@ async function runBatched(db: D1Database, statements: D1PreparedStatement[]): Pr
 }
 
 export async function POST(ctx: APIContext): Promise<Response> {
-  const denied = requireImportToken(ctx.request, env);
+  const denied = requireImportAuth(ctx, env);
   if (denied) return denied;
 
   const db = env.DB;

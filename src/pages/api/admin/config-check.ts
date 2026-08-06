@@ -13,7 +13,7 @@
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
-import { json, requireImportToken } from '~/lib/admin-auth';
+import { json, requireImportAuth } from '~/lib/admin-auth';
 
 export const prerender = false;
 
@@ -30,7 +30,7 @@ const EXPECTED = [
 ] as const;
 
 export async function GET(ctx: APIContext): Promise<Response> {
-  const denied = requireImportToken(ctx.request, env);
+  const denied = requireImportAuth(ctx, env);
   if (denied) return denied;
 
   const bag = env as unknown as Record<string, unknown>;

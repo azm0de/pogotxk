@@ -15,7 +15,7 @@
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
-import { json, requireImportToken } from '~/lib/admin-auth';
+import { json, requireImportAuth } from '~/lib/admin-auth';
 import { parseMarkers } from '~/lib/legacy/parse';
 import { transform } from '~/lib/legacy/transform';
 import { readImageSize } from '~/lib/image-size';
@@ -29,7 +29,7 @@ const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 45;
 
 export async function POST(ctx: APIContext): Promise<Response> {
-  const denied = requireImportToken(ctx.request, env);
+  const denied = requireImportAuth(ctx, env);
   if (denied) return denied;
 
   const url = new URL(ctx.request.url);
