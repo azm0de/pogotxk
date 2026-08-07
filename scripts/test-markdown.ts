@@ -171,5 +171,63 @@ check('explicit offset still wins', levels('## A', { headingOffset: 0 }), '2');
 check('hash inside a fence is ignored', levels('## Real\n\n```bash\n# not a heading\n```\n\n### Nested'), '2,3');
 check('no headings at all does not throw', levels('just a paragraph'), '');
 
+console.log('\n== tables ==');
+const T = '| Lap | Stops |\n| --- | --- |\n| One | 11 |\n| Two | 16 |';
+const tableHtml = renderMarkdown(T);
+check('wrapped so a wide table scrolls, not the page', tableHtml.startsWith('<div class="table-scroll"><table>'), true);
+// `[ >]` matters: a bare /<th/ also matches the <thead> wrapper.
+check('header cells are th', (tableHtml.match(/<th[ >]/g) ?? []).length, 2);
+check('body rows', (tableHtml.match(/<tr>/g) ?? []).length, 3);
+check('cell text survives', tableHtml.includes('<td>16</td>'), true);
+
+check(
+  'alignment from the delimiter row',
+  renderMarkdown('| a | b | c |\n| :-- | :-: | --: |\n| 1 | 2 | 3 |').includes(
+    '<th style="text-align:left">a</th><th style="text-align:center">b</th><th style="text-align:right">c</th>',
+  ),
+  true,
+);
+
+// A delimiter row is required, so ordinary prose containing a pipe stays prose.
+check('a sentence with a pipe is not a table', renderMarkdown('use a | b for pipes'), '<p>use a | b for pipes</p>');
+check(
+  'header and delimiter widths must agree',
+  renderMarkdown('| a | b |\n| --- |').includes('<table>'),
+  false,
+);
+
+check(
+  'a ragged row is padded, not dropped',
+  renderMarkdown('| a | b |\n| --- | --- |\n| 1 |').includes('<td>1</td><td></td>'),
+  true,
+);
+check(
+  'an escaped pipe stays in the cell',
+  renderMarkdown('| a |\n| --- |\n| x \\| y |').includes('<td>x | y</td>'),
+  true,
+);
+check(
+  'inline markup works inside cells',
+  renderMarkdown('| a |\n| --- |\n| **bold** |').includes('<td><strong>bold</strong></td>'),
+  true,
+);
+
+// The escaping discipline is the part that matters: cells take author input.
+check(
+  'html in a cell is inert',
+  renderMarkdown('| a |\n| --- |\n| <img src=x onerror=alert(1)> |').includes('&lt;img'),
+  true,
+);
+check(
+  'a script tag in a header is inert',
+  renderMarkdown('| <script>alert(1)</script> |\n| --- |\n| x |').includes('<script>'),
+  false,
+);
+check(
+  'a javascript: link in a cell is refused',
+  renderMarkdown('| a |\n| --- |\n| [x](javascript:alert(1)) |').includes('javascript:'),
+  false,
+);
+
 console.log(failures ? `\nFAILED (${failures})\n` : '\nAll checks passed.\n');
 process.exit(failures ? 1 : 0);

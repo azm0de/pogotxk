@@ -14,11 +14,14 @@
  * Supported: ATX headings, bold / italic / strikethrough, inline code, fenced
  * code, links, images (an image alone in a paragraph becomes a <figure>),
  * nested ordered and unordered lists, blockquotes, horizontal rules, hard line
- * breaks, paragraphs.
+ * breaks, GitHub-style pipe tables, paragraphs.
  *
- * Deliberately unsupported: raw HTML, tables, footnotes, reference-style links.
- * If a post ever needs a table, that is a signal it wants a component, not a
- * bigger Markdown dialect.
+ * Deliberately unsupported: raw HTML, footnotes, reference-style links.
+ *
+ * Tables used to be on that list, on the reasoning that a post wanting one
+ * really wanted a component. That was the wrong call here — raid schedules and
+ * CP ranges are ordinary things to write about — and the failure mode was not a
+ * graceful "no", it was the pipes rendering as a run-on paragraph.
  */
 
 import { slugify } from '~/lib/slug';
@@ -292,6 +295,113 @@ function normalisedHeadingOffset(lines: string[]): number {
   return 2 - shallowest;
 }
 
+/* ---------------------------------------------------------------- tables -- */
+
+/**
+ * GitHub-style pipe tables.
+ *
+ * These were deliberately unsupported at first, on the reasoning that a post
+ * wanting a table really wanted a component. That was wrong for this site: raid
+ * schedules and CP ranges are ordinary things to write, and the failure was not
+ * a graceful degradation — the pipes rendered as a run-on paragraph.
+ *
+ * A delimiter row is required, as in GFM, so a sentence that merely contains a
+ * `|` is still a paragraph.
+ */
+const DELIMITER_CELL_RE = /^:?-+:?$/;
+
+/** Splits a row on unescaped pipes, dropping the optional outer ones. */
+function splitRow(line: string): string[] {
+  const cells: string[] = [];
+  let cur = '';
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '\\' && line[i + 1] === '|') {
+      // A literal pipe in a cell. Keep the pipe, drop the backslash.
+      cur += '|';
+      i++;
+      continue;
+    }
+    if (ch === '|') {
+      cells.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  cells.push(cur);
+
+  // `| a | b |` yields empty first and last cells from the outer pipes.
+  if (cells.length && cells[0]!.trim() === '') cells.shift();
+  if (cells.length && cells[cells.length - 1]!.trim() === '') cells.pop();
+  return cells.map((c) => c.trim());
+}
+
+function isDelimiterRow(line: string | undefined): boolean {
+  if (!line || !line.includes('-')) return false;
+  const cells = splitRow(line);
+  return cells.length > 0 && cells.every((c) => DELIMITER_CELL_RE.test(c));
+}
+
+function isTableStart(lines: string[], i: number): boolean {
+  const header = lines[i] ?? '';
+  if (!header.includes('|')) return false;
+  if (!isDelimiterRow(lines[i + 1])) return false;
+  // Header and delimiter must agree on width, or it is not a table.
+  return splitRow(header).length === splitRow(lines[i + 1] ?? '').length;
+}
+
+type Align = 'left' | 'center' | 'right' | null;
+
+function alignments(delimiter: string): Align[] {
+  return splitRow(delimiter).map((cell) => {
+    const left = cell.startsWith(':');
+    const right = cell.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    if (left) return 'left';
+    return null;
+  });
+}
+
+function renderTable(lines: string[], start: number, opts: MarkdownOptions): [string, number] {
+  const header = splitRow(lines[start] ?? '');
+  const align = alignments(lines[start + 1] ?? '');
+  let i = start + 2;
+
+  const rows: string[][] = [];
+  while (i < lines.length) {
+    const line = lines[i] ?? '';
+    if (line.trim() === '' || !line.includes('|')) break;
+    rows.push(splitRow(line));
+    i++;
+  }
+
+  // Same escape-then-inline order as headings and paragraphs: the cell text is
+  // escaped first, so nothing an author types can open a tag, and only the
+  // inline renderer's own markup survives.
+  const cell = (text: string, tag: 'th' | 'td', a: Align) => {
+    const style = a ? ` style="text-align:${a}"` : '';
+    return `<${tag}${style}>${renderInline(escapeHtml(text), opts)}</${tag}>`;
+  };
+
+  const head = `<thead><tr>${header.map((h, n) => cell(h, 'th', align[n] ?? null)).join('')}</tr></thead>`;
+  const body = rows.length
+    ? `<tbody>${rows
+        .map((row) => {
+          // Ragged rows are padded rather than dropped: a missing trailing cell
+          // is a typo, and losing the row hides the author's content entirely.
+          const padded = header.map((_, n) => row[n] ?? '');
+          return `<tr>${padded.map((c, n) => cell(c, 'td', align[n] ?? null)).join('')}</tr>`;
+        })
+        .join('')}</tbody>`
+    : '';
+
+  // Wrapped so a wide table scrolls inside the article instead of widening the
+  // page — the same rule the rest of the site follows for overflow.
+  return [`<div class="table-scroll"><table>${head}${body}</table></div>`, i];
+}
+
 function renderBlocks(lines: string[], opts: MarkdownOptions): string {
   const out: string[] = [];
   const headingOffset = opts.headingOffset ?? normalisedHeadingOffset(lines);
@@ -357,6 +467,15 @@ function renderBlocks(lines: string[], opts: MarkdownOptions): string {
       continue;
     }
 
+    // Tables are checked after lists so a leading `|` cannot be mistaken for a
+    // bullet, and before paragraphs so the rows are not swallowed as prose.
+    if (isTableStart(lines, i)) {
+      const [html, next] = renderTable(lines, i, opts);
+      out.push(html);
+      i = next;
+      continue;
+    }
+
     // Paragraph: run to the next blank line or block-level opener.
     const para: string[] = [];
     while (i < lines.length) {
@@ -367,7 +486,8 @@ function renderBlocks(lines: string[], opts: MarkdownOptions): string {
         HR_RE.test(current) ||
         HEADING_RE.test(current) ||
         QUOTE_RE.test(current) ||
-        matchListItem(current)
+        matchListItem(current) ||
+        isTableStart(lines, i)
       ) {
         break;
       }
