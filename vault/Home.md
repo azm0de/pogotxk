@@ -58,8 +58,9 @@ Two of five production auditors never reported — see [[Backlog]].
 - [x] 16 review defects fixed — see [[Bugs Worth Remembering]]
 - [x] 3 more found by a production audit and fixed: an open redirect, six dead calendar
       subscribe links, and a role that survived leaving the Discord
-- [ ] Push + Discord fan-out — code done, **needs secrets**, see [[Configuration]]
+- [x] Web push live; Discord fan-out still needs a webhook — see [[Backlog]]
+- [x] A design pass over every page — see [[Backlog]] and [[Bugs Worth Remembering]]
 - [ ] Bubble tested on real hardware — see [[Android App]]
 
 Production runs whatever is on `main`; a push deploys in 60–90 seconds. `npm test` is 8 suites
-and roughly 310 assertions.
+and roughly 366 assertions.

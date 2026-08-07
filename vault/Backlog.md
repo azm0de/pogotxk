@@ -58,11 +58,11 @@ matter of finding the right menu.
       subscribe link (see [[Bugs Worth Remembering]])
 - [ ] **Announce posts and meetups to Discord.** `announceToDiscord` exists and has no caller —
       wire the "also announce" toggle in the post editor to it
-- [ ] **Media library page (`/admin/media`).** The tab and a dashboard card both linked here
-      and both 404'd — the console advertised a section that was never built. Links removed
-      2026-08-06 rather than left pointing at nothing. `/api/admin/media` already exists, so
-      this is a page away from working: an R2 browser with alt text, credit, and the
-      source-attribution fields. Put the tab back in the same change that adds the route
+- [x] ~~Media library page (`/admin/media`)~~ — built 2026-08-06. Browse everything in R2,
+      filter by kind or by what is missing, and edit alt text, caption, credit and the
+      source-attribution fields. Added `PATCH /api/admin/media/[id]`, which did not exist:
+      credits were captured on upload and then frozen, so fixing one meant SQL against
+      production. **63 of 72 items still have no credit** — the filter counts them
 - [ ] **Settings page (`/admin/settings`).** Same story, but with no API either. Social links,
       hero copy, theme colours, Code of Conduct PDF. It is the only `adminOnly` nav entry the
       layout was built for
@@ -89,6 +89,29 @@ matter of finding the right menu.
       callback re-validates, and 21 assertions cover it
 - [x] ~~Leaving the Discord kept your role~~ — `fetchGuildRoles` now distinguishes
       "not configured" from "not a member"
+
+### From the design pass, 2026-08-06
+
+- [x] ~~Every page scrolled sideways on a phone~~ — 169px of overhang at 375px, on all twelve
+      routes, in production. One missing `min-width: 0`. See [[Bugs Worth Remembering]]
+- [x] ~~The footer floated mid-page on short pages~~ — body is a flex column now
+- [x] ~~`/live`, `/eggs`, `/research` unreachable from the nav~~ — `/live` has a slot; the
+      other two link to each other and `/raids` through a GameNav chip row
+- [x] ~~`/map` had no `<h1>`~~ — the only page without one, now `sr-only`
+- [x] ~~Three links under the 24px minimum target size~~ — the home page's `→` actions
+- [x] ~~Gallery captions unreadable over bright photos~~ — the scrim only reached full
+      strength at its final pixel
+- [x] ~~Posts skipped a heading level~~ — the offset is measured from the shallowest heading
+      the author actually used, so `##`-first documents still open on `<h2>`
+- [x] ~~Markdown tables rendered as literal pipes~~ — supported now, with alignment, escaped
+      pipes, and cells that cannot open a tag
+- [x] ~~Sixteen places where a word was glued to the next link~~ — Astro trims the trailing
+      space before an element on the next line; `{' '}` survives reformatting
+- [x] ~~`/events` opened on 900px of subscribe UI~~ — collapsed into a `<details>`; the first
+      event moved from 927px to 386px down the page
+- [x] ~~Two admin tabs led to 404s~~ — Media is built; Settings is out of the nav until it is
+- [ ] **`/go` is sparse for a signed-out visitor.** The empty board is centred now rather than
+      top-aligned, but the screen still says little about what the app does before you sign in
 
 ## Audit still owed
 

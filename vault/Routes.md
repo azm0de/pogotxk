@@ -39,6 +39,7 @@ updated: 2026-08-05
 | `/admin/map` | Map editor — click to place, drag to move, upload photos |
 | `/admin/meetups` | Meetup editor |
 | `/admin/posts` | Blog editor |
+| `/admin/media` | Media library — browse R2, fix alt text and photo credits |
 
 ## API
 
@@ -53,6 +54,8 @@ updated: 2026-08-05
 | `GET /api/flares/socket` | public | WebSocket upgrade → Durable Object |
 | `GET/POST/DELETE /api/push/subscribe` | mixed | VAPID key / manage subscription |
 | `/api/admin/pois` `/meetups` `/posts` `/media` | ambassador | CRUD |
+| `PATCH /api/admin/media/[id]` | ambassador | Attribution fields only |
+| `GET /img/leekduck/[...path]` | public | Cached proxy for Leek Duck event artwork |
 | `POST /api/admin/import-legacy` `/import-media` | admin **or** token | [[Importing Legacy Data]] |
 | `GET /api/admin/config-check` | admin **or** token | Which variables the Worker can see |
 | `GET /media/[...key]` | public | R2 objects, immutable cache |
