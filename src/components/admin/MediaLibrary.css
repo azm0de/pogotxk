@@ -1,0 +1,275 @@
+.media-loading,
+.media-error,
+.media-empty {
+  margin: 24px 0;
+  color: var(--text-muted);
+}
+.media-error {
+  color: var(--live-text);
+}
+
+.media-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.media-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.media-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.media-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.media-chip[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* The count is the point of these two filters — it should read as a tally of
+   outstanding work, not as decoration. */
+.media-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--poi-gym);
+  color: #fff;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.media-search input {
+  width: 100%;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.media-summary {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.media-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.media-tile {
+  display: grid;
+  gap: 0;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+.media-tile:hover {
+  border-color: var(--accent);
+}
+.media-tile img {
+  display: block;
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  background: var(--bg-sunken);
+}
+
+.media-tile-meta {
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px 10px;
+}
+.media-tile-name {
+  font-size: 0.76rem;
+  /* Keys are long and the interesting part is the end, but wrapping them makes
+     the grid ragged — one line, clipped, with the full value in the sheet. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-tile-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.media-flag {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.media-flag--warn {
+  border-color: var(--poi-gym);
+  color: var(--poi-gym);
+}
+
+/* --- edit sheet ----------------------------------------------------------- */
+
+.media-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.55);
+}
+
+.media-sheet {
+  width: min(560px, 100%);
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: 18px 20px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.media-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.media-sheet-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.media-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-panel);
+  color: inherit;
+  cursor: pointer;
+}
+
+.media-preview {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.media-facts {
+  margin: 10px 0 16px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.media-facts code {
+  font-size: 0.72rem;
+  word-break: break-all;
+}
+
+.media-field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.media-field > span {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.media-field em {
+  font-weight: 400;
+  font-style: normal;
+  color: var(--text-muted);
+}
+.media-field input,
+.media-field textarea,
+.media-field select {
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+  resize: vertical;
+}
+
+.media-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 460px) {
+  .media-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.media-sheet-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.media-save {
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 700;
+  cursor: pointer;
+}
+.media-save:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.media-view {
+  font-size: 0.84rem;
+}
+.media-status {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}

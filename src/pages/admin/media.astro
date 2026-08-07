@@ -1,0 +1,10 @@
+---
+import Admin from '~/layouts/Admin.astro';
+import MediaLibrary from '~/components/admin/MediaLibrary';
+
+export const prerender = false;
+---
+
+<Admin title="Media">
+  <MediaLibrary client:load />
+</Admin>

@@ -50,10 +50,7 @@ const cards = [
   { label: 'Awaiting review', value: c.pois_pending ?? 0, href: '/admin/map', warn: (c.pois_pending ?? 0) > 0 },
   { label: 'Upcoming meetups', value: c.meetups_upcoming ?? 0, href: '/admin/meetups' },
   { label: 'Published posts', value: c.posts ?? 0, href: '/admin/posts' },
-  // No href: /admin/media was never built, and a stat card that 404s on click
-  // is worse than one that simply reports a number. Give it back its link in
-  // the change that adds the page.
-  { label: 'Media items', value: c.media ?? 0 },
+  { label: 'Media items', value: c.media ?? 0, href: '/admin/media' },
   { label: 'Open reports', value: c.reports_open ?? 0, href: '/admin/map', warn: (c.reports_open ?? 0) > 0 },
 ];
 ---
