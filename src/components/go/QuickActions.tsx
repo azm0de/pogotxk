@@ -354,7 +354,7 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
 
       <section className="go-board" aria-label="Active flares">
         {flares.length === 0 ? (
-          <p className="go-empty">
+          <p className="go-empty empty-art-bg">
             Nothing active right now. Fire one below when you are at a gym and want company.
           </p>
         ) : (

@@ -188,3 +188,52 @@ button {
     scroll-behavior: auto !important;
   }
 }
+
+/* --------------------------------------------------------------- empty art --
+ * Faint map-pin motif for empty states.
+ *
+ * A quiet live board or flare list looked like something had failed to load
+ * rather than like nothing was happening. This gives those moments a surface.
+ *
+ * Deliberately our own pin artwork, not photographs: several community photos
+ * are Texarkana Gazette press photos whose credit is a licensing obligation
+ * that must stay attached to the image, and a credit cannot ride on a faded
+ * background. See vault/Attribution Obligations.md.
+ *
+ * Implemented as a mask over `currentColor` rather than a coloured background
+ * image, so it inherits the surrounding text colour and needs no separate
+ * light and dark values. One declaration serves both Astro pages and React
+ * islands, which cannot share a component.
+ */
+.empty-art-bg {
+  position: relative;
+  isolation: isolate;
+}
+
+.empty-art-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: currentColor;
+  opacity: 0.15;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 120'%3E%3Cg fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round'%3E%3Cg transform='translate(8 10) scale(0.9) rotate(-12)'%3E%3Cpath d='M16 43C16 43 30 26.5 30 16A14 14 0 1 0 2 16C2 26.5 16 43 16 43Z'/%3E%3Ccircle cx='16' cy='15.5' r='8.4'/%3E%3Cpath d='M16 9.6l5.2 5.9-5.2 5.9-5.2-5.9z' fill='black' stroke='none'/%3E%3C/g%3E%3Cg transform='translate(128 4) scale(0.7) rotate(14)'%3E%3Cpath d='M16 43C16 43 30 26.5 30 16A14 14 0 1 0 2 16C2 26.5 16 43 16 43Z'/%3E%3Ccircle cx='16' cy='15.5' r='8.4'/%3E%3Cpath d='M11.4 20.6v-7.1l4.6-3.6 4.6 3.6v7.1h-3.1v-4.1h-3v4.1z' fill='black' stroke='none'/%3E%3C/g%3E%3Cg transform='translate(164 52) scale(0.95) rotate(-8)'%3E%3Cpath d='M16 43C16 43 30 26.5 30 16A14 14 0 1 0 2 16C2 26.5 16 43 16 43Z'/%3E%3Ccircle cx='16' cy='15.5' r='8.4'/%3E%3Cpath d='M16 9.4l5 2.9v5.8l-5 2.9-5-2.9v-5.8z' fill='black' stroke='none'/%3E%3C/g%3E%3Cg transform='translate(62 64) scale(0.62) rotate(9)'%3E%3Cpath d='M16 43C16 43 30 26.5 30 16A14 14 0 1 0 2 16C2 26.5 16 43 16 43Z'/%3E%3Ccircle cx='16' cy='15.5' r='8.4'/%3E%3Cpath d='M11.4 20.6v-7.1l4.6-3.6 4.6 3.6v7.1h-3.1v-4.1h-3v4.1z' fill='black' stroke='none'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  mask-repeat: no-repeat;
+  /* `contain`, and anchored right.
+     `cover` stretched the pins into streaks; a fixed width made the artwork
+     taller than these short boxes and sliced the tops off. Containing it keeps
+     whole pins, and the right edge is the one place in a left-aligned text
+     block where they are not behind a sentence. */
+  mask-size: contain;
+  mask-position: right center;
+}
+
+/* Enough room for the motif to be visible behind the text. Without this the
+   pins are clipped to a two-line paragraph and read as stray marks. */
+.live-empty.empty-art-bg,
+.go-empty.empty-art-bg {
+  min-height: 108px;
+  display: grid;
+  align-content: center;
+}

@@ -715,7 +715,7 @@ export default function LiveBoard({
       </p>
 
       {visible.length === 0 ? (
-        <p className="live-empty">
+        <p className="live-empty empty-art-bg">
           Nothing burning right now. When someone starts a raid it will appear here without a
           refresh.
         </p>

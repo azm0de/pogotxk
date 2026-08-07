@@ -12,7 +12,9 @@ import {
 } from '~/lib/db/meetups';
 import { listPublishedPosts } from '~/lib/db/posts';
 import { gameEventsFromPayload, groupEvents, type CalendarEvent } from '~/lib/ics';
-import { getFeed } from '~/lib/scrapedduck';
+import { getFeed, raidTierRank } from '~/lib/scrapedduck';
+import Attribution from '~/components/game/Attribution.astro';
+import { proxiedImageUrl } from '~/lib/game-image';
 import { DEFAULT_TZ, formatInZone } from '~/lib/time';
 
 export const prerender = false;
@@ -70,6 +72,22 @@ const totalPois =
 const globalEvents = await getFeed('events')
   .then(gameEventsFromPayload)
   .catch(() => null);
+
+/**
+ * The bosses actually worth walking to tonight — legendary and mega tiers only.
+ *
+ * `raidTierRank` is the same ordering /raids uses, so "headline" means the same
+ * thing on both pages rather than being a second opinion. Capped at four: this
+ * is a glance, and /raids is one tap away for the rest.
+ */
+const raidFeed = await getFeed('raids').catch(() => null);
+const headlineBosses = (raidFeed?.data ?? [])
+  .filter((boss) => {
+    const t = boss.tier.toLowerCase();
+    return t.includes('5-star') || t.includes('mega') || t.includes('primal');
+  })
+  .sort((a, b) => raidTierRank(b.tier) - raidTierRank(a.tier))
+  .slice(0, 4);
 
 const happening = groupEvents([
   ...meetups.map((m) => meetupToCalendarEvent(m, new URL(Astro.url.origin))),
@@ -233,7 +251,7 @@ const socials = [
       }
     </section>
 
-    <section class="card">
+    <section class="card empty-art-bg">
       <h2>Right now</h2>
       <p class="empty">
         Raid flares from the community appear on the live board. Fire one when you are at a gym
@@ -242,15 +260,56 @@ const socials = [
       <a class="card-link" href="/live">Open the live board →</a>
     </section>
 
-    <section class="card">
+    <section class="card card--raids">
       <h2>In game today</h2>
-      <p class="empty">
-        Current raid bosses, egg pools and field research, updated automatically from Leek Duck.
-      </p>
-      <p class="card-links">
-        <a href="/raids">Raid bosses</a> · <a href="/eggs">Eggs</a> ·{' '}
-        <a href="/research">Research</a>
-      </p>
+      {
+        headlineBosses.length > 0 ? (
+          <>
+            {/* The bosses themselves, not a sentence about them. This is the
+                same functional use as /raids — you are here to find out what
+                is worth walking to tonight — and the same attributed source. */}
+            <ul class="boss-strip">
+              {headlineBosses.map((boss) => (
+                <li>
+                  {/* Through our proxy, not hotlinked — same reasoning as the
+                      event artwork: it is Leek Duck's bandwidth, and a cached
+                      copy survives them adding hotlink protection. */}
+                  <img
+                    src={proxiedImageUrl(boss.image) ?? boss.image}
+                    alt=""
+                    width="56"
+                    height="56"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span class="boss-name">{boss.name}</span>
+                  <span class="boss-tier">{boss.tier.replace(/ Raids?$/i, '')}</span>
+                  {boss.canBeShiny && (
+                    <span class="boss-shiny" title="Can be shiny">
+                      <span class="sr-only">Can be shiny</span>
+                      <span aria-hidden="true">✦</span>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p class="card-links">
+              <a href="/raids">All raid bosses</a> · <a href="/eggs">Eggs</a> ·{' '}
+              <a href="/research">Research</a>
+            </p>
+          </>
+        ) : (
+          <>
+            <p class="empty">
+              Current raid bosses, egg pools and field research, updated automatically.
+            </p>
+            <p class="card-links">
+              <a href="/raids">Raid bosses</a> · <a href="/eggs">Eggs</a> ·{' '}
+              <a href="/research">Research</a>
+            </p>
+          </>
+        )
+      }
     </section>
   </div>
 
@@ -353,6 +412,15 @@ const socials = [
         </div>
       )
     }
+
+    {/*
+      Licence, not decoration. This page shows Leek Duck's event artwork and raid
+      bosses, and their terms require visible credit to both Leek Duck AND
+      ScrapedDuck on any page using the data. It had been crediting Leek Duck in
+      one line of prose and never naming ScrapedDuck at all — a gap introduced
+      when "Happening now" started rendering their artwork.
+    */}
+    <Attribution />
   </section>
 
   <section class="section">
@@ -596,6 +664,58 @@ const socials = [
     margin: 0;
     font-size: 0.9rem;
     color: var(--text-muted);
+  }
+
+  /* --- tonight's raid bosses ------------------------------------------------
+     A row of sprites rather than a sentence about sprites. Sized so four fit a
+     phone without wrapping into a second row that would make the card taller
+     than its two neighbours and break the grid's rhythm. */
+  .boss-strip {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+    gap: 8px;
+  }
+  .boss-strip li {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 1px;
+    padding: 8px 4px 7px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    text-align: center;
+  }
+  .boss-strip img {
+    width: 46px;
+    height: 46px;
+    object-fit: contain;
+  }
+  .boss-name {
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.2;
+    /* Names like "Hisuian Growlithe" would otherwise set the column width. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  .boss-tier {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+  .boss-shiny {
+    position: absolute;
+    top: 4px;
+    right: 5px;
+    font-size: 0.7rem;
+    color: var(--poi-campsite);
   }
   /* `padding-block` rather than a bare line of text: at 22px tall these fell
      under the 24px minimum target size (WCAG 2.2 SC 2.5.8). They are standalone
