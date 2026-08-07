@@ -8,6 +8,8 @@ import {
   type FlareKind,
   type FlareRsvpState,
 } from '~/lib/db/flares';
+import { proxiedImageUrl } from '~/lib/game-image';
+import { slugify } from '~/lib/slug';
 import './LiveBoard.css';
 
 /**
@@ -100,6 +102,24 @@ const RSVP_LABEL: Record<FlareRsvpState, string> = {
   here: "I'm here",
   done: 'Done',
 };
+
+/**
+ * Loosens a boss name enough to match what someone typed against the feed.
+ *
+ * `boss` is free text — a human at a gym with one hand on their phone. The
+ * project rule is that the name is matched against a public list, never read
+ * from the game, and `slugify` already folds case, spacing, accents and
+ * punctuation exactly the way that needs. Reused rather than reimplemented: it
+ * is the same normalisation the tags and slugs use, and it is already tested.
+ *
+ * A miss is fine and expected — the card reads correctly without a sprite.
+ */
+const normaliseBossName = slugify;
+
+/** Only the two fields the sprite lookup needs, not the whole raid shape. */
+interface RaidFeedResponse {
+  data?: { name: string; image: string }[];
+}
 
 function socketUrl(): string {
   const url = new URL('/api/flares/socket', window.location.href);
@@ -250,6 +270,39 @@ export default function LiveBoard({
     const timer = window.setInterval(() => setNowMs(Date.now() + skewRef.current), TICK_MS);
     return () => window.clearInterval(timer);
   }, [initialNow]);
+
+  /**
+   * Boss name -> sprite, for putting a face on a raid flare.
+   *
+   * Resolved on the client rather than served with the flare, so that flares
+   * arriving over the WebSocket get a sprite on exactly the same terms as ones
+   * that came from the poll — enriching the API response would have covered
+   * only half the paths into this list.
+   *
+   * A miss is fine and expected: `boss` is free text a human typed, and the
+   * card already reads correctly without a picture.
+   */
+  const [bossArt, setBossArt] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/game/raids.json')
+      .then((r) => (r.ok ? (r.json() as Promise<RaidFeedResponse | null>) : null))
+      .then((body) => {
+        if (cancelled || !body?.data) return;
+        const map = new Map<string, string>();
+        for (const boss of body.data) {
+          if (boss.name && boss.image) map.set(normaliseBossName(boss.name), boss.image);
+        }
+        setBossArt(map);
+      })
+      .catch(() => {
+        /* No sprites, same board. Not worth surfacing. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // --- the connection -----------------------------------------------------
   useEffect(() => {
@@ -732,6 +785,26 @@ export default function LiveBoard({
                   </span>
                   <span className="flare-left">{timeLeft(flare.expiresAt, nowMs)}</span>
                 </div>
+
+                {/* A raid flare names a boss; showing the boss beats spelling
+                    it. Decorative: the title beside it already says the name,
+                    so announcing the image would just repeat it. */}
+                {(() => {
+                  if (flare.kind !== 'raid' || !flare.boss) return null;
+                  const art = bossArt.get(normaliseBossName(flare.boss));
+                  if (!art) return null;
+                  return (
+                    <img
+                      className="flare-boss-art"
+                      src={proxiedImageUrl(art) ?? art}
+                      alt=""
+                      width="52"
+                      height="52"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  );
+                })()}
 
                 <h3 className="flare-title">
                   {flare.kind === 'raid' && flare.boss
