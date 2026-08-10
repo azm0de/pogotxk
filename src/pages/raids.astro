@@ -48,14 +48,48 @@ function tierNote(tier: string): string | null {
   description="Every current Pokémon GO raid boss by tier, with catch CP, weather-boosted CP, type matchups, and shiny availability — for the PoGo TXK community in Texarkana."
 >
   <div class="g-page">
-    <header class="g-head">
+    <header class="raids-hero">
+      {/*
+        Decorative: the `h1` beside it already says what this is, and describing
+        a crowd of trainers fighting a Gigantamax Pokémon tells a screen-reader
+        user nothing about the boss list below.
+
+        1600x900 is the whole source and the card caps at 1116px, so the widest
+        variant is the most any layout can ask for. 217KB of JPEG became 190KB
+        of WebP at full width, and 61KB at 640 — which is the one phones get.
+      */}
+      <picture class="raids-hero-art">
+        <img
+          src="/hero/raid-battle-1600.webp"
+          srcset="/hero/raid-battle-640.webp 640w, /hero/raid-battle-960.webp 960w, /hero/raid-battle-1280.webp 1280w, /hero/raid-battle-1600.webp 1600w"
+          sizes="(min-width: 1244px) 1116px, calc(100vw - 28px)"
+          width="1600"
+          height="900"
+          alt=""
+          decoding="async"
+        />
+      </picture>
+
       <h1>Current raid bosses</h1>
-      <p>
+      <p class="raids-lede">
         Every boss in rotation right now, grouped by tier, with the CP you will see on the catch
         screen and the weather that boosts it.
       </p>
-      <GameNav />
+
+      {/*
+        The artwork carries no rights notice of its own — unlike the PokéStop
+        art on the events page, whose printed notice the crop was cutting off —
+        but it is still somebody else's, so it is credited rather than used
+        bare. See vault/Attribution Obligations.
+      */}
+      <p class="raids-hero-credit">
+        Artwork ©Pokémon. ©Nintendo / Creatures Inc. / GAME FREAK inc.
+      </p>
     </header>
+
+    {/* Below the card rather than inside it: these are opaque panel chips, and
+        floating them over artwork this busy reads as clutter. */}
+    <div class="raids-nav"><GameNav /></div>
 
     <FeedStatus
       fetchedAt={feed.fetchedAt}
@@ -121,6 +155,108 @@ function tierNote(tier: string): string | null {
 </Base>
 
 <style>
+  /* --- the hero card -------------------------------------------------------
+   *
+   * Built the same way as the events hero, deliberately: art at z-index −2,
+   * scrim at −1, and `isolation: isolate` so neither escapes to the root
+   * stacking context and paints behind the page itself.
+   *
+   * This replaces `.g-head`, which is still what /eggs and /research use — so
+   * the type styling `.g-head h1` was providing is restated below rather than
+   * inherited.
+   */
+  .raids-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px) clamp(14px, 2.5vw, 20px);
+    color: #fff;
+    /* A column so the credit can be pushed to the bottom edge below. */
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Taller from 760px up, so more of the artwork survives the crop — at the
+     natural content height this is a ~5:1 slot for a 16:9 image. */
+  @media (min-width: 760px) {
+    .raids-hero {
+      min-height: clamp(260px, 30vw, 380px);
+    }
+  }
+
+  .raids-hero-art {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+  }
+  .raids-hero-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* 38% keeps the Gigantamax Pokémon's head and the trainers below it inside
+       the band; centre would cut the head off at the top. */
+    object-position: center 38%;
+  }
+
+  /*
+   * The events hero's scrim, unchanged, because it was measured against this
+   * artwork too rather than assumed to carry over. This image is much brighter
+   * — pure white cloud, yellow, hot pink — so it was the case most likely to
+   * need a darker one, and did not: worst case anywhere in the padded content
+   * box is h1 8.06:1, lede 7.13:1, credit 5.68:1, all clear of AA.
+   *
+   * Checked at 1116x380 and 345x195 (both measured off the live page), plus
+   * 772x260, 292x240 and a no-crop case. The narrow ones matter: the mobile
+   * card lands at almost exactly 16:9, so `cover` flips to binding on height
+   * and very nearly the whole image shows — including the bright right edge
+   * that the wide crop cuts away. The worst pixel is always bottom-right,
+   * where the art is brightest and the gradient is at its lightest 0.70.
+   */
+  .raids-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      105deg,
+      rgb(6 8 12 / 0.84) 0%,
+      rgb(6 8 12 / 0.74) 58%,
+      rgb(6 8 12 / 0.7) 100%
+    );
+  }
+
+  .raids-hero h1 {
+    margin: 0 0 6px;
+    font-size: clamp(1.7rem, 4vw, 2.3rem);
+    color: #fff;
+  }
+  .raids-lede {
+    margin: 0;
+    max-width: 62ch;
+    color: rgb(255 255 255 / 0.92);
+  }
+  .raids-hero-credit {
+    margin: clamp(14px, 3vw, 22px) 0 0;
+    font-size: 0.68rem;
+    line-height: 1.45;
+    color: rgb(255 255 255 / 0.78);
+  }
+  /* Only where the card has a floor to push against — below 760px it is only as
+     tall as its content, so `auto` would collapse to nothing. */
+  @media (min-width: 760px) {
+    .raids-hero-credit {
+      margin-top: auto;
+      padding-top: clamp(14px, 3vw, 22px);
+    }
+  }
+
+  /* Carries the gap `.g-head`'s own margin-bottom used to provide. */
+  .raids-nav {
+    margin-bottom: 22px;
+  }
+
   /* The tier name is the heading; the badge inside it carries the colour, so
      the heading itself needs no extra type styling. */
   .g-page :global(.g-section-head h2) {
