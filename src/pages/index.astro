@@ -1879,6 +1879,18 @@ function homeWhen(event: CalendarEvent): string {
     .on-now-dot {
       animation: none;
     }
+    /*
+     * Swap the source, because there is nothing else to swap.
+     *
+     * An animated WebP used as a `background-image` has no CSS switch — it is
+     * not an animation the cascade can set to `none`, and there is no element to
+     * call `pause()` on the way the hero video has. The only way to honour
+     * reduced motion here is to serve a different file, so this one is a single
+     * frame of the same fish at 12KB.
+     */
+    .campsite-band {
+      --art-src: url('/art/magikarp-still.webp');
+    }
   }
 
   /* --- campsite artwork -----------------------------------------------------
@@ -1890,9 +1902,23 @@ function homeWhen(event: CalendarEvent): string {
    * Barely negative on the right, unlike the hero: there is no card in the way
    * here, so nearly the whole bird stays on screen.
    */
+  /*
+   * Magikarp, flopping. 16 frames over 1.6s as an animated WebP.
+   *
+   * Encoded **lossless**, which is not the usual choice for a 147KB asset — but
+   * this is pixel art, and lossless actually came out smaller than lossy at the
+   * same size (183KB vs 188KB at full width) as well as keeping the pixel edges
+   * intact. The 480x480 source was trimmed to its union bounding box across all
+   * sixteen frames — a per-frame crop would make the fish jitter — and scaled to
+   * 384 with NEAREST, so the pixel grid survives the resize.
+   *
+   * 239KB of GIF became 147KB. Modest, and it is worth knowing that most of the
+   * remaining weight is the frame count, not the resolution: 320px wide would
+   * be 115KB if this ever needs to come down.
+   */
   .campsite-band {
-    --art-src: url('/art/magikarp.webp');
-    --art-ratio: 0.9;
+    --art-src: url('/art/magikarp-anim.webp');
+    --art-ratio: 1.04;
     --art-right: calc(-1 * clamp(12px, 2vw, 46px));
     --art-bottom: 10px;
     /*
