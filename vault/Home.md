@@ -1,6 +1,6 @@
 ---
 tags: [index]
-updated: 2026-08-05
+updated: 2026-08-10
 ---
 
 # PoGo TXK
@@ -63,7 +63,14 @@ Two of five production auditors never reported — see [[Backlog]].
 - [x] A design pass over every page — see [[Backlog]] and [[Bugs Worth Remembering]]
 - [x] Two design skills wired into the repo, and the 63 landmark photographs surfaced on the
       home page — see [[Design System]]
+- [x] Repainted red and white as a Poké Ball, replacing the inherited navy and cream
+- [x] The community's own GO Fest photograph as the home page banner
 - [ ] Bubble tested on real hardware — see [[Android App]]
 
-Production runs whatever is on `main`; a push deploys in 60–90 seconds. `npm test` is 8 suites
-and roughly 366 assertions.
+Shipped 2026-08-10, in one push: the Poké Ball repaint, a generated **PoGo TXK logo** now serving
+as the wordmark in the hero and the header, social marks beside the brand, a Poké Ball nav menu on
+phones, the **Leafeon and Espeon forest video** behind the hero, the community photograph moved
+into its own section, clickable event cards linking back to Leek Duck, and Poké Ball favicon and
+app icons. See [[Design System]].
+
+Production runs whatever is on `main`; a push deploys in 60–90 seconds. `npm test` is 9 suites.

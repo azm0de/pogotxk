@@ -356,7 +356,7 @@
   text-align: center;
 }
 .go-toast--ok {
-  background: var(--navy-800);
+  background: var(--accent-solid);
   color: #fff;
 }
 .go-toast--err {

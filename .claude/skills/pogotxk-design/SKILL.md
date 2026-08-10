@@ -13,36 +13,70 @@ Pair this with the `frontend-design` skill: that one supplies taste, this one
 supplies the constraints. Where they disagree, this one wins — its rules are
 licences and accessibility, not preferences.
 
-## The palette is inherited, not chosen
+> [!warning] Never edit CSS with `sed -i` or `perl -i`
+> Both replace the file rather than writing in place, which silently breaks
+> Vite's file watcher. The dev server then keeps serving the *previous* CSS with
+> no error anywhere, and every measurement taken afterwards is against stale
+> styles. This has already cost one debugging session. Use the Edit tool; if a
+> bulk edit has already happened, restart the dev server before believing
+> anything you measure.
 
-`src/styles/global.css` holds every token. Deep navy `--navy-800: #123254` was
-the old site's `theme-color`; the cream `#eef1e7` came with it. The rebuild kept
-both so it still reads as PoGo TXK to people who used the old one.
+## The palette is a Poké Ball
 
-This matters because `frontend-design` names "warm cream background with a
-terracotta accent" as an AI-generated default to avoid. Ours is not that — it is
-a documented inheritance from a real predecessor, and the brief's own words win.
-Do not "fix" the cream. Do question anything *else* that drifts toward that look.
+`src/styles/global.css` holds every token. Red top, white bottom, black band.
+Chosen by Justin, replacing the navy-and-cream inherited from the old site.
 
 Never introduce a raw hex value in a component. If a colour is needed, it is
-either an existing token or a new token added to `global.css` with a comment
-saying why.
+either an existing token or a new token added to `global.css` with a comment and
+its measured contrast ratio.
 
-### The two red tokens are not a duplicate
+### Hue matters as much as lightness
+
+Every red in the ramp sits at **hue 353–354°** — approaching pure red from the
+crimson side. A red at hue 2–6° is *warmer* than pure red and reads as orange or
+brick; the first version of this palette did exactly that and was rejected on
+sight. **Keep green below blue in any new red.** The moment G rises above B it
+starts drifting orange again.
+
+The obvious Poké Ball reds also fail AA outright: `#ff0000` is 4.00:1 on white,
+Pokémon red `#ee1515` is 4.42, Pokémon GO's `#e3350d` is 4.39. The ramp starts at
+the first red that passes. These were measured, not picked — do not "correct"
+them back towards the brand reds.
+
+### `--accent` and `--accent-solid` are not interchangeable
+
+This is the single easiest thing to get wrong here.
 
 ```css
---live: #d93a31;      /* a filled surface; white text on it — 4.57:1 */
---live-text: #c9342c; /* the same idea as text on the page — 5.24:1 */
+--accent: var(--red-700);       /* light: #c8071c · dark: #ff5c6e (INVERTS) */
+--accent-solid: var(--red-700); /* deep red in BOTH themes */
 ```
 
-One colour cannot do both jobs accessibly: a surface must be dark enough for
-white to sit on it, while text must contrast with a *light* page in one theme
-and a *dark* page in the other. A single `#e8453c` managed 3.93:1 both ways,
-under the 4.5:1 AA floor. They invert between light and dark mode. Do not
-collapse them.
+`--accent` **inverts** between themes: in dark mode it becomes a *light* red so
+it can be read as link text on a dark page. That means `background: var(--accent)`
+paired with `color: #fff` is white-on-light-red in dark mode — 3.0:1.
 
-`--team-instinct` is likewise darkened via `color-mix` before use as text; the
-raw yellow fails on cream.
+Ten components did exactly that, including the site header. Any filled surface
+carrying white text uses **`--accent-solid`**. The same trap applies to
+`--poi-powerspot` and every POI colour: they lift in dark mode for the basemap,
+so a badge with white text must pin the light-theme value.
+
+### The two live tokens are not a duplicate
+
+```css
+--live: var(--red-600);      /* a filled surface; white on it — 5.57:1 */
+--live-text: var(--red-700); /* the same idea as text on the page */
+```
+
+A surface must be dark enough for white to sit on it, while text must contrast
+with a *light* page in one theme and a *dark* page in the other. They invert
+between themes. Do not collapse them.
+
+Note that red no longer uniquely means "live" now that the whole brand is red —
+the live signal leans on its pulse animation and the word "Live", which the site
+required anyway, because colour is never the only signal here.
+
+`--team-instinct` is likewise darkened via `color-mix` before use as text.
 
 ## The accessibility floor
 

@@ -90,7 +90,7 @@
   --pin-color: var(--poi-powerspot);
 }
 .pin--photo {
-  --pin-color: var(--navy-700);
+  --pin-color: var(--ink-700);
 }
 .pin--photo .pin-head {
   fill: rgb(255 255 255 / 0.9);
@@ -211,7 +211,7 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: var(--navy-800);
+  background: var(--accent-solid);
   color: #fff;
   font-weight: 700;
   font-size: 0.85rem;
@@ -304,7 +304,9 @@
   color: #4a2c00;
 }
 .popup-badge--meetup {
-  background: var(--navy-800);
+  /* Inherits `color: #fff` from `.popup-badge`, so it needs the surface token
+     rather than `--accent`, which is a light red in dark mode. */
+  background: var(--accent-solid);
 }
 
 .popup-title {

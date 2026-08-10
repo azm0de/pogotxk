@@ -85,7 +85,7 @@
   font-size: 0.86rem;
 }
 .live-toast--ok {
-  background: var(--navy-800);
+  background: var(--accent-solid);
   color: #fff;
 }
 .live-toast--err {
@@ -282,7 +282,7 @@
   --flare-color: var(--poi-pokestop);
 }
 .flare--help {
-  --flare-color: var(--navy-600);
+  --flare-color: var(--ink-600);
 }
 
 .flare-head {

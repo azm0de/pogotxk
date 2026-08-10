@@ -1,11 +1,25 @@
 ---
 tags: [planning]
-updated: 2026-08-05
+updated: 2026-08-10
 ---
 
 # Backlog
 
 Everything in the original plan is built. This is what is left, roughly by value.
+
+## Left in the working tree on purpose
+
+The whole design pass — repaint, logo, hero video, icons, the home page as it now stands — shipped
+on 2026-08-10. These are the only things still uncommitted, and they were **left out
+deliberately** because they are Justin's rather than the agent's:
+
+- The **`.gitignore` edit** and the untracked **`.github/`**. That ignore rule is
+  `.github\instructions\codacy.instructions.md` — backslashes, which gitignore does not match, so
+  the file it is trying to exclude would be committed anyway. Change it to forward slashes before
+  committing either
+- **`public/art/go.webp`**, **`pogoeve.png`** and **`Pokemon_Go.svg.webp`** — untracked and
+  referenced by no code. The last is the Pokémon GO wordmark used as the reference for generating
+  our own logo; committing it would serve a trademarked logo from `/art/` for no reason
 
 ## Blocked on the owner
 
@@ -33,6 +47,10 @@ matter of finding the right menu.
       the database. See [[Auth and Roles]]
 - [ ] **A second admin.** Right now the site has exactly one, promoted by hand. If Nick is
       going to be an ambassador on the site as well, do it in the same sitting
+- [ ] **Tell Nick his GO Fest photo is now the landing banner**, and ask whether he has a frame
+      without the refuse bin in it. His photo, his byline, and the crop currently loses two
+      members at the right edge — a wider or different frame would let everyone back in. See
+      [[Design System]] for why the bin was not retouched out
 
 - [x] ~~`DISCORD_GUILD_ID` + `DISCORD_BOOTSTRAP_ADMIN_ID`~~ — set 2026-08-06. Neither needed
       admin: Developer Mode plus right-click → Copy ID. The membership check is now **on**,
@@ -137,6 +155,14 @@ matter of finding the right menu.
       or restore the birds — but it should not stay as an accident
 - [ ] **Only the home page and `/about` carry artwork.** `/gallery`, `/live` and `/events` are
       the remaining candidates with room
+- [x] ~~The palette was inherited navy and cream~~ — repainted red/white/black as a Poké Ball.
+      The obvious Pokémon reds all fail AA on white and every red now sits at hue 353–354°;
+      see [[Design System]] before touching any of it
+- [x] ~~The home page opened on a headline, not on the community~~ — the GO Fest group photo is
+      now the banner, art-directed for wide and narrow
+- [ ] **Ask Nick for a GO Fest frame without the refuse bin.** The banner crop currently loses
+      two members at the right edge because the bin could not be retouched out without inventing
+      their legs — [[Design System]] has the full reasoning
 - [ ] **The hero and the section headings are still system-ui at every level.** Typography is
       the largest remaining templated default on the site; a display face would change more than
       any new section. Needs self-hosting — no third-party font CDN

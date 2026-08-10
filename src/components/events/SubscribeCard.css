@@ -64,7 +64,7 @@
   width: 42px;
   height: 42px;
   border-radius: var(--radius-sm);
-  background: var(--navy-800);
+  background: var(--accent-solid);
   color: #fff;
 }
 

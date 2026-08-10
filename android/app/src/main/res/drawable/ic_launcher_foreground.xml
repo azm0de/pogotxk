@@ -4,6 +4,6 @@
     <!-- Map pin, matching the website's favicon. -->
     <path android:fillColor="#F2A33C"
         android:pathData="M54,30a13,13 0 0,0 -13,13c0,9.75 13,25 13,25s13,-15.25 13,-25a13,13 0 0,0 -13,-13z" />
-    <path android:fillColor="#123254"
+    <path android:fillColor="#c8071c"
         android:pathData="M54,37m-6,0a6,6 0 1,0 12,0a6,6 0 1,0 -12,0" />
 </vector>

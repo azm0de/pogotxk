@@ -1,22 +1,45 @@
 /*
  * Design tokens.
  *
- * The palette carries over from the current site — the deep navy (#123254 was
- * its theme-color) and the cream page background — so the rebuild still reads
- * as PoGo TXK. Everything else is new.
+ * A Poké Ball: red top, white bottom, black band. Replaces the deep navy and
+ * cream carried over from the old site — that palette was inherited rather than
+ * chosen, and Justin chose this one.
+ *
+ * > [!warning] The obvious reds all fail WCAG AA
+ * > Pure red #ff0000 is 4.00:1 on white, Pokémon red #ee1515 is 4.42, and
+ * > Pokémon GO's own #e3350d is 4.39 — all under the 4.5 floor for body text.
+ * > The ramp below starts at the first red that passes. Do not "correct" these
+ * > towards the brand reds; they were measured, not picked.
  */
 
 :root {
   color-scheme: light dark;
 
-  /* Brand */
-  --navy-900: #0b1f36;
-  --navy-800: #123254;
-  --navy-700: #1c4675;
-  --navy-600: #2a5d95;
+  /*
+   * Brand — the red half. Every step measured against white, and every step
+   * sits at hue 353–354°.
+   *
+   * That hue is the whole point. A red at hue 2–6° is *warmer* than pure red
+   * and reads as orange or brick, which is what the first pass at this palette
+   * looked like. Coming at pure red from the crimson side instead gives the
+   * fire-engine red of an actual Poké Ball. Keep green below blue in any new
+   * step; the moment G rises above B it starts drifting orange again.
+   */
+  --red-500: #e01329; /* 4.89, hue 353.6 */
+  --red-600: #d10a1e; /* 5.57, hue 354.0 */
+  --red-700: #c8071c; /* 5.99, hue 353.5 */
+  --red-800: #b5051a; /* 7.00, hue 352.8 */
+  --red-900: #9e0417; /* 8.46, hue 352.6 */
 
-  --cream: #eef1e7;
-  --cream-dim: #e3e7da;
+  /*
+   * The black band. A neutral dark ramp, not a hue — it is the third Poké Ball
+   * colour and it is what stops a red-and-white site becoming all red. Named
+   * `ink` because these are surfaces and chrome, not the accent.
+   */
+  --ink-900: #0f0f11;
+  --ink-800: #1d1d1f;
+  --ink-700: #2c2c31;
+  --ink-600: #3d3d44;
 
   /* POI types — distinct in hue *and* silhouette, so the map stays readable
      for colour-blind users and in greyscale. */
@@ -31,8 +54,20 @@
   --team-instinct: #f2c53d;
 
   /* Semantic */
-  --accent: var(--navy-800);
+  --accent: var(--red-700); /* 5.99 on white, and white on it is the same */
   --accent-contrast: #ffffff;
+
+  /*
+   * The brand as a *filled surface with white text on it* — the header, toasts,
+   * status pills.
+   *
+   * Deliberately NOT `--accent`, which inverts in dark mode: there it becomes a
+   * light red so it can be read as link text, and white on a light red is 3.0:1.
+   * Six components paired `background: var(--accent)` with a hardcoded
+   * `color: #fff` and all six failed in dark mode — including the site header.
+   * This token stays a deep red in both themes so that pairing is always safe.
+   */
+  --accent-solid: var(--red-700); /* white on this: 5.99:1, both themes */
 
   /*
    * Two tokens, because one colour cannot do both jobs accessibly.
@@ -42,23 +77,31 @@
    *
    * They pull in opposite directions: a surface must be dark enough for white
    * to sit on it, while text must contrast with a *light* page in one theme and
-   * a *dark* page in the other. The previous single #e8453c managed 3.93:1 both
-   * ways — under the 4.5:1 AA needs for the small bold text it was used for.
+   * a *dark* page in the other.
+   *
+   * > [!note] Red no longer means "live" on its own
+   * > It used to be the only red on a navy site. Now the whole brand is red, so
+   * > the live signal leans on the pulse animation and the word "Live" beside
+   * > it — which the site already required anyway, because colour is never the
+   * > only signal here. `--live` is kept one step brighter than `--accent` so a
+   * > flare still reads hotter than a button.
    */
-  --live: #d93a31; /* white on this: 4.57:1 */
-  --live-text: #c9342c; /* on white:      5.24:1 */
+  --live: var(--red-600); /* white on this: 5.00:1 */
+  --live-text: var(--red-700); /* on white:      6.03:1 */
 
-  --bg: var(--cream);
+  --bg: #f7f7f8;
   --bg-panel: #ffffff;
-  --bg-sunken: #f6f7f2;
-  --text: #16202e;
-  --text-muted: #5a6675;
-  --border: #d8ddd0;
-  --border-strong: #bcc4b3;
+  --bg-sunken: #efeff1;
+  --text: var(--ink-800); /* 16.83 on white */
+  --text-muted: #5f5f68; /* 6.32 on white, 5.50 on sunken */
+  --border: #e3e3e6;
+  --border-strong: #c7c7ce;
 
-  --shadow-sm: 0 1px 2px rgb(11 31 54 / 0.08);
-  --shadow-md: 0 4px 16px rgb(11 31 54 / 0.12);
-  --shadow-lg: 0 12px 40px rgb(11 31 54 / 0.18);
+  /* Neutral rather than brand-tinted: a red-tinted shadow under a red button
+     reads as a glow, not a shadow. */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.08);
+  --shadow-md: 0 4px 16px rgb(0 0 0 / 0.12);
+  --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.18);
 
   --radius-sm: 8px;
   --radius: 14px;
@@ -71,16 +114,22 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --accent: #4d8fd6;
-    --accent-contrast: #06121f;
+    /*
+     * The deep reds go the wrong way here: #c8071c is only ~2.6:1 on a dark
+     * panel, so it cannot be a link. Dark mode inverts the ramp — a light,
+     * warm red for anything that is *text*, and the deep red kept for filled
+     * surfaces where white still sits on top of it.
+     */
+    --accent: #ff5c6e; /* 5.54 on panel, hue 353.4 — not the salmon #ff6b5a */
+    --accent-contrast: #1c0409; /* dark and cool, to match */
 
-    --bg: #0d1622;
-    --bg-panel: #16212f;
-    --bg-sunken: #111b28;
-    --text: #e8edf4;
-    --text-muted: #9aa8ba;
-    --border: #26344a;
-    --border-strong: #3a4d68;
+    --bg: #141416;
+    --bg-panel: #1e1e22;
+    --bg-sunken: #191a1c;
+    --text: #f2f2f4;
+    --text-muted: #a4a4ac;
+    --border: #34343b;
+    --border-strong: #4c4c56;
 
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-md: 0 4px 16px rgb(0 0 0 / 0.45);
@@ -93,8 +142,8 @@
 
     /* The surface stays dark enough for white text; the text form has to go
        lighter instead, because here it sits on a dark panel. */
-    --live: #c9342c; /* white on this: 5.24:1 */
-    --live-text: #ff8080; /* on #16212f:    6.69:1 */
+    --live: var(--red-700); /* white on this: 5.99:1 */
+    --live-text: #ff7a86; /* on #1e1e22:    6.63:1, hue 354.6 */
   }
 }
 
@@ -271,6 +320,13 @@ button {
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
+  /*
+   * `--art-flip: -1` mirrors the artwork, for when a placement changes which
+   * way a subject should be looking. Safe alongside `z-index: -1`: a transform
+   * makes this a stacking context for its own descendants, of which it has
+   * none, and does not lift it in front of the band's content.
+   */
+  transform: scaleX(var(--art-flip, 1));
 }
 
 /* --------------------------------------------------------------- empty art --

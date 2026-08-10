@@ -162,7 +162,7 @@
   max-width: min(90%, 520px);
 }
 .editor-toast--ok {
-  background: var(--navy-800);
+  background: var(--accent-solid);
   color: #fff;
 }
 .editor-toast--err {

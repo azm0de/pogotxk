@@ -142,7 +142,7 @@ class BubbleService : Service() {
             gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#123254"))
+                setColor(Color.parseColor("#c8071c"))
                 setStroke(dp(2), Color.parseColor("#F2A33C"))
             }
             val size = dp(56)
@@ -241,7 +241,7 @@ class BubbleService : Service() {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             background = GradientDrawable().apply {
                 cornerRadius = dp(28).toFloat()
-                setColor(Color.parseColor("#F2123254".replace("F2", "EE")))
+                setColor(Color.parseColor("#F2c8071c".replace("F2", "EE")))
             }
             // Sits to the right of the bubble.
             layoutParams = FrameLayout.LayoutParams(

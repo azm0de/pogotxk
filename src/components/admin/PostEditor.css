@@ -67,7 +67,7 @@
   color: #fff;
 }
 .posts-toast--ok {
-  background: var(--navy-800);
+  background: var(--accent);
 }
 .posts-toast--err {
   background: var(--live);
@@ -469,7 +469,7 @@
   text-transform: uppercase;
 }
 .post-state--live {
-  background: var(--navy-800);
+  background: var(--accent-solid);
   color: #fff;
 }
 .post-state--scheduled {

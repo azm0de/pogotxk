@@ -45,7 +45,7 @@
   font-size: 0.86rem;
 }
 .meetups-toast--ok {
-  background: var(--navy-800);
+  background: var(--accent-solid);
   color: #fff;
 }
 .meetups-toast--err {
@@ -205,7 +205,7 @@
   color: var(--text-muted);
 }
 .meetup-status--published {
-  background: var(--navy-800);
+  background: var(--accent-solid);
   color: #fff;
 }
 .meetup-status--cancelled {

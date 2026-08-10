@@ -163,7 +163,7 @@ export async function announceToDiscord(
             title: announcement.title,
             description: announcement.description,
             url: announcement.url,
-            color: 0x123254,
+            color: 0xc8071c,
             image: announcement.imageUrl ? { url: announcement.imageUrl } : undefined,
             timestamp: new Date().toISOString(),
           },

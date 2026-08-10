@@ -71,15 +71,23 @@
   color: var(--text-muted);
 }
 
+/*
+ * Both of these carry white text, so both need a surface that stays dark in
+ * *both* themes. `--accent` and `--poi-powerspot` each lighten in dark mode —
+ * they exist to be read as text or as map markers on a dark basemap — and white
+ * on the lightened values measured 3.0 and 3.18, under AA.
+ */
 .event-badge--meetup {
-  background: var(--navy-800);
-  border-color: var(--navy-800);
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
   color: #fff;
 }
 
 .event-badge--global {
-  background: var(--poi-powerspot);
-  border-color: var(--poi-powerspot);
+  /* The light-theme purple, pinned so it does not lift in dark: 4.87 with
+     white on it, against 3.18 for the dark-mode `--poi-powerspot`. */
+  background: #8257d9;
+  border-color: #8257d9;
   color: #fff;
 }
 
@@ -196,4 +204,58 @@
 }
 .event-action:hover {
   filter: brightness(1.08);
+}
+
+/*
+ * The whole card is the link.
+ *
+ * Stretched from `.event-action` with a pseudo-element rather than wrapping the
+ * card in an `<a>`. Wrapping would put the location link — which points at our
+ * own map, somewhere else entirely — inside another anchor, which is invalid
+ * and gives screen readers two overlapping targets. This way there is still
+ * exactly one link per card, and it already names the event through its
+ * `sr-only` span, so "Details" does not read as an anonymous button.
+ *
+ * For a Pokémon GO event that destination is the Leek Duck page the data came
+ * from; for a meetup it is its Campfire page, when it has one. A card with
+ * neither never gets the modifier class and stays inert.
+ */
+.event-card--linked {
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.event-card--linked:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+.event-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.event-card--linked:hover .event-title-link {
+  text-decoration: underline;
+}
+.event-title-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+/* Both sit above the overlay. `.event-where` because it is a different
+   destination — our own map — and would otherwise be swallowed, sending every
+   "where" link to Leek Duck. `.event-actions` because on /events it is still
+   visible, and a button you can see should be the thing you press. */
+.event-where a,
+.event-actions a {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-card--linked {
+    transition: none;
+  }
 }

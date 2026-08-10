@@ -1,5 +1,7 @@
 ---
 import '~/styles/global.css';
+import SocialIcon from '~/components/SocialIcon.astro';
+import { SOCIALS } from '~/lib/socials';
 
 interface Props {
   title: string;
@@ -60,7 +62,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <meta name="theme-color" content="#123254" />
+    <meta name="theme-color" content="#c8071c" />
 
     <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content="PoGo TXK" />
@@ -86,14 +88,100 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
 
     <header class="site-header">
       <a class="brand" href="/">
-        <span class="brand-mark" aria-hidden="true">TXK</span>
-        <span class="brand-copy">
-          <strong>PoGo TXK</strong>
-          <span>Pokémon GO Texarkana</span>
-        </span>
+        {/*
+          The stacked mark, TEXARKANA under the GO as usual. The wide 2.74:1
+          lockup is still built at /art/logo-txk-wide.webp if this reads too
+          small — inside a fixed 60px header the stacking costs real legibility,
+          because the three tiers have to share the height the wide one spends
+          on two.
+
+          `alt` carries the full name because this image *is* the site's name —
+          it replaced the text that used to say it.
+        */}
+        <img
+          class="brand-logo"
+          src="/art/logo-txk-classic.webp"
+          width="850"
+          height="793"
+          alt="PoGo TXK — Pokémon GO Texarkana"
+        />
       </a>
 
-      <nav aria-label="Primary">
+      {/*
+        The same four links as the home page's "Find us", from the same source —
+        see `~/lib/socials`. Marks only: there is no room for labels beside eight
+        nav items, and these are four icons a member already recognises.
+
+        They sit with the brand rather than after the nav, so the left of the
+        header is "who we are and where to find us" and the right stays purely
+        navigation.
+
+        `aria-label` goes on the link and the mark stays decorative. Naming both
+        would have a screen reader announce "Discord Discord" — the exact trap
+        SocialIcon's `decorative` prop documents.
+      */}
+      <ul class="header-socials">
+        {
+          SOCIALS.map((social) => (
+            <li>
+              <a
+                href={social.href}
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label={`${social.label} (opens in a new tab)`}
+              >
+                <SocialIcon name={social.name} size={24} />
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+
+      {/*
+        A Poké Ball rather than three lines. It only exists below 820px, where
+        the nav collapses into a panel.
+
+        Sits before the nav in source order deliberately: with the panel closed
+        the links are `display: none` and out of the tab order entirely, and
+        with it open Tab moves straight from the button into them. That is the
+        whole focus management this needs — no trapping, no moving focus on
+        open, nothing to get wrong.
+      */}
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="primary-nav"
+        aria-label="Open menu"
+      >
+        <svg
+          class="pokeball"
+          viewBox="0 0 40 40"
+          width="30"
+          height="30"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <circle cx="20" cy="20" r="17" fill="#fff" />
+          {/* Upper half only: sweep-flag 1 from the leftmost point runs over the
+              top. Brighter than the header's own #c8071c so the two reds are
+              not mistaken for one another. */}
+          <path d="M3 20a17 17 0 0 1 34 0Z" fill="#ff2f3d" />
+          {/* Weights are set for 30px, not for the 4x view where they were
+              drawn. At 4/3/3 the black swallowed most of a 25px ball and it
+              read as a dark disc. */}
+          <path d="M3 20h34" stroke="#0f0f11" stroke-width="3.2" />
+          {/* The outer ring is WHITE, not black. On a red header a red-topped
+              ball with a dark outline loses its own silhouette — the top half
+              sinks into the background and what is left reads as a dark ring
+              with a white dot in it. White draws the edge the background
+              cannot. */}
+          <circle cx="20" cy="20" r="17" fill="none" stroke="#fff" stroke-width="2.6" />
+          <circle cx="20" cy="20" r="5.8" fill="#fff" stroke="#0f0f11" stroke-width="2.4" />
+        </svg>
+      </button>
+
+      <nav id="primary-nav" aria-label="Primary">
         <ul>
           {
             nav.map((item) => (
@@ -110,12 +198,17 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           }
         </ul>
       </nav>
+
     </header>
 
     <script is:inline>
       // Bring the current page's nav chip into view when the row is scrollable,
       // so /gallery does not open with its own tab off the right edge.
       // `instant` because a visible scroll animation on load reads as a glitch.
+      //
+      // Below 820px the row is a hidden column instead, where both measurements
+      // are 0 and the condition is simply false — so this needs no breakpoint of
+      // its own.
       (() => {
         const current = document.querySelector('.site-header nav a[aria-current="page"]');
         if (!current) return;
@@ -123,6 +216,47 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         if (row && row.scrollWidth > row.clientWidth) {
           current.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'instant' });
         }
+      })();
+
+      // The Poké Ball menu.
+      (() => {
+        const btn = document.querySelector('.nav-toggle');
+        const nav = document.getElementById('primary-nav');
+        if (!btn || !nav) return;
+
+        const isOpen = () => btn.getAttribute('aria-expanded') === 'true';
+        const setOpen = (open) => {
+          btn.setAttribute('aria-expanded', String(open));
+          // The label is the button's whole accessible name, so it has to say
+          // what the next press does, not what the icon is.
+          btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+          nav.toggleAttribute('data-open', open);
+        };
+
+        btn.addEventListener('click', () => setOpen(!isOpen()));
+
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && isOpen()) {
+            setOpen(false);
+            btn.focus();
+          }
+        });
+
+        // Tapping the page behind it should close it. The button's own click is
+        // already handled above; letting it fall through here would toggle twice
+        // and the menu would never open.
+        document.addEventListener('click', (e) => {
+          if (!isOpen()) return;
+          if (btn.contains(e.target) || nav.contains(e.target)) return;
+          setOpen(false);
+        });
+
+        // Above the breakpoint the panel rules stop applying and the row is
+        // visible regardless. Without this, `data-open` would survive the
+        // resize and the menu would spring open again on the way back down.
+        window
+          .matchMedia('(min-width: 821px)')
+          .addEventListener('change', (e) => e.matches && setOpen(false));
       })();
     </script>
 
@@ -192,8 +326,18 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         gap: 16px;
         height: var(--header-h);
         padding: 0 clamp(12px, 3vw, 24px);
-        background: var(--navy-800);
+        background: var(--accent-solid);
         color: #fff;
+        /*
+         * The Poké Ball's band. Red above, white below, and this is the line
+         * between them — solid black and deliberately thick, because on the ball
+         * it is the heaviest part of the design, not a hairline.
+         *
+         * Safe to add height here: `--header-h` is only ever used to set these
+         * two headers' own height. Nothing offsets content by it, so the extra
+         * 4px cannot desynchronise a sticky or scroll-margin calculation.
+         */
+        border-bottom: 4px solid var(--ink-900);
         position: sticky;
         top: 0;
         z-index: 900;
@@ -206,28 +350,17 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         color: inherit;
         text-decoration: none;
       }
-      .brand-mark {
-        display: grid;
-        place-items: center;
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
-        background: rgb(255 255 255 / 0.14);
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.04em;
-      }
-      .brand-copy {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.15;
-      }
-      .brand-copy strong {
-        font-size: 0.98rem;
-      }
-      .brand-copy span {
-        font-size: 0.72rem;
-        opacity: 0.75;
+      /* Sized by height, never width — the header is a fixed 60px and the logo
+         has to sit inside it with air above and below. `width: auto` lets the
+         intrinsic ratio decide the rest.
+
+         48px, not the 40px the wide lockup used: the stacked mark spends its
+         height on three tiers instead of two, so it needs every pixel the
+         56px content box will give it. */
+      .brand-logo {
+        display: block;
+        height: 48px;
+        width: auto;
       }
 
       /*
@@ -243,6 +376,86 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       .site-header nav {
         min-width: 0;
         position: relative;
+        /* The nav and the social marks travel together on the right, with the
+           brand holding the left. Without this, `space-between` distributes
+           three children evenly and strands the nav mid-header. */
+        margin-left: auto;
+      }
+
+      .header-socials {
+        list-style: none;
+        margin: 0;
+        padding: 0 0 0 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        /* Same reasoning as `.brand`: the nav absorbs every bit of flex by
+           scrolling, so these keep their natural width or are hidden outright. */
+        flex: 0 0 auto;
+        /* A hairline, not just a gap — it separates the marks from the logo
+           without reading as a second brand element. */
+        border-left: 1px solid rgb(255 255 255 / 0.22);
+        /* The header's own 16px gap plus this padding would set them adrift from
+           the brand they belong to; a negative start pulls the rule in close. */
+        margin-left: -3px;
+      }
+      .header-socials a {
+        display: block;
+        line-height: 0;
+        border-radius: 7px;
+        opacity: 0.92;
+        transition:
+          transform 0.16s ease,
+          opacity 0.16s ease;
+      }
+      .header-socials a:hover {
+        opacity: 1;
+        transform: translateY(-1px) scale(1.06);
+      }
+      .header-socials a:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+      }
+      .header-socials svg {
+        display: block;
+        border-radius: 6px;
+      }
+
+      /* Hidden until the panel breakpoint takes over below. 44px because it is
+         the only way to reach anything on a phone — the icon itself is 30. */
+      .nav-toggle {
+        display: none;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
+      .nav-toggle:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+      }
+      .nav-toggle .pokeball {
+        display: block;
+        /* Global reduced-motion already flattens these to 0.01ms. */
+        transition: transform 0.2s ease;
+      }
+      /* The centre button lights up when the menu is open, rather than the ball
+         rotating. A Poké Ball turned 180° just puts the red half underneath,
+         which reads as an upside-down ball rather than as an open menu; a lit
+         button reads as "active" and leaves the mark the right way up. */
+      .nav-toggle .pokeball circle:last-of-type {
+        transition: fill 0.2s ease;
+      }
+      .nav-toggle[aria-expanded='true'] .pokeball {
+        transform: scale(1.06);
+      }
+      .nav-toggle[aria-expanded='true'] .pokeball circle:last-of-type {
+        fill: #ffe14d;
       }
 
       nav ul {
@@ -293,24 +506,15 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         }
       }
 
-      /* The brand never wraps. At 580–700px it was folding onto three lines and
-         spilling out of the fixed 60px header. */
-      /* `0 0 auto`, not `0 1 auto`. Allowed to shrink, the brand gave up six
-         pixels and rendered "PoGo …" — truncated just enough to look like a
-         bug, not enough to save room. The nav absorbs every bit of flex by
-         scrolling, so the brand keeps its natural width and is hidden outright
-         at the breakpoints below when there is genuinely no space. */
+      /* `0 0 auto`, not `0 1 auto`. Allowed to shrink, the brand used to give up
+         six pixels and render "PoGo …" — truncated just enough to look like a
+         bug, not enough to save room. It is an image now, but the reasoning
+         holds: a squeezed logo is worse than a smaller one, so the brand keeps
+         its natural width and the nav absorbs every bit of flex by scrolling.
+         The breakpoint below steps the height down rather than letting flex
+         distort it. */
       .brand {
         flex: 0 0 auto;
-      }
-      .brand-copy {
-        min-width: 0;
-      }
-      .brand-copy strong,
-      .brand-copy span {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
       nav a {
         display: block;
@@ -326,19 +530,30 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         background: rgb(255 255 255 / 0.1);
         color: #fff;
       }
+      /* `--accent-solid`, not `--accent`: this is dark text on a white chip, and
+         in dark mode `--accent` is the *light* red meant for the opposite job —
+         it measured 3.0:1 here. */
       nav a[aria-current='page'] {
         background: #fff;
-        color: var(--navy-800);
+        color: var(--accent-solid);
       }
-      /* The quick-action screen is the point of the whole site on a phone;
-         it earns a bit of visual weight in the nav. */
+      /*
+       * The quick-action screen is the point of the whole site on a phone; it
+       * earns a bit of visual weight in the nav.
+       *
+       * Black — the Poké Ball's band — rather than the orange it used to be.
+       * White on `--poi-gym` measured 3.18:1, under AA, and orange on a red bar
+       * was muddy besides. It also has to stay distinct from `[aria-current]`,
+       * which is a *white* chip: if Go were white too it would look permanently
+       * selected.
+       */
       nav a.nav-highlight {
-        background: var(--poi-gym);
+        background: var(--ink-900);
         color: #fff;
       }
       nav a.nav-highlight[aria-current='page'] {
         background: #fff;
-        color: var(--navy-800);
+        color: var(--accent-solid);
       }
 
       .site-footer {
@@ -356,20 +571,79 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         text-align: center;
       }
 
-      /* Dropped well before the old 560px: the tagline was still competing with
-         the nav for room through the whole 560–820px band, which is where the
-         brand used to wrap. Below this the mark plus "PoGo TXK" is enough. */
-      @media (max-width: 820px) {
-        .brand-copy span {
+      /* The logo is one indivisible image, so the old two-stage degrade (drop
+         the tagline at 820px, then the wordmark at 430px) has nothing to drop.
+         It steps down in height instead — still legible, and it hands ~30px
+         back to the seven nav items it is competing with. */
+      @media (max-width: 430px) {
+        .brand-logo {
+          height: 42px;
+        }
+      }
+
+      /* The marks are a desktop affordance and nothing more. They cost roughly
+         135px, and a squeezed nav does not overflow the header — it just scrolls
+         — so keeping them on a phone would quietly shrink the primary navigation
+         to pay for a secondary one. The home page's "Find us" carries the same
+         four links, from the same source, so nothing is lost by dropping them. */
+      @media (max-width: 1024px) {
+        .header-socials {
           display: none;
         }
       }
 
-      /* Under ~430px even the wordmark is losing the argument with seven nav
-         items; the TXK mark alone still identifies the site and links home. */
-      @media (max-width: 430px) {
-        .brand-copy {
+      /*
+       * Below 820px the nav stops being a scrolling row and becomes a panel
+       * behind the Poké Ball.
+       *
+       * 820 rather than the ~590 where the row actually starts to overflow:
+       * that is where the rest of the page already goes single-column, and a
+       * header that reflows on a different boundary from the content under it
+       * reads as a bug. It also means the row is never cramped — it is replaced
+       * before it has to scroll at all.
+       *
+       * The panel is positioned against `.site-header`, which is `sticky` and
+       * therefore already a containing block. It inherits the header's
+       * `z-index: 900`, so it covers the map on the full-bleed pages too.
+       */
+      @media (max-width: 820px) {
+        .nav-toggle {
+          display: grid;
+          margin-left: auto;
+        }
+
+        .site-header nav {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          /* It is out of flow now, so the auto margin that kept the row right
+             would do nothing but confuse the next reader. */
+          margin-left: 0;
+          background: var(--accent-solid);
+          border-bottom: 4px solid var(--ink-900);
+          box-shadow: 0 12px 24px -12px rgb(0 0 0 / 0.55);
           display: none;
+        }
+        .site-header nav[data-open] {
+          display: block;
+        }
+
+        .site-header nav ul {
+          flex-direction: column;
+          align-items: stretch;
+          /* The row's horizontal scroll has nothing to do here, and leaving it
+             on clips the chips' focus rings. */
+          overflow: visible;
+          gap: 2px;
+          padding: 8px clamp(12px, 3vw, 24px) 14px;
+        }
+        .site-header nav li {
+          width: 100%;
+        }
+        nav a {
+          padding: 11px 14px;
+          font-size: 0.95rem;
         }
       }
     </style>

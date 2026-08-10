@@ -1,6 +1,6 @@
 ---
 tags: [history, quality]
-updated: 2026-08-05
+updated: 2026-08-10
 ---
 
 # Bugs Worth Remembering
@@ -190,6 +190,44 @@ wrapper elements. Nothing was wrong with the page.
 
 > The tree is also viewport-limited — it lists only what is on screen, which is why the probes
 > reported nothing until they were scrolled into view.
+
+**"The header is still the wrong colour."** It was — but the source was right.
+`sed -i` and `perl -i` **replace** the file rather than writing in place, which
+breaks Vite's file watcher. The dev server carried on serving the CSS from before
+the bulk edit, with no error anywhere. The tell was that an Edit-tool change to
+the *same style block* was live while the `perl` change to the line below it was
+not. Restarting the dev server fixed it instantly.
+
+> Every measurement taken between that bulk edit and the restart was against
+> stale styles. Use the Edit tool for source files; if a bulk edit has already
+> happened, restart before believing anything you measure.
+
+**An invisible link, shipped to production.** The landmark rail's trailing tile — "See all 104 on
+the map" — rendered **white on the page background**. `.place-rail li > a { color: #fff }` is two
+classes and beats `.place-more > a { color: var(--accent) }` at one, so the photo tiles' white
+label colour won a rule it was never meant to reach.
+
+It went out with the rail and nobody saw it, because that tile sits at the far end of a
+horizontally scrolling row — every screenshot I took stopped before it. What found it was
+auditing *computed* contrast on the rendered page rather than reading the stylesheet. Fixed with
+`li:not(.place-more)`.
+
+> Specificity bugs do not look like bugs in the source. Both rules read correctly on their own;
+> only the cascade between them is wrong. Measure the rendered result.
+
+**A token that inverts, used as a surface.** `--accent` is a deep red in light
+mode and a *light* red in dark mode, because in dark mode it has to be readable
+as link text. Ten components paired `background: var(--accent)` with a hardcoded
+`color: #fff`, which is 3.0:1 in dark mode. The site header was one of them, and
+it had been wrong since long before the repaint — the old dark accent was a light
+blue at ~2.6:1.
+
+Fixed by adding `--accent-solid`, which stays deep in both themes. The same trap
+applies to every POI colour: they lift in dark mode for the basemap, so
+`--poi-powerspot` behind white text measured 3.18:1.
+
+> A colour token that changes between themes cannot be used for both text and
+> filled surfaces. Two tokens, or the pairing silently fails in one theme.
 
 **"72 community photographs."** 72 is the *total*; only 9 are of people. The other 63 are
 photographs of the locations. Reported to Justin the wrong way round, and it would have built the

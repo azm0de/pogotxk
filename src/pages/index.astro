@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import Base from '~/layouts/Base.astro';
 import MapPreview from '~/components/map/MapPreview';
 import SocialIcon from '~/components/SocialIcon.astro';
+import { SOCIALS } from '~/lib/socials';
 import EventCard from '~/components/events/EventCard.astro';
 import {
   listPublicMeetups,
@@ -146,49 +147,63 @@ function homeWhen(event: CalendarEvent): string {
     : `${dayFmt.format(start)} – ${dayFmt.format(end)}`;
 }
 
-const socials = [
-  {
-    href: 'https://discord.com/invite/2sYR5YdRpH',
-    label: 'Discord',
-    hint: 'Raids, chat, meetups',
-    cls: 'discord',
-    icon: 'discord',
-  },
-  {
-    href: 'https://campfire.onelink.me/eBr8?af_dp=campfire%3A%2F%2F&af_force_deeplink=true&deep_link_sub1=cj1jbHVicyZjPTI4Y2Y0NDJjLTg2M2UtNDcwZS1iYmQwLTQwNjdhNDcxMDJjYyZpPXRydWU%3D',
-    label: 'Campfire',
-    hint: 'Check in at meetups',
-    cls: 'campfire',
-    icon: 'campfire',
-  },
-  {
-    href: 'https://www.facebook.com/groups/1792291964630166/',
-    label: 'Facebook',
-    hint: 'Community group',
-    cls: 'facebook',
-    icon: 'facebook',
-  },
-  {
-    href: 'https://www.instagram.com/pogotxk',
-    label: 'Instagram',
-    hint: '@pogotxk',
-    cls: 'instagram',
-    icon: 'instagram',
-  },
-] as const;
 ---
 
 <Base title="PoGo TXK">
+
   {/*
     A full-width band around the hero purely so the artwork has an edge to run
     off. The hero itself is capped at 1100px and centred, so art anchored to it
     would stop at the content box rather than the screen.
   */}
   <div class="hero-band art-band">
+    {/*
+      Leafeon and Espeon, behind the logo and the map.
+      Source was 3440x1440 at 60fps and 25Mbps — 53MB, with an audio track on a
+      background that is muted by definition. Re-encoded to 1600 wide, 30fps and
+      no audio: 656KB, which is 1.2% of what was handed over.
+
+      `data-src`, not `src`, and `preload="none"`: the script below only promotes
+      it above 900px and only when motion is allowed, so a phone on cell data
+      never fetches it at all. Everything is keyed off `data-hero-video`, which
+      goes on the band when the video actually reaches `playing` — so a blocked
+      autoplay, a decode failure or reduced motion all land on exactly the hero
+      that exists today rather than on a dark band over nothing.
+    */}
+    {/*
+      No `poster`. The element is transparent until `playing` fires, so a poster
+      would never actually be seen — but the browser fetches it regardless, which
+      cost every phone 61KB for an image behind an invisible element. The static
+      hero is the loading state.
+    */}
+    <video
+      class="hero-video"
+      data-src="/hero/eevee-forest.mp4"
+      muted
+      loop
+      playsinline
+      preload="none"
+      aria-hidden="true"
+      tabindex="-1"></video>
+    <div class="hero-scrim" aria-hidden="true"></div>
+
     <section class="hero">
     <div class="hero-copy">
-      <p class="eyebrow">Texarkana, Texas &amp; Arkansas</p>
-      <h1>Pokémon GO Texarkana</h1>
+      {/*
+        The logo says the name now, so the h1 holds the image instead of the
+        words. The heading element itself stays — it is this page's only h1 and
+        the document outline hangs off it — which makes `alt` load-bearing: it
+        has to read exactly what the text used to.
+      */}
+      <h1>
+        <img
+          class="hero-logo"
+          src="/art/logo-txk-classic.webp"
+          width="850"
+          height="793"
+          alt="Pokémon GO Texarkana"
+        />
+      </h1>
       <p class="lede">
         A community Campsite at Spring Lake Park, run by trainers from all three teams. Find every
         PokéStop and Gym, catch the next meetup, and raid with people who actually show up.
@@ -255,57 +270,132 @@ const socials = [
   </div>
 
   {/*
-    The stats above say "104 locations". This says which ones, with their faces
-    on. A local recognises three of these instantly, and that recognition is the
-    moment the page stops being a generic fan site.
-
-    A rail rather than a grid because the photographs are overwhelmingly
-    portrait phone shots — eighteen of those in a grid is a wall of vertical
-    crops, and a row that runs off the edge is also the true statement: there
-    are more of these than fit.
+    What is on right now, immediately under the map. The hero says where we are;
+    this says whether anything is happening there today — which is the first
+    thing a returning member wants and the second thing a newcomer does.
+    Community meetups and Pokémon GO events in one list, as /events builds it.
   */}
-  {
-    landmarks.length > 0 && (
-      <section class="section places" aria-labelledby="places-heading">
-        <div class="section-head">
-          <h2 id="places-heading">Places you already know</h2>
-          <a href="/map">All {totalPois} on the map →</a>
-        </div>
+  <div class="onnow-band art-band">
+  <section class="section" aria-labelledby="on-now-heading">
+    <div class="section-head">
+      <h2 id="on-now-heading">
+        {onNow.length > 0 && <span class="on-now-dot" aria-hidden="true" />}
+        Happening now
+      </h2>
+      <a href="/events">Upcoming events →</a>
+    </div>
 
-        <ul class="place-rail">
-          {landmarks.map((place) => (
-            <li>
-              <a href={`/map?poi=${encodeURIComponent(place.slug)}`}>
-                {/* alt="" deliberately: the name is right there as visible
-                    text, and the link takes its accessible name from it.
-                    Real alt text here would read every place twice. */}
-                <img
-                  src={`/media/${place.r2_key}`}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-                <span class="place-label">
-                  <span class="place-type">
-                    <span class={`place-dot place-dot--${place.type}`} aria-hidden="true" />
-                    {place.type === 'gym' ? 'Gym' : 'PokéStop'}
-                  </span>
-                  <strong>{place.name}</strong>
-                </span>
-              </a>
-            </li>
-          ))}
-
-          <li class="place-more">
-            <a href="/map">
-              <span>See all {totalPois} on the map</span>
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    {
+      onNow.length > 0 ? (
+        <>
+          <div class="on-now">
+            {onNow.map((event) => (
+              <EventCard
+                event={event}
+                when={homeWhen(event)}
+                state={happening.live.includes(event) ? 'live' : 'ongoing'}
+                showImage
+              />
+            ))}
+          </div>
+          <p class="on-now-more">
+            <a class="btn btn--outline" href="/events">
+              <span>
+                {moreOnNow > 0
+                  ? `See ${moreOnNow} more and everything upcoming`
+                  : 'See everything upcoming'}
+              </span>
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                 <path
                   fill="currentColor"
                   d="M13.2 5.4 11.8 6.8l4.2 4.2H4v2h12l-4.2 4.2 1.4 1.4 6.6-6.6z"></path>
               </svg>
             </a>
-          </li>
+          </p>
+        </>
+      ) : (
+        <div class="on-now-empty">
+          <p class="empty">
+            Nothing running at this minute. Raid Hours, Community Days and Spotlight Hours all
+            show up here automatically when they start.
+          </p>
+          <a class="btn btn--outline" href="/events">
+            See what is coming up
+          </a>
+        </div>
+      )
+    }
+
+    {/*
+      Licence, not decoration. This page shows Leek Duck's event artwork and raid
+      bosses, and their terms require visible credit to both Leek Duck AND
+      ScrapedDuck on any page using the data. It had been crediting Leek Duck in
+      one line of prose and never naming ScrapedDuck at all — a gap introduced
+      when "Happening now" started rendering their artwork.
+    */}
+    <Attribution />
+  </section>
+  </div>
+
+  {
+    photos.length > 0 && (
+      <section class="section">
+        {/* Four of nine, and until now there was no way to reach the other
+            five from here — the section was the only one on the page with no
+            route onward. */}
+        <div class="section-head">
+          <h2>The community</h2>
+          <a href="/gallery">All photos →</a>
+        </div>
+
+        {/*
+          The GO Fest group shot, in the flow above the tiles rather than behind
+          them. As a background it was never really visible: the tiles are opaque
+          and `auto-fit` collapses them to a single column below ~430px, so no
+          amount of scrim tuning was going to show a photograph they were sitting
+          on top of.
+
+          Its `alt` is back. It was `alt=""` while it was decoration behind a
+          heading that already said what it was; now it is the thing itself.
+
+          Still art-directed — a sixty-person group shot 3.4 times wider than it
+          is tall renders every face about three pixels across on a phone, so
+          narrow screens get the tighter crop centred on the two Ambassador
+          banners. `sizes` is no longer `100vw`: it sits inside the 1100px
+          section now, not across the viewport.
+        */}
+        <figure class="community-shot">
+          <picture>
+            <source
+              media="(min-width: 900px)"
+              srcset="/hero/community-wide-1200.webp 1200w, /hero/community-wide-1600.webp 1600w, /hero/community-wide-2400.webp 2400w"
+              sizes="(min-width: 1140px) 1060px, calc(100vw - 40px)"
+            />
+            <img
+              src="/hero/community-tight-900.webp"
+              srcset="/hero/community-tight-600.webp 600w, /hero/community-tight-900.webp 900w, /hero/community-tight-1200.webp 1200w"
+              sizes="calc(100vw - 40px)"
+              width="1200"
+              height="560"
+              alt="PoGo TXK members gathered at Spring Lake Park for GO Fest 2026, holding two Pokémon GO Community Ambassador banners under a black and a purple canopy."
+              loading="lazy"
+              decoding="async"
+            />
+          </picture>
+        </figure>
+        <ul class="photos">
+          {photos.map((photo) => (
+            <li>
+              <img
+                src={`/media/${photo.r2_key}`}
+                alt={photo.alt ?? 'PoGo TXK community photo'}
+                loading="lazy"
+                width="400"
+                height="300"
+              />
+              {photo.credit && <span>{photo.credit}</span>}
+            </li>
+          ))}
         </ul>
       </section>
     )
@@ -420,100 +510,63 @@ const socials = [
     )
   }
 
+  {/*
+    The places themselves, with their faces on. Sits last because it is the
+    "go and look" note the page ends on, immediately before the ways to reach
+    us — a local recognises three of these instantly, and that recognition is
+    the moment the page stops being a generic fan site.
+
+    A rail rather than a grid because the photographs are overwhelmingly
+    portrait phone shots — eighteen of those in a grid is a wall of vertical
+    crops, and a row that runs off the edge is also the true statement: there
+    are more of these than fit.
+  */}
   {
-    photos.length > 0 && (
-      <section class="section">
-        {/* Four of nine, and until now there was no way to reach the other
-            five from here — the section was the only one on the page with no
-            route onward. */}
+    landmarks.length > 0 && (
+      <section class="section places" aria-labelledby="places-heading">
         <div class="section-head">
-          <h2>The community</h2>
-          <a href="/gallery">All photos →</a>
+          <h2 id="places-heading">Places you already know</h2>
+          <a href="/map">All {totalPois} on the map →</a>
         </div>
-        <ul class="photos">
-          {photos.map((photo) => (
+
+        <ul class="place-rail">
+          {landmarks.map((place) => (
             <li>
-              <img
-                src={`/media/${photo.r2_key}`}
-                alt={photo.alt ?? 'PoGo TXK community photo'}
-                loading="lazy"
-                width="400"
-                height="300"
-              />
-              {photo.credit && <span>{photo.credit}</span>}
+              <a href={`/map?poi=${encodeURIComponent(place.slug)}`}>
+                {/* alt="" deliberately: the name is right there as visible
+                    text, and the link takes its accessible name from it.
+                    Real alt text here would read every place twice. */}
+                <img
+                  src={`/media/${place.r2_key}`}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
+                <span class="place-label">
+                  <span class="place-type">
+                    <span class={`place-dot place-dot--${place.type}`} aria-hidden="true" />
+                    {place.type === 'gym' ? 'Gym' : 'PokéStop'}
+                  </span>
+                  <strong>{place.name}</strong>
+                </span>
+              </a>
             </li>
           ))}
-        </ul>
-      </section>
-    )
-  }
 
-  {/*
-    What is on right now, community and game side by side. Placed directly under
-    the community photos because that is where the page stops being "who we are"
-    and starts being "come do something".
-  */}
-  <div class="onnow-band art-band">
-  <section class="section" aria-labelledby="on-now-heading">
-    <div class="section-head">
-      <h2 id="on-now-heading">
-        {onNow.length > 0 && <span class="on-now-dot" aria-hidden="true" />}
-        Happening now
-      </h2>
-      <a href="/events">Upcoming events →</a>
-    </div>
-
-    {
-      onNow.length > 0 ? (
-        <>
-          <div class="on-now">
-            {onNow.map((event) => (
-              <EventCard
-                event={event}
-                when={homeWhen(event)}
-                state={happening.live.includes(event) ? 'live' : 'ongoing'}
-                showImage
-              />
-            ))}
-          </div>
-          <p class="on-now-more">
-            <a class="btn btn--outline" href="/events">
-              <span>
-                {moreOnNow > 0
-                  ? `See ${moreOnNow} more and everything upcoming`
-                  : 'See everything upcoming'}
-              </span>
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <li class="place-more">
+            <a href="/map">
+              <span>See all {totalPois} on the map</span>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                 <path
                   fill="currentColor"
                   d="M13.2 5.4 11.8 6.8l4.2 4.2H4v2h12l-4.2 4.2 1.4 1.4 6.6-6.6z"></path>
               </svg>
             </a>
-          </p>
-        </>
-      ) : (
-        <div class="on-now-empty">
-          <p class="empty">
-            Nothing running at this minute. Raid Hours, Community Days and Spotlight Hours all
-            show up here automatically when they start.
-          </p>
-          <a class="btn btn--outline" href="/events">
-            See what is coming up
-          </a>
-        </div>
-      )
-    }
-
-    {/*
-      Licence, not decoration. This page shows Leek Duck's event artwork and raid
-      bosses, and their terms require visible credit to both Leek Duck AND
-      ScrapedDuck on any page using the data. It had been crediting Leek Duck in
-      one line of prose and never naming ScrapedDuck at all — a gap introduced
-      when "Happening now" started rendering their artwork.
-    */}
-    <Attribution />
-  </section>
-  </div>
+          </li>
+        </ul>
+      </section>
+    )
+  }
 
   <section class="section">
     <div class="section-head">
@@ -521,21 +574,25 @@ const socials = [
     </div>
     <ul class="socials">
       {
-        socials.map((social) => (
+        SOCIALS.map((social) => (
           <li>
             <a
-              class={`social social--${social.cls}`}
+              class={`social social--${social.name}`}
               href={social.href}
               rel="noopener noreferrer"
               target="_blank"
             >
               <span class="social-mark" aria-hidden="true">
-                <SocialIcon name={social.icon} size={42} />
+                <SocialIcon name={social.name} size={42} />
               </span>
               <span class="social-text">
                 <strong>{social.label}</strong>
                 <span>{social.hint}</span>
               </span>
+              {/* Every one of these opens in a new tab; the arrow is the only
+                  thing on the tile that says so. Decorative, because the link
+                  already has its name from the label. */}
+              <span class="social-go" aria-hidden="true">↗</span>
             </a>
           </li>
         ))
@@ -562,9 +619,118 @@ const socials = [
       </p>
     </section>
   </div>
+
+  <script is:inline>
+    // The hero video. Every screen now, phones included.
+    //
+    // The width gate that used to be here was not about bandwidth so much as
+    // framing: `cover` on a 2.39:1 clip inside a tall phone column keeps about
+    // 18% of the width, and both Pokémon sit outside that. The CSS solves it by
+    // giving the clip its own strip at the top on narrow screens instead of
+    // stretching it over the whole band, so the gate is gone.
+    //
+    // `saveData` stays as the one opt-out. 656KB of decoration is not something
+    // to push at someone who has explicitly asked their browser to spend less.
+    (() => {
+      const band = document.querySelector('.hero-band');
+      const video = band && band.querySelector('.hero-video');
+      if (!video) return;
+
+      const still = matchMedia('(prefers-reduced-motion: reduce)');
+      const thrifty = navigator.connection && navigator.connection.saveData;
+
+      // Set on `playing`, not on load: until frames are actually going up there
+      // is nothing to darken, and the scrim would just be a grey slab.
+      video.addEventListener('playing', () => band.setAttribute('data-hero-video', ''));
+
+      const sync = () => {
+        if (!still.matches && !thrifty) {
+          if (!video.src) video.src = video.dataset.src;
+          // The attribute alone is not always enough for autoplay policy; the
+          // property is what browsers actually check.
+          video.muted = true;
+          // A refused autoplay is a normal outcome, not an error — the static
+          // hero is already the fallback, so there is nothing to handle.
+          video.play().catch(() => {});
+        } else {
+          video.pause();
+          band.removeAttribute('data-hero-video');
+        }
+      };
+
+      sync();
+      still.addEventListener('change', sync);
+    })();
+  </script>
 </Base>
 
 <style>
+  /* --- the community photograph --------------------------------------------
+   *
+   * In the flow above the tiles, not behind them.
+   *
+   * It spent one revision as a background, and the problem there was structural
+   * rather than a matter of tuning: the tiles are opaque, and `auto-fit`
+   * collapses them to a single column below ~430px, so on a phone they covered
+   * the band end to end. No amount of scrim grading shows a photograph that
+   * something is sitting on top of — the only pixels ever visible were the
+   * padding around the grid.
+   *
+   * Gone with that approach: the band wrapper, the absolute positioning, the
+   * three-stage scrim built off `--cb-pad`, and the white-text overrides the
+   * dark scrim needed. The heading is back to ordinary `--text` on the page
+   * background, because there is no longer anything dark behind it.
+   */
+  .community-shot {
+    margin: 0 0 10px;
+    border-radius: var(--radius);
+    /* Clips the drift below, which scales the image past its own box. */
+    overflow: hidden;
+    background: var(--bg-sunken);
+  }
+  .community-shot picture {
+    display: block;
+  }
+  .community-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* Matches the tight crop the `<img>` fallback actually serves, so `cover`
+       is not cropping an already-cropped frame a second time. */
+    aspect-ratio: 1200 / 560;
+    max-height: 300px;
+    object-fit: cover;
+    /* Low, because the people are in the lower two-thirds of the frame. */
+    object-position: center 58%;
+    /* The same slow drift the hero video has, so the page does not read as one
+       moving half and one still one. 1.00 -> 1.04 over 32s, `alternate` so it
+       eases back rather than snapping at the loop. */
+    animation: cb-drift 32s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  @keyframes cb-drift {
+    from {
+      transform: scale(1) translate3d(0, 0, 0);
+    }
+    to {
+      transform: scale(1.04) translate3d(-0.6%, -0.5%, 0);
+    }
+  }
+  /* The `<source>` swaps to the wide crop at exactly this width, so the ratio
+     has to swap with it or `cover` starts eating the group. */
+  @media (min-width: 900px) {
+    .community-shot img {
+      aspect-ratio: 2540 / 740;
+      max-height: 360px;
+      object-position: center 72%;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .community-shot img {
+      animation: none;
+    }
+  }
+
   /* --- hero artwork ---------------------------------------------------------
    * Articuno — Mystic's bird, and the one whose blue sits with the navy brand.
    *
@@ -582,6 +748,10 @@ const socials = [
    * on wider screens instead of being pinned to one breakpoint's arithmetic.
    */
   .hero-band {
+    /* The negative top margin that used to slide this under the community
+       banner is gone with the banner. It is the first thing in `main` now, and
+       a −80px margin there would only have pulled the video up behind an opaque
+       sticky header. */
     --art-src: url('/art/lucario-shiny.webp');
     /* 280x431 trimmed — the narrowest of the three, which is why it gets the
        hero: a tall subject reads from a thin sliver where a round one would
@@ -590,6 +760,206 @@ const socials = [
     --art-right: calc(-1 * clamp(30px, 6vw, 110px));
     --art-bottom: -14px;
     --art-w: clamp(150px, 17vw, 280px);
+
+    /*
+     * The distance the video and its scrim dissolve over at the foot of the
+     * band, and the room made for them to do it in.
+     *
+     * The padding is unconditional rather than sitting under
+     * `[data-hero-video]`. Tying it to the video would move everything below the
+     * hero down the moment playback started — a layout shift a second into the
+     * page load, which is worse than a little extra breathing room on the runs
+     * where the video never plays.
+     *
+     * `--hero-out` stays under the clear space beneath the last content, so the
+     * dissolve never thins the scrim under the stats. Measured, not assumed: at
+     * 5.5vw/88px the margin came out at 8px at 1280, which is a rounding step
+     * from the fade reaching white text on a bright frame. 6.5vw/96px puts it at
+     * 21–26px across 900–1920.
+     */
+    --hero-out: clamp(70px, 8vw, 110px);
+    padding-bottom: clamp(52px, 6.5vw, 96px);
+  }
+
+  /* --- the forest behind the hero -------------------------------------------
+   *
+   * Both layers start invisible and are revealed together by `data-hero-video`.
+   * That attribute is set on `playing`, never on load, so every way this can
+   * fail — autoplay refused, codec missing, reduced motion, narrow screen —
+   * leaves the hero exactly as it is without the video, instead of leaving a
+   * scrim darkening an empty band.
+   *
+   * z-index −2 and −1 put them under the hero's static content while keeping
+   * the scrim over the video. Same trick the `.art-band` pseudo-elements
+   * already use, and it works for the same reason: nothing between here and the
+   * root paints an opaque background.
+   */
+  .hero-video,
+  .hero-scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.7s ease;
+  }
+  .hero-video {
+    z-index: -2;
+    width: 100%;
+    height: 100%;
+    /* `cover` on a 2.39:1 source in a ~1.7:1 band crops the sides, and the two
+       subjects sit at 33% and 76% across — centred keeps the middle 70%, which
+       holds both. Move this and you start cutting one of them off. */
+    object-fit: cover;
+    object-position: center;
+  }
+  .hero-scrim {
+    z-index: -1;
+    /* Heaviest on the left, where the copy is, and lifting toward the map card
+       on the right, which brings its own opaque background. */
+    background: linear-gradient(
+      to right,
+      rgb(6 8 12 / 0.84) 0%,
+      rgb(6 8 12 / 0.72) 46%,
+      rgb(6 8 12 / 0.52) 100%
+    );
+  }
+  .hero-band[data-hero-video] .hero-video,
+  .hero-band[data-hero-video] .hero-scrim {
+    opacity: 1;
+  }
+
+  /* Lucario stands down wherever the video actually runs. Any time it does not
+     play, he is still the hero's artwork. */
+  .hero-band[data-hero-video]::after {
+    display: none;
+  }
+
+  /* --- the same forest, on a phone -----------------------------------------
+   *
+   * Not the desktop treatment scaled down. Stretching a 2.39:1 clip over a tall
+   * phone column with `cover` keeps roughly 18% of its width — Espeon is at 33%
+   * across and Leafeon at 76%, so both fall outside it and what is left is a
+   * strip of light between two trunks, upscaled past the source's own 1600px.
+   *
+   * So the clip gets a band at the top rather than the whole background. At
+   * 390px wide a ~242px strip keeps about 60% of the width, x18%–x78%, which
+   * holds both of them.
+   *
+   * Below the strip the scrim goes fully opaque and becomes the hero's
+   * background. That is why there is no `background` on `.hero-band` itself: it
+   * would paint *over* the video. `.hero-band` sets no stacking context, so the
+   * z-index −2 video escapes to the root and paints beneath any background its
+   * own parent draws. Doing this in the scrim — which is already the layer above
+   * the video — sidesteps that entirely.
+   */
+  @media (max-width: 899px) {
+    .hero-band {
+      /* Sized to end behind the logo, which is ~340px tall here. Everything
+         with a contrast requirement — lede, stats — then sits on the solid part
+         below, where white is simply white on #0b0e13. */
+      --hero-vid-h: clamp(210px, 62vw, 330px);
+    }
+    .hero-video {
+      height: var(--hero-vid-h);
+      bottom: auto;
+    }
+    .hero-scrim {
+      background: linear-gradient(
+        to bottom,
+        rgb(6 8 12 / 0.42) 0,
+        rgb(6 8 12 / 0.5) calc(var(--hero-vid-h) * 0.55),
+        rgb(11 14 19) var(--hero-vid-h),
+        rgb(11 14 19) 100%
+      );
+    }
+  }
+
+  /* The copy inverts over the scrim. `--text-muted` is a grey tuned for a light
+     panel and reads at roughly 2:1 on this. */
+  .hero-band[data-hero-video] .lede {
+    color: rgb(255 255 255 / 0.92);
+  }
+  .hero-band[data-hero-video] .stats dt {
+    color: rgb(255 255 255 / 0.78);
+  }
+  .hero-band[data-hero-video] .stats dd {
+    color: #fff;
+  }
+
+  /*
+   * The foot of the band dissolves instead of stopping dead.
+   *
+   * Masked to transparent rather than covered by a gradient in the page colour,
+   * for the same reason the community photograph is: whatever is below shows
+   * through on its own, so this needs no knowledge of the next section's
+   * background and holds in both themes.
+   *
+   * The scrim is masked at every width. The video is only masked from 900px up,
+   * because below that it is a strip at the top of the band and its own bottom
+   * edge is already hidden by the scrim reaching full opacity there — masking it
+   * would fade the strip early, in the middle of the hero, for nothing.
+   */
+  .hero-band[data-hero-video] .hero-scrim {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - var(--hero-out)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--hero-out)), transparent 100%);
+  }
+  @media (min-width: 900px) {
+    .hero-band[data-hero-video] .hero-video {
+      -webkit-mask-image: linear-gradient(
+        to bottom,
+        #000 calc(100% - var(--hero-out)),
+        transparent 100%
+      );
+      mask-image: linear-gradient(to bottom, #000 calc(100% - var(--hero-out)), transparent 100%);
+    }
+  }
+
+  /*
+   * Wide screens: he stands in the hero's own gap, between the end of the copy
+   * and the left edge of the map, facing the map instead of off the page.
+   *
+   * The offset is derived from the grid rather than guessed, because the hero
+   * is a centred 1100px box sitting inside a full-width band:
+   *
+   *   outer gutter          (100% − heroWidth) / 2
+   * + the map column        (heroWidth − 40 − gap) / 2.15   [1fr of 1.15fr+1fr]
+   * + the hero's padding    20px
+   * + a gutter off the map  12px
+   *
+   * Only above 1080px. Below that the two columns are too tight to hold him
+   * without crowding the lede, so he keeps the edge bleed defined above.
+   */
+  @media (min-width: 1080px) {
+    .hero-band {
+      --art-right: calc(
+        (100% - min(1100px, 100%)) / 2 + (min(1100px, 100%) - 40px - clamp(20px, 4vw, 48px)) /
+          2.15 + 26px
+      );
+      --art-bottom: 42px;
+      /*
+       * Sized to the corridor, not to preference. Measured at 1280: the lede's
+       * longest line ends at x534 and the map starts at x692, so there are 158px
+       * to work with and nothing wider than that can grow without going behind
+       * body copy — he sits at full opacity, so "behind text" means unreadable
+       * text, not a subtle wash.
+       *
+       * Two things buy the extra size over the old 130px cap. The gutter term
+       * above went 32px → 26px, moving him from 12px off the map to 6px, and the
+       * cap rose to 142px. That leaves 9–11px of clearance to the lede across
+       * 1080–1440 — checked at each, not interpolated.
+       *
+       * Note he cannot escape the corridor by tucking his empty corner behind
+       * the map. The frame's top-right *is* empty (the figure occupies only
+       * x21–53% for its top eighth) but `--art-flip: -1` mirrors it, so that
+       * empty corner lands top-left, away from the map.
+       */
+      --art-w: clamp(112px, 11vw, 142px);
+      --art-flip: -1;
+    }
   }
 
   .hero {
@@ -602,18 +972,21 @@ const socials = [
     padding: clamp(28px, 6vw, 64px) 20px clamp(20px, 4vw, 40px);
   }
 
-  .eyebrow {
-    margin: 0;
-    font-size: 0.74rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
+  /* No font-size or line-height any more: the h1's only child is an image, and
+     a stray line-height on the block would show up as unexplained space under
+     it. */
   .hero h1 {
-    margin: 6px 0 12px;
-    font-size: clamp(2rem, 6vw, 3.2rem);
-    line-height: 1.05;
+    margin: 6px 0 16px;
+    line-height: 0;
+  }
+  /* Capped in px rather than left at 100%: the copy column is ~563px at the
+     1100px cap, and a logo that wide dwarfs the lede and pushes both buttons
+     below the fold. */
+  .hero-logo {
+    display: block;
+    width: 100%;
+    max-width: 380px;
+    height: auto;
   }
   .lede {
     margin: 0 0 22px;
@@ -778,7 +1151,15 @@ const socials = [
     scroll-snap-align: start;
   }
 
-  .place-rail li > a {
+  /*
+   * `:not(.place-more)` matters. Without it this rule also matched the trailing
+   * "See all 104 on the map" tile and its `color: #fff` outranked
+   * `.place-more > a { color: var(--accent) }` — two classes beat one — so that
+   * tile rendered white on the page background and was invisible. It shipped
+   * that way. Caught by auditing computed contrast on the rendered page rather
+   * than reading the stylesheet.
+   */
+  .place-rail li:not(.place-more) > a {
     position: relative;
     display: block;
     width: 148px;
@@ -793,7 +1174,7 @@ const socials = [
       transform 0.18s ease,
       box-shadow 0.18s ease;
   }
-  .place-rail li > a:hover {
+  .place-rail li:not(.place-more) > a:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
   }
@@ -879,10 +1260,10 @@ const socials = [
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .place-rail li > a {
+    .place-rail li:not(.place-more) > a {
       transition: none;
     }
-    .place-rail li > a:hover {
+    .place-rail li:not(.place-more) > a:hover {
       transform: none;
     }
   }
@@ -1108,51 +1489,110 @@ const socials = [
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 10px;
   }
+  /*
+   * Dark tile with the brand as light, rather than a tile painted in the brand.
+   *
+   * The previous version filled each tile with the brand's own colour and put
+   * white text on top, which six of its seven gradient stops could not carry:
+   * Campfire's light end measured 2.55:1 for the title and Instagram's amber
+   * 1.84:1, against a 4.5 floor. Darkening those colours enough to pass would
+   * have taken the brand down with them — a 4.5:1 orange is brown.
+   *
+   * So the colour becomes a glow over a dark surface. The base is 18.04:1, and
+   * even with the glow at full strength the worst composite measures 5.70:1
+   * (Campfire's hint). The brand still reads instantly, because it sits behind
+   * its own full-colour app icon and tints the whole tile.
+   */
   .social {
     position: relative;
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: 13px;
     padding: 15px 16px;
-    border-radius: var(--radius);
+    border-radius: 14px;
     text-decoration: none;
     color: #fff;
-    background: var(--navy-700);
+    background: #16161a;
+    border: 1px solid rgb(255 255 255 / 0.09);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.28);
     overflow: hidden;
+    isolation: isolate;
     transition:
       transform 0.18s ease,
-      box-shadow 0.18s ease;
+      box-shadow 0.18s ease,
+      border-color 0.18s ease;
   }
-  /* A soft top-left sheen so each tile reads as a surface rather than a
-     flat colour swatch. Sits under the content via the stacking context. */
+  /* The brand glow, anchored left so it peaks behind the mark and has faded out
+     by the time it reaches the text. Held at 0.85 so the hover state has
+     somewhere to go. */
   .social::before {
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at 12% 0%, rgb(255 255 255 / 0.28), transparent 62%);
+    z-index: 0;
+    opacity: 0.85;
+    background: radial-gradient(78% 130% at 6% 50%, var(--brand-glow), transparent 72%);
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+  /* One lit pixel along the top. This is the whole difference between a surface
+     catching light and a rectangle of colour. */
+  .social::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    z-index: 1;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.32), transparent);
     pointer-events: none;
   }
   .social > * {
     position: relative;
+    z-index: 2;
   }
   .social:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    transform: translateY(-3px);
+    border-color: var(--brand-edge);
+    box-shadow:
+      0 12px 26px -10px var(--brand-glow),
+      0 3px 8px rgb(0 0 0 / 0.32);
+  }
+  .social:hover::before {
+    opacity: 1;
+  }
+  .social:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
   }
 
-  /* The mark is now each brand's real app icon, so it brings its own background.
-     A translucent chip behind it would be a second tile behind a tile. The ring
-     is what keeps Discord's blurple icon from dissolving into the blurple
-     panel — the one pairing where icon and tile are the same colour. */
+  .social-go {
+    justify-self: end;
+    font-size: 0.95rem;
+    line-height: 1;
+    opacity: 0.45;
+    transition:
+      transform 0.18s ease,
+      opacity 0.18s ease;
+  }
+  .social:hover .social-go {
+    opacity: 1;
+    transform: translate(2px, -2px);
+  }
+
+  /* The mark is each brand's real app icon, so it brings its own background — a
+     translucent chip behind it would be a second tile behind a tile. The ring is
+     lighter than it was: against a dark surface the icon no longer risks
+     dissolving into a panel of its own colour, so the ring is there to seat it,
+     not to rescue it. The drop shadow does the lifting instead. */
   .social-mark {
     display: grid;
     place-items: center;
     line-height: 0;
     border-radius: 12px;
     box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.35),
-      0 2px 6px rgb(0 0 0 / 0.22);
+      0 0 0 1px rgb(255 255 255 / 0.16),
+      0 4px 10px rgb(0 0 0 / 0.38);
   }
   .social-mark svg {
     display: block;
@@ -1171,24 +1611,50 @@ const socials = [
   .social-text span {
     font-size: 0.78rem;
     line-height: 1.35;
-    opacity: 0.85;
+    /* 0.88, which is the value the contrast pass was run at. Dropping it dims
+       the text toward the background it is measured against. */
+    opacity: 0.88;
     /* Allowed to wrap. Truncating instead turned "Raids, chat, meetups" into
        "Raids, chat, meet…" at two-up widths, which loses the only thing the
        line was there to say. Grid stretches the tiles to equal height anyway,
        so a second line costs nothing but a few pixels of row height. */
   }
 
+  /* Each brand supplies a glow and an edge now, not a fill. These alphas are the
+     ones the contrast pass cleared, so they are not free to nudge upward —
+     raising one lightens the composite the text sits on.
+
+     Facebook is back to its real #1877f2. The old #1668d8 existed only to claw
+     white text up to AA while the colour was a fill; as a glow it no longer has
+     that job, so the brand gets its actual blue back. */
   .social--discord {
-    background: #5865f2;
+    --brand-glow: rgb(88 101 242 / 0.55);
+    --brand-edge: rgb(88 101 242 / 0.7);
   }
   .social--campfire {
-    background: linear-gradient(135deg, #f0873d, #d1502a);
+    --brand-glow: rgb(240 135 61 / 0.5);
+    --brand-edge: rgb(240 135 61 / 0.65);
   }
   .social--facebook {
-    background: #1877f2;
+    --brand-glow: rgb(24 119 242 / 0.5);
+    --brand-edge: rgb(24 119 242 / 0.65);
   }
   .social--instagram {
-    background: linear-gradient(135deg, #833ab4, #fd1d1d 55%, #fcb045);
+    --brand-glow: rgb(214 41 118 / 0.55);
+    --brand-edge: rgb(214 41 118 / 0.7);
+  }
+  /* Instagram is the one brand whose identity *is* the gradient, so its glow is
+     three offset stops rather than one.
+     Stacked gradients compound where they overlap, and these alphas are set from
+     that worst case rather than from each layer alone: at 0.45/0.55/0.38 the
+     fully-compounded point measured 3.72:1 for the hint. That point sits behind
+     the icon rather than under the text, but a bound that fails is not a bound.
+     0.36/0.44/0.24 puts even the compounded case at 5.04:1. */
+  .social--instagram::before {
+    background:
+      radial-gradient(58% 105% at 3% 92%, rgb(252 176 69 / 0.24), transparent 68%),
+      radial-gradient(78% 130% at 6% 48%, rgb(214 41 118 / 0.44), transparent 72%),
+      radial-gradient(56% 100% at 24% 2%, rgb(131 58 180 / 0.36), transparent 70%);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1198,8 +1664,12 @@ const socials = [
     .btn--outline svg {
       transition: none;
     }
+    .social-go {
+      transition: none;
+    }
     .social:hover,
-    .hero-map-open:hover {
+    .hero-map-open:hover,
+    .social:hover .social-go {
       transform: none;
     }
     .hero-map-open:hover svg,
@@ -1209,36 +1679,129 @@ const socials = [
   }
 
   /* --- "Happening now" artwork ----------------------------------------------
-   * Mew, bleeding off the *left*. The hero and the Campsite explainer both come
-   * in from the right, so alternating here keeps the page from reading as a
-   * column of art stacked down one margin.
+   * Mew on the left, Incineroar on the right. The hero and the Campsite
+   * explainer both come in from the right, so alternating here keeps the page
+   * from reading as a column of art stacked down one margin.
    *
-   * This section's cards run edge to edge, so unlike the Campsite there is no
-   * clear space inside the container — the art lives entirely in the margin
-   * outside the 1100px content box, which only exists on wide screens.
+   * These were previously anchored to the band's bottom corners on the
+   * assumption that the 1100px content cap left a margin for them to stand in.
+   * It does not, below roughly 1400px: at 1000px the section fills the band edge
+   * to edge, so Mew's box ran x −80→120 and Incineroar's 865→1045 — straight
+   * through the cards. And every surface in this section is opaque (the cards
+   * are #fff, the attribution carries its own panel), so at `z-index: -1`
+   * neither one rendered at all. Vertically it was no better: the attribution
+   * ran to the band's bottom edge, which is exactly where both were anchored.
+   *
+   * So they get their own strip rather than borrowing a margin that is not
+   * there. `padding-bottom` opens genuinely empty band below the attribution and
+   * both are anchored into it, which makes them visible at every width instead
+   * of only on a wide desktop.
    */
   .onnow-band {
+    /*
+     * Narrow screens keep the strip: the attribution fills the width, so there
+     * is nothing to stand beside and the art goes underneath it instead.
+     *
+     * The floor is 132px and not 120px, and the cap 280px and not 265px, because
+     * Incineroar is the tall one: at 19vw/265px he cleared the attribution by
+     * 2px at 1000 wide and 1px at 375, which is not clearance, it is luck.
+     */
+    padding-bottom: clamp(132px, 20vw, 280px);
+
     --art-src: url('/art/mew.webp');
     --art-ratio: 0.99;
-    --art-left: calc(-1 * clamp(40px, 8vw, 150px));
-    --art-bottom: 40px;
-    --art-w: clamp(160px, 20vw, 330px);
+    /* Barely any bleed now. The old −150px hid nearly half of him off-page; in
+       clear space there is no reason to throw the image away. */
+    --art-left: calc(-1 * clamp(8px, 2.5vw, 44px));
+    --art-bottom: clamp(6px, 1.5vw, 18px);
+    --art-w: clamp(100px, 16vw, 225px);
 
     /*
-     * Incineroar flanking the other side. This is the only section tall enough
-     * to carry two — 627px at 1440 — and at a trimmed ratio of 0.55 Incineroar
-     * is the narrowest piece we have, so it fits the margin outside the content
-     * box without reaching the cards.
-     *
      * `--art-2nd` is the opt-in: it turns `content: none` into `content: ''` and
      * brings the ::before into existence.
+     *
+     * Incineroar is sized off a different number from Mew even though they share
+     * the strip: at a trimmed ratio of 0.55 he is 1.82x as tall as he is wide, so
+     * the width that fits is set by the strip's height, not by matching Mew's
+     * width. At 1440 that is 132px wide and 240px tall against a 265px strip.
      */
     --art-2nd: '';
     --art2-src: url('/art/incineroar.webp');
     --art2-ratio: 0.55;
-    --art2-right: calc(-1 * clamp(30px, 6vw, 110px));
-    --art2-bottom: 30px;
-    --art2-w: clamp(150px, 18vw, 290px);
+    --art2-right: calc(-1 * clamp(6px, 2vw, 38px));
+    --art2-bottom: clamp(6px, 1.5vw, 18px);
+    --art2-w: clamp(62px, 9.5vw, 132px);
+  }
+
+  /*
+   * Wide enough for the art to stand either side of the credit, so the box
+   * stops being full width and they flank it instead of queueing underneath.
+   *
+   * This block has to sit *after* the base rule above, not before it. Media
+   * queries add no specificity — `.onnow-band` inside `@media` and `.onnow-band`
+   * outside it are an exact tie, decided purely on source order. Placed earlier
+   * in the file it lost every property the base rule also declares, while the
+   * two it does not (`--art-right`, `--art2-left`) applied normally: the art
+   * kept its old size and its 200px strip while claiming a new anchor.
+   *
+   * The empty space was never slack in the layout — `.g-attribution p` caps at
+   * 74ch while the box itself ran the full 985px, so most of it was padding.
+   * Capping the box near the measure the text already obeys closes the gap
+   * without reflowing the copy.
+   *
+   * `--attr-w` is the single number both sides derive from. The box is centred,
+   * so its left edge sits at (100% − attrW)/2, and the distance from the band's
+   * right edge back to that point is (100% + attrW)/2 — exactly what
+   * `--art-right` needs, and its mirror what `--art2-left` needs. Change the
+   * width and both pieces follow.
+   */
+  @media (min-width: 900px) {
+    .onnow-band {
+      --attr-w: min(640px, 100%);
+      --attr-gap: clamp(14px, 2vw, 30px);
+
+      /* No strip any more — the art is beside the box, not below it. This is
+         just breathing room under the band. */
+      padding-bottom: clamp(24px, 3vw, 44px);
+
+      /* Same value as the padding, which lands the art's feet exactly on the
+         attribution's bottom edge rather than near it. */
+      --art-bottom: clamp(24px, 3vw, 44px);
+      --art-right: calc((100% + var(--attr-w)) / 2 + var(--attr-gap));
+      --art-left: auto;
+      /*
+       * Two ceilings, and the smaller wins.
+       *
+       * The gutter one is why these are not `vw`: the space beside a fixed 640px
+       * box is (100% − attrW)/2, which at 1000 wide is 172px. A 17vw Mew was
+       * 170 plus a 20px gap and hung 18px off the left edge — and at the 900px
+       * end of this query he would have been half again too wide.
+       *
+       * The px one is height in disguise. The art is bottom-aligned with the
+       * box, so anything taller than the box rises past its top, and there are
+       * only 36px of clear band up there before the "See 5 more" pill. At a 0.99
+       * ratio 180px of width is 182px of height, which is 33px of rise. Mew is
+       * the round one, so width and height are nearly the same number; keep that
+       * in mind before raising it.
+       */
+      --art-w: min(180px, calc((100% - var(--attr-w)) / 2 - var(--attr-gap)));
+
+      --art2-bottom: clamp(24px, 3vw, 44px);
+      --art2-left: calc((100% + var(--attr-w)) / 2 + var(--attr-gap));
+      --art2-right: auto;
+      /* Same two ceilings, but Incineroar is 1.82x as tall as he is wide, so the
+         height budget caps him at 100px where Mew gets 180. */
+      --art2-w: min(100px, calc((100% - var(--attr-w)) / 2 - var(--attr-gap)));
+    }
+
+    /* `:global`, because the aside belongs to Attribution.astro and Astro would
+       otherwise scope this selector to elements this page rendered itself.
+       Kept under `.onnow-band` so /raids, /eggs and /research — which run the
+       same component full width with no art beside it — are untouched. */
+    .onnow-band :global(.g-attribution) {
+      max-width: var(--attr-w);
+      margin-inline: auto;
+    }
   }
 
   .on-now {
@@ -1375,20 +1938,21 @@ const socials = [
       --art-opacity: 0.17;
     }
 
-    /* No margin left to sit in once the content box fills the screen. Both
-       pieces drop to atmosphere, and they are pushed to opposite ends of a very
-       tall section so they do not stack into one murky patch. */
-    .onnow-band {
-      --art-left: -56px;
-      --art-bottom: 24px;
-      --art-w: 200px;
-      --art-opacity: 0.15;
-
-      --art2-right: -60px;
-      --art2-top: 30px;
-      --art2-bottom: auto;
-      --art2-w: 165px;
-      --art2-opacity: 0.14;
-    }
+    /*
+     * `.onnow-band` deliberately has no override here any more.
+     *
+     * It used to drop to atmosphere at 0.15/0.14 opacity for the same reason as
+     * the two above — no margin left once the content box fills the screen. But
+     * opacity was never the thing standing between those two and the reader:
+     * they sit at `z-index: -1` and every surface in that section is opaque, so
+     * behind a card they rendered at 0.15 of nothing. Pushing them to opposite
+     * ends only moved which card hid them.
+     *
+     * The strip fixes that at every width, which is exactly what the mobile
+     * override could not do — its own sizes (200px wide, `--art2-top: 30px`)
+     * fought the strip and put Incineroar back up among the cards. The base
+     * clamps already fit: at 375 they are 100px and 62px wide against a 132px
+     * strip, clearing it by 25px and 13px.
+     */
   }
 </style>

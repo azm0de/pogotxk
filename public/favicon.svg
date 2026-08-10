@@ -1,7 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="PoGo TXK">
-  <rect width="64" height="64" rx="14" fill="#123254"/>
-  <!-- Map pin: the site is a map first. -->
-  <path d="M32 13a13 13 0 0 0-13 13c0 9.75 13 25 13 25s13-15.25 13-25a13 13 0 0 0-13-13z"
-        fill="#f2a33c"/>
-  <circle cx="32" cy="26" r="6" fill="#123254"/>
+  <!--
+    The same Poké Ball as the mobile nav toggle in Base.astro, at 1.6x into a
+    64 viewBox.
+
+    One thing differs, deliberately: the toggle's outer ring is WHITE, because it
+    sits on the red header and a red-topped ball with a dark outline loses its
+    silhouette there. A favicon has no such backdrop — it lands on whatever
+    chrome the browser paints, usually white. A white ring on a white tab strip
+    erases the outline and leaves the red half looking like a floating blob, so
+    here the ring is the classic dark one, which holds on light and dark alike.
+
+    Strokes are heavier than a straight 1.6x scale would give (5.2 / 5 / 4
+    rather than 5.12 / 4.16 / 3.84). At 16px the ring is barely over a pixel
+    either way, and the thinner set greys out rather than reading as a line.
+  -->
+  <circle cx="32" cy="32" r="27" fill="#ffffff"/>
+  <!-- Upper half only: sweep-flag 1 from the leftmost point runs over the top. -->
+  <path d="M5 32a27 27 0 0 1 54 0Z" fill="#ff2f3d"/>
+  <path d="M5 32h54" stroke="#0f0f11" stroke-width="5.2"/>
+  <circle cx="32" cy="32" r="27" fill="none" stroke="#0f0f11" stroke-width="5"/>
+  <circle cx="32" cy="32" r="9.3" fill="#ffffff" stroke="#0f0f11" stroke-width="4"/>
 </svg>

@@ -48,8 +48,14 @@ const blurb = summary.length > 240 ? `${summary.slice(0, 237).trimEnd()}…` : s
 const externalUrl = event.url && !event.url.includes('/events#') ? event.url : null;
 ---
 
+{/*
+  `--linked` rather than `:has(.event-action)`. The cursor and hover state are
+  how anyone knows the card is clickable at all, and that should not depend on
+  `:has()` being implemented — the stretched link itself works either way, but
+  an invisible affordance is not an affordance.
+*/}
 <article
-  class="event-card"
+  class={`event-card${externalUrl ? ' event-card--linked' : ''}`}
   id={anchor}
   data-state={state}
   data-source={event.source}
@@ -72,7 +78,30 @@ const externalUrl = event.url && !event.url.includes('/events#') ? event.url : n
     {recurrence && <span class="event-badge event-badge--repeat">{recurrence}</span>}
   </p>
 
-  <h3 class="event-title" id={`${anchor}-title`}>{event.summary}</h3>
+  {/*
+    The title carries the link, not the "Details" button.
+
+    The button was the obvious anchor for a stretched link and it does not work:
+    the home page hides `.event-actions` outright, and a `display: none` element
+    generates no boxes, so its `::after` never exists and the card stays inert
+    exactly where it was wanted most. The title renders everywhere.
+
+    The `id` moved off the `<h3>` and onto the inner span so `aria-labelledby`
+    still names the card with the event alone — with the id on the heading, the
+    "(opens in a new tab)" note would have become part of the card's name.
+  */}
+  <h3 class="event-title">
+    {
+      externalUrl ? (
+        <a class="event-title-link" href={externalUrl} rel="noopener noreferrer" target="_blank">
+          <span id={`${anchor}-title`}>{event.summary}</span>
+          <span class="sr-only"> (opens in a new tab)</span>
+        </a>
+      ) : (
+        <span id={`${anchor}-title`}>{event.summary}</span>
+      )
+    }
+  </h3>
 
   <p class="event-when">
     <time datetime={event.start}>{when}</time>
