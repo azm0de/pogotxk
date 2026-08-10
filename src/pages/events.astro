@@ -296,6 +296,26 @@ const credit = global?.attribution ?? null;
     border-radius: var(--radius-lg);
     padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px) clamp(14px, 2.5vw, 20px);
     color: #fff;
+    /* A column so the credit can be pushed to the bottom edge below. Without
+       it the taller card would stack heading, lede and credit at the top and
+       leave a pool of empty scrim underneath. */
+    display: flex;
+    flex-direction: column;
+  }
+
+  /*
+   * Taller from 760px up, so more of the artwork survives the crop.
+   *
+   * At the natural content height the card was 932x199 — a 4.7:1 slot for a
+   * 16:9 image, which threw away most of it. This gives it closer to 3:1.
+   * Height rather than aspect-ratio: the text still sets the floor on a narrow
+   * screen, where a fixed ratio would leave a very tall card with four lines in
+   * it.
+   */
+  @media (min-width: 760px) {
+    .events-hero {
+      min-height: clamp(260px, 30vw, 380px);
+    }
   }
   .events-hero-art {
     display: block;
@@ -345,6 +365,16 @@ const credit = global?.attribution ?? null;
     font-size: 0.68rem;
     line-height: 1.45;
     color: rgb(255 255 255 / 0.78);
+  }
+  /* Only where the card has a floor to push against. `margin-top: auto` inside
+     the flex column drops this to the bottom edge; the padding keeps the gap to
+     the lede that the margin was providing. Below 760px the card is only as
+     tall as its content, so `auto` would collapse to nothing. */
+  @media (min-width: 760px) {
+    .events-hero-credit {
+      margin-top: auto;
+      padding-top: clamp(14px, 3vw, 22px);
+    }
   }
 
   .events-note {
