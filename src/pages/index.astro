@@ -26,7 +26,7 @@ const db = env.DB;
  * meetups and no posts, and the page still has to look deliberate rather than
  * broken — so each section renders a real fallback instead of an empty shell.
  */
-const [counts, meetups, posts, photos] = await Promise.all([
+const [counts, meetups, posts, photos, landmarks] = await Promise.all([
   db
     .prepare(
       `SELECT
@@ -48,6 +48,28 @@ const [counts, meetups, posts, photos] = await Promise.all([
         WHERE kind = 'community_photo' ORDER BY created_at DESC LIMIT 4`,
     )
     .all<{ r2_key: string; alt: string | null; credit: string | null }>()
+    .then((r) => r.results)
+    .catch(() => []),
+
+  /*
+   * The landmarks themselves — a T-33 trainer jet, the park mural, the water
+   * spring. Sixty-three of the 104 POIs carry a photograph, and until now the
+   * only way to see one was to tap its pin on the map.
+   *
+   * Gyms first: they are where people actually stand around together, so the
+   * rail opens on the places that matter for a raid. Then by name, which is
+   * arbitrary but stable — the order must not shuffle between requests.
+   */
+  db
+    .prepare(
+      `SELECT p.slug, p.name, p.type, m.r2_key
+         FROM pois p
+         JOIN media m ON m.id = p.hero_media_id
+        WHERE p.status = 'published'
+        ORDER BY (p.type = 'gym') DESC, p.name
+        LIMIT 18`,
+    )
+    .all<{ slug: string; name: string; type: string; r2_key: string }>()
     .then((r) => r.results)
     .catch(() => []),
 ]);
@@ -157,7 +179,13 @@ const socials = [
 ---
 
 <Base title="PoGo TXK">
-  <section class="hero">
+  {/*
+    A full-width band around the hero purely so the artwork has an edge to run
+    off. The hero itself is capped at 1100px and centred, so art anchored to it
+    would stop at the content box rather than the screen.
+  */}
+  <div class="hero-band art-band">
+    <section class="hero">
     <div class="hero-copy">
       <p class="eyebrow">Texarkana, Texas &amp; Arkansas</p>
       <h1>Pokémon GO Texarkana</h1>
@@ -222,8 +250,66 @@ const socials = [
           </span>
         </div>
       </noscript>
-    </div>
-  </section>
+      </div>
+    </section>
+  </div>
+
+  {/*
+    The stats above say "104 locations". This says which ones, with their faces
+    on. A local recognises three of these instantly, and that recognition is the
+    moment the page stops being a generic fan site.
+
+    A rail rather than a grid because the photographs are overwhelmingly
+    portrait phone shots — eighteen of those in a grid is a wall of vertical
+    crops, and a row that runs off the edge is also the true statement: there
+    are more of these than fit.
+  */}
+  {
+    landmarks.length > 0 && (
+      <section class="section places" aria-labelledby="places-heading">
+        <div class="section-head">
+          <h2 id="places-heading">Places you already know</h2>
+          <a href="/map">All {totalPois} on the map →</a>
+        </div>
+
+        <ul class="place-rail">
+          {landmarks.map((place) => (
+            <li>
+              <a href={`/map?poi=${encodeURIComponent(place.slug)}`}>
+                {/* alt="" deliberately: the name is right there as visible
+                    text, and the link takes its accessible name from it.
+                    Real alt text here would read every place twice. */}
+                <img
+                  src={`/media/${place.r2_key}`}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
+                <span class="place-label">
+                  <span class="place-type">
+                    <span class={`place-dot place-dot--${place.type}`} aria-hidden="true" />
+                    {place.type === 'gym' ? 'Gym' : 'PokéStop'}
+                  </span>
+                  <strong>{place.name}</strong>
+                </span>
+              </a>
+            </li>
+          ))}
+
+          <li class="place-more">
+            <a href="/map">
+              <span>See all {totalPois} on the map</span>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M13.2 5.4 11.8 6.8l4.2 4.2H4v2h12l-4.2 4.2 1.4 1.4 6.6-6.6z"></path>
+              </svg>
+            </a>
+          </li>
+        </ul>
+      </section>
+    )
+  }
 
   <div class="grid">
     <section class="card card--meetup">
@@ -337,8 +423,12 @@ const socials = [
   {
     photos.length > 0 && (
       <section class="section">
+        {/* Four of nine, and until now there was no way to reach the other
+            five from here — the section was the only one on the page with no
+            route onward. */}
         <div class="section-head">
           <h2>The community</h2>
+          <a href="/gallery">All photos →</a>
         </div>
         <ul class="photos">
           {photos.map((photo) => (
@@ -363,6 +453,7 @@ const socials = [
     the community photos because that is where the page stops being "who we are"
     and starts being "come do something".
   */}
+  <div class="onnow-band art-band">
   <section class="section" aria-labelledby="on-now-heading">
     <div class="section-head">
       <h2 id="on-now-heading">
@@ -422,6 +513,7 @@ const socials = [
     */}
     <Attribution />
   </section>
+  </div>
 
   <section class="section">
     <div class="section-head">
@@ -451,20 +543,55 @@ const socials = [
     </ul>
   </section>
 
-  <section class="section campsite">
-    <h2>What is a Community Campsite?</h2>
-    <p>
-      Community Campsites are dedicated in-game areas established by official Community
-      Ambassadors, and they act as local hubs for in-person meetups. They come with perks —
-      exclusive event check-ins, special Timed Research, and enhanced PokéStops and Gyms.
-    </p>
-    <p>
-      Ours covers Spring Lake Park. The ★ markers on the map are the Campsite locations.
-    </p>
-  </section>
+  {/*
+    The one section on this page with real room for artwork. Its paragraphs are
+    capped at 68ch, so at 1600px there are ~798px of clear space to their right
+    — everything else on the home page is edge-to-edge cards. This is where a
+    bird can be a whole bird rather than a slice cropped by the screen.
+  */}
+  <div class="campsite-band art-band">
+    <section class="section campsite">
+      <h2>What is a Community Campsite?</h2>
+      <p>
+        Community Campsites are dedicated in-game areas established by official Community
+        Ambassadors, and they act as local hubs for in-person meetups. They come with perks —
+        exclusive event check-ins, special Timed Research, and enhanced PokéStops and Gyms.
+      </p>
+      <p>
+        Ours covers Spring Lake Park. The ★ markers on the map are the Campsite locations.
+      </p>
+    </section>
+  </div>
 </Base>
 
 <style>
+  /* --- hero artwork ---------------------------------------------------------
+   * Articuno — Mystic's bird, and the one whose blue sits with the navy brand.
+   *
+   * Sized against the gap, not against taste. The hero content box is capped at
+   * 1100px and the map card fills the right half of it, so at a 1280px viewport
+   * there are only ~118px between that card's edge and the screen's. Anything
+   * wider simply hides behind an opaque card — a first pass at 320px had 157px
+   * of the bird behind it.
+   *
+   * It cannot go in front, either: the map's bottom-right corner carries the
+   * OpenStreetMap and CARTO attribution, which must never be covered.
+   *
+   * So it is pushed deliberately past the edge — the leading half shows and the
+   * screen crops the rest. Both values are vw-based so the visible slice grows
+   * on wider screens instead of being pinned to one breakpoint's arithmetic.
+   */
+  .hero-band {
+    --art-src: url('/art/lucario-shiny.webp');
+    /* 280x431 trimmed — the narrowest of the three, which is why it gets the
+       hero: a tall subject reads from a thin sliver where a round one would
+       show as an unidentifiable curve. */
+    --art-ratio: 0.65;
+    --art-right: calc(-1 * clamp(30px, 6vw, 110px));
+    --art-bottom: -14px;
+    --art-w: clamp(150px, 17vw, 280px);
+  }
+
   .hero {
     display: grid;
     grid-template-columns: 1.15fr 1fr;
@@ -619,6 +746,157 @@ const socials = [
     max-width: 30ch;
   }
 
+
+  /* --- the landmark rail ----------------------------------------------------
+     Sits tight under the hero: it is the hero's evidence, not a separate
+     topic, so it gets less air above it than a real section would. */
+  .places {
+    padding-top: 10px;
+  }
+
+  .place-rail {
+    list-style: none;
+    margin: 0;
+    /* Headroom for the focus ring. `overflow-x: auto` forces `overflow-y` to
+       compute to `auto` as well, so anything drawn outside the box is clipped
+       — and the global :focus-visible ring reaches 5px out (3px wide, 2px
+       offset). 8px clears it with room for the hover lift. */
+    padding: 8px 0;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  .place-rail li {
+    /* Without `0 0 auto` a flex child shrinks to share the row, and eighteen
+       tiles would compress to slivers instead of scrolling. */
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .place-rail li > a {
+    position: relative;
+    display: block;
+    width: 148px;
+    aspect-ratio: 3 / 4;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-sunken);
+    overflow: hidden;
+    text-decoration: none;
+    color: #fff;
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.18s ease;
+  }
+  .place-rail li > a:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Beats the global `img { height: auto }`, which would otherwise let a
+     portrait photo set the tile's height and break the 3:4 ratio. */
+  .place-rail img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .place-label {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    display: grid;
+    gap: 1px;
+    padding: 26px 10px 9px;
+    /* Same gradient strength as the community photo credits, so text over a
+       photograph means one thing across the page. */
+    background: linear-gradient(transparent, rgb(0 0 0 / 0.82));
+  }
+  .place-label strong {
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.25;
+    /* Two lines, then ellipsis: "Walk Through History Marker #4" is real. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* The type is carried by the word, and the colour only reinforces it — a
+     blue label on a near-black gradient would sit near the contrast floor,
+     and colour alone is never the signal on this site. */
+  .place-type {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: rgb(255 255 255 / 0.88);
+  }
+  .place-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .place-dot--gym {
+    background: var(--poi-gym);
+  }
+  .place-dot--pokestop {
+    background: var(--poi-pokestop);
+  }
+
+  .place-more > a {
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 7px;
+    width: 148px;
+    aspect-ratio: 3 / 4;
+    padding: 12px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    text-align: center;
+    text-decoration: none;
+    color: var(--accent);
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  .place-more > a:hover {
+    border-color: var(--accent);
+    border-style: solid;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .place-rail li > a {
+      transition: none;
+    }
+    .place-rail li > a:hover {
+      transform: none;
+    }
+  }
+
+  /* On a phone the rail runs edge to edge. The negative margin is exactly the
+     section's own padding and the same value is added back as padding, so the
+     scroll area widens without the page gaining any horizontal overflow. */
+  @media (max-width: 720px) {
+    .place-rail {
+      margin-inline: -20px;
+      padding-inline: 20px;
+    }
+  }
+
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -742,8 +1020,13 @@ const socials = [
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 16px;
+    gap: 4px 16px;
     margin-bottom: 12px;
+    /* On a narrow screen a two-line heading leaves the link too little room and
+       it breaks mid-phrase — "All 104 on the map" over one line and the arrow
+       stranded on the next. Wrapping the row instead drops the whole link to
+       its own line intact. */
+    flex-wrap: wrap;
   }
   .section-head h2 {
     margin: 0;
@@ -755,6 +1038,9 @@ const socials = [
     /* Same reason as .card-link: a standalone action, so it needs a real target. */
     display: inline-block;
     padding-block: 5px;
+    /* Safe only because the row above may wrap; without that this would
+       overflow rather than break. */
+    white-space: nowrap;
   }
 
   .posts {
@@ -922,6 +1208,39 @@ const socials = [
     }
   }
 
+  /* --- "Happening now" artwork ----------------------------------------------
+   * Mew, bleeding off the *left*. The hero and the Campsite explainer both come
+   * in from the right, so alternating here keeps the page from reading as a
+   * column of art stacked down one margin.
+   *
+   * This section's cards run edge to edge, so unlike the Campsite there is no
+   * clear space inside the container — the art lives entirely in the margin
+   * outside the 1100px content box, which only exists on wide screens.
+   */
+  .onnow-band {
+    --art-src: url('/art/mew.webp');
+    --art-ratio: 0.99;
+    --art-left: calc(-1 * clamp(40px, 8vw, 150px));
+    --art-bottom: 40px;
+    --art-w: clamp(160px, 20vw, 330px);
+
+    /*
+     * Incineroar flanking the other side. This is the only section tall enough
+     * to carry two — 627px at 1440 — and at a trimmed ratio of 0.55 Incineroar
+     * is the narrowest piece we have, so it fits the margin outside the content
+     * box without reaching the cards.
+     *
+     * `--art-2nd` is the opt-in: it turns `content: none` into `content: ''` and
+     * brings the ::before into existence.
+     */
+    --art-2nd: '';
+    --art2-src: url('/art/incineroar.webp');
+    --art2-ratio: 0.55;
+    --art2-right: calc(-1 * clamp(30px, 6vw, 110px));
+    --art2-bottom: 30px;
+    --art2-w: clamp(150px, 18vw, 290px);
+  }
+
   .on-now {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -986,6 +1305,31 @@ const socials = [
     }
   }
 
+  /* --- campsite artwork -----------------------------------------------------
+   * Zapdos — Instinct's bird, and the section's own accent is already that
+   * colour: `--poi-campsite` (#f2a33c) is what the ★ Campsite markers use. The
+   * art lands where its team colour already means something on this site rather
+   * than being dropped somewhere it merely fits.
+   *
+   * Barely negative on the right, unlike the hero: there is no card in the way
+   * here, so nearly the whole bird stays on screen.
+   */
+  .campsite-band {
+    --art-src: url('/art/magikarp.webp');
+    --art-ratio: 0.9;
+    --art-right: calc(-1 * clamp(12px, 2vw, 46px));
+    --art-bottom: 10px;
+    /*
+     * Capped by the section's *height*, not by the 798px of clear width beside
+     * the text. `overflow-x: clip` leaves `overflow-y` computing to `visible`,
+     * so anything taller than the band spills up into "Find us" rather than
+     * being cropped — this is why the band also takes extra bottom padding
+     * below, to buy the art somewhere to be.
+     */
+    --art-w: clamp(170px, 23vw, 330px);
+    padding-bottom: clamp(0px, 5vw, 76px);
+  }
+
   .campsite {
     padding-bottom: 56px;
   }
@@ -1005,6 +1349,46 @@ const socials = [
     }
     .hero-map {
       aspect-ratio: 16 / 9;
+    }
+
+    /*
+     * Single column, so there is no margin for the art to live in — every
+     * horizontal band of the hero has text or the map card in it. It moves up
+     * behind the headline and drops to atmosphere, because full opacity behind
+     * body copy cannot be made to hold 4.5:1 at every scroll position.
+     */
+    .hero-band {
+      --art-top: -14px;
+      --art-right: -54px;
+      --art-bottom: auto;
+      --art-w: 208px;
+      --art-opacity: 0.16;
+    }
+
+    /* Same reason: below this width the campsite paragraphs stop being capped
+       by their 68ch measure and fill the column, so the clear space the art was
+       sitting in no longer exists. */
+    .campsite-band {
+      --art-right: -40px;
+      --art-bottom: -6px;
+      --art-w: 210px;
+      --art-opacity: 0.17;
+    }
+
+    /* No margin left to sit in once the content box fills the screen. Both
+       pieces drop to atmosphere, and they are pushed to opposite ends of a very
+       tall section so they do not stack into one murky patch. */
+    .onnow-band {
+      --art-left: -56px;
+      --art-bottom: 24px;
+      --art-w: 200px;
+      --art-opacity: 0.15;
+
+      --art2-right: -60px;
+      --art2-top: 30px;
+      --art2-bottom: auto;
+      --art2-w: 165px;
+      --art2-opacity: 0.14;
     }
   }
 </style>

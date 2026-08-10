@@ -189,6 +189,90 @@ button {
   }
 }
 
+/* --------------------------------------------------------------- art bleed --
+ * Decorative Pokémon artwork running off the edge of the screen.
+ *
+ * Official artwork from the PokéAPI sprite collection. That repository is CC0,
+ * but its own licence file states plainly that the image contents remain
+ * copyright The Pokémon Company — so this sits under the same unofficial fan-use
+ * position the site already takes and already discloses in the footer, /about
+ * and /terms. It carries no *per-page* credit obligation, which is why it can be
+ * decoration where Leek Duck's sprites and the Gazette's photographs cannot.
+ * See vault/Attribution Obligations.md.
+ *
+ * Two things make this safe rather than a source of bugs:
+ *
+ *  1. `overflow-x: clip` on the band. The art is deliberately positioned past
+ *     the viewport edge; clip crops it there *without* adding to the page's
+ *     scroll width. A negative offset on its own would put the site straight
+ *     back into the horizontal-overflow bug it shipped once already.
+ *  2. A background image, not an `<img>`. It is decoration, and a CSS
+ *     background is invisible to assistive technology by default — there is no
+ *     alt text to get wrong and nothing for a screen reader to announce.
+ *
+ * Every value is a custom property so one rule serves every placement. The band
+ * must be a full-width block: anchoring art to a `max-width` container makes it
+ * stop at the content box rather than the screen.
+ */
+.art-band {
+  position: relative;
+  overflow-x: clip;
+}
+
+/*
+ * An optional *second* piece on the same band, for a section wide enough to be
+ * flanked on both sides.
+ *
+ * `content: var(--art-2nd, none)` is what keeps this from costing anything on
+ * the bands that do not use it: `content: none` means the pseudo-element is
+ * never generated at all, so there is no stray empty box on every other band.
+ * A band opts in by setting `--art-2nd: ''` alongside its `--art2-*` values.
+ */
+.art-band::before {
+  content: var(--art-2nd, none);
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  aspect-ratio: var(--art2-ratio, 1);
+  width: var(--art2-w, clamp(200px, 22vw, 350px));
+  right: var(--art2-right, auto);
+  left: var(--art2-left, auto);
+  top: var(--art2-top, auto);
+  bottom: var(--art2-bottom, auto);
+  opacity: var(--art2-opacity, 1);
+  background-image: var(--art2-src);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.art-band::after {
+  content: '';
+  position: absolute;
+  /* Behind the band's own content but above the page background. The band sets
+     no z-index, so it creates no stacking context and this stays put. */
+  z-index: -1;
+  pointer-events: none;
+  /*
+   * The artwork is trimmed of its transparent padding when it is imported, so
+   * the box and the visible art are the same thing and each file has its own
+   * ratio (Lucario 0.65, Mew 0.99, Magikarp 0.90). Left at a square, a tall
+   * subject would sit in a box far bigger than itself and no position value
+   * would mean what it says.
+   */
+  aspect-ratio: var(--art-ratio, 1);
+  width: var(--art-w, clamp(200px, 22vw, 350px));
+  right: var(--art-right, auto);
+  left: var(--art-left, auto);
+  top: var(--art-top, auto);
+  bottom: var(--art-bottom, auto);
+  opacity: var(--art-opacity, 1);
+  background-image: var(--art-src);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
 /* --------------------------------------------------------------- empty art --
  * Faint map-pin motif for empty states.
  *

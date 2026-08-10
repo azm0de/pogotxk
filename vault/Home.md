@@ -28,6 +28,7 @@ Replaces the hand-maintained static site at [pokemontxk.com](https://pokemontxk.
 | Area | Notes |
 |---|---|
 | Structure | [[Architecture Overview]] · [[Data Model]] · [[Routes]] |
+| Look | [[Design System]] |
 | Behaviour | [[Auth and Roles]] · [[Flares and Realtime]] · [[Notifications]] |
 | Operating it | [[Local Development]] · [[Deploying]] · [[Configuration]] · [[Importing Legacy Data]] |
 | Android | [[Android App]] |
@@ -60,6 +61,8 @@ Two of five production auditors never reported — see [[Backlog]].
       subscribe links, and a role that survived leaving the Discord
 - [x] Web push live; Discord fan-out still needs a webhook — see [[Backlog]]
 - [x] A design pass over every page — see [[Backlog]] and [[Bugs Worth Remembering]]
+- [x] Two design skills wired into the repo, and the 63 landmark photographs surfaced on the
+      home page — see [[Design System]]
 - [ ] Bubble tested on real hardware — see [[Android App]]
 
 Production runs whatever is on `main`; a push deploys in 60–90 seconds. `npm test` is 8 suites

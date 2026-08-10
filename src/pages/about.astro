@@ -29,9 +29,16 @@ const hero = await env.DB.prepare(
   title="About"
   description="PoGo TXK is the Pokémon GO community for Texarkana, Texas and Arkansas, with a Community Campsite at Spring Lake Park."
 >
-  <article class="legal">
-    <p class="legal-eyebrow">PoGo TXK</p>
-    <h1>About the community</h1>
+  {/*
+    `.legal` is a 68ch column shared with Terms and Privacy, and its own comment
+    says no decoration should compete with the text — so the artwork hangs off a
+    band around it rather than being styled onto that shared class, and Terms
+    and Privacy stay plain.
+  */}
+  <div class="about-band art-band">
+    <article class="legal">
+      <p class="legal-eyebrow">PoGo TXK</p>
+      <h1>About the community</h1>
 
     {
       hero && (
@@ -127,12 +134,44 @@ const hero = await env.DB.prepare(
       Niantic, Nintendo, Creatures Inc., GAME FREAK, or The Pokémon Company. Pokémon and its
       trademarks are ©1995–2026 Nintendo, Creatures, and GAMEFREAK. All images and names owned and
       trademarked by Nintendo, Niantic, The Pokémon Company, and GAMEFREAK are property of their
-      respective owners.
-    </p>
-  </article>
+        respective owners.
+      </p>
+    </article>
+  </div>
 </Base>
 
 <style>
+  /* --- page artwork ---------------------------------------------------------
+   * Moltres — Valor's bird, completing the set the hero lede promises when it
+   * says the community is "run by trainers from all three teams". Articuno is
+   * on the home hero, Zapdos beside the Campsite explainer.
+   *
+   * `.legal` is a 68ch column centred in the page, so on a wide screen there is
+   * a genuinely large empty margin on both sides. Anchored low and left, which
+   * is the emptiest part of a long article — the right side is where the
+   * trailing short paragraphs and the disclaimer sit.
+   */
+  .about-band {
+    --art-src: url('/art/moltres.webp');
+    --art-left: calc(-1 * clamp(30px, 4vw, 90px));
+    --art-bottom: 24px;
+    --art-w: clamp(170px, 24vw, 360px);
+  }
+
+  /*
+   * Below this, the 68ch measure stops being the limit and the column fills the
+   * screen, so the margin the art was living in disappears. Same treatment as
+   * the home page: it drops to atmosphere rather than sitting behind body text
+   * at a contrast that cannot be guaranteed.
+   */
+  @media (max-width: 1000px) {
+    .about-band {
+      --art-left: -50px;
+      --art-w: 210px;
+      --art-opacity: 0.15;
+    }
+  }
+
   .about-hero {
     margin: 0 0 24px;
     position: relative;

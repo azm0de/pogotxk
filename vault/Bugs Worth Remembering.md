@@ -178,8 +178,26 @@ textarea read-only until it lands.
 **"Zero live pins."** They were inside map clusters and simply not in the DOM. Chasing it anyway
 surfaced the real popup bug underneath.
 
-> Three of my own wrong calls came from measuring the wrong thing and believing the number.
-> Check what the measurement actually means before acting on it.
+**"The landmark tiles are unnamed links."** The accessibility tree from the browser tooling
+showed the rail's links with no accessible name at all — which would be a serious defect. But it
+showed the same for `.hero-map-open` and the whole socials row, both shipped and both already
+through an accessibility pass.
+
+The tell was that every unnamed link wrapped its text in a `<span>`, and every named one had
+bare text. Two throwaway `<a>` elements injected into the live page settled it: bare text got a
+name, span-wrapped text did not. The reader does not run the accessible-name algorithm through
+wrapper elements. Nothing was wrong with the page.
+
+> The tree is also viewport-limited — it lists only what is on screen, which is why the probes
+> reported nothing until they were scrolled into view.
+
+**"72 community photographs."** 72 is the *total*; only 9 are of people. The other 63 are
+photographs of the locations. Reported to Justin the wrong way round, and it would have built the
+wrong thing — a people-first gallery instead of the landmark rail. See [[Design System]].
+
+> Four of my own wrong calls came from measuring the wrong thing and believing the number.
+> Check what the measurement actually means before acting on it — and when a tool reports a
+> defect in code that already passed review, suspect the tool before the code.
 
 ## See also
 

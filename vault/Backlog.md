@@ -63,6 +63,10 @@ matter of finding the right menu.
       source-attribution fields. Added `PATCH /api/admin/media/[id]`, which did not exist:
       credits were captured on upload and then frozen, so fixing one meant SQL against
       production. **63 of 72 items still have no credit** — the filter counts them
+- [ ] **The "no credit" filter over-reports.** Those 63 are exactly the POI photographs, which
+      are the community's own and owe no credit; all 9 community photos are credited. The filter
+      reads as 63 outstanding tasks when the real number is zero. It should exempt
+      `kind = 'photo'`, or say "no credit recorded" rather than implying one is missing
 - [ ] **Settings page (`/admin/settings`).** Same story, but with no API either. Social links,
       hero copy, theme colours, Code of Conduct PDF. It is the only `adminOnly` nav entry the
       layout was built for
@@ -113,6 +117,31 @@ matter of finding the right menu.
 - [ ] **`/go` is sparse for a signed-out visitor.** The empty board is centred now rather than
       top-aligned, but the screen still says little about what the app does before you sign in
 
+### From the visual pass, 2026-08-07
+
+- [x] ~~Two design skills wired into `.claude/skills/`~~ — Anthropic's `frontend-design`
+      (vendored, Apache 2.0) for taste, and `pogotxk-design` for our constraints. See
+      [[Design System]]
+- [x] ~~The 63 landmark photographs were invisible~~ — they existed only inside a map popup you
+      had to tap a pin to open. Now a rail under the hero, each tile deep-linking to
+      `/map?poi=<slug>`
+- [x] ~~"The community" had no route onward~~ — the only section on the home page without one;
+      now links to `/gallery`
+- [x] ~~`.section-head` broke a link mid-phrase~~ — at 390px "All 104 on the map" wrapped and
+      stranded the arrow on its own line
+- [x] ~~No Pokémon artwork anywhere outside the game-data pages~~ — shiny Lucario, Mew and
+      Magikarp bleed off a page edge in the hero, "Happening now" and the Campsite explainer,
+      via a reusable `.art-band` utility. See [[Design System]]
+- [ ] **Moltres is orphaned on `/about`.** It is the last survivor of the earlier three-teams
+      bird set, which the home page no longer uses. Either give `/about` one of the current three
+      or restore the birds — but it should not stay as an accident
+- [ ] **Only the home page and `/about` carry artwork.** `/gallery`, `/live` and `/events` are
+      the remaining candidates with room
+- [ ] **The hero and the section headings are still system-ui at every level.** Typography is
+      the largest remaining templated default on the site; a display face would change more than
+      any new section. Needs self-hosting — no third-party font CDN
+- [ ] **Per-page OG images.** A Discord link preview shows a placeholder rather than the park
+
 ## Audit still owed
 
 Three of five production auditors reported before the run was stopped on 2026-08-05. Their
@@ -130,7 +159,13 @@ found a security defect apiece.
 - **iOS Live Activity.** Needs a native app, an Apple Developer account and store review, for a
   strictly worse version of what the web app already does. See
   [[Why iOS cannot have a floating bubble]]
-- **A cron.** See [[Why there is no cron]]
+- **A cron.** See [[Why there is no cron]]. Re-examined 2026-08-07 and the decision holds. The
+  feeds already refresh continuously — a 30-minute freshness window, verified live in production
+  — so a *weekly* scan would be a downgrade, not an upgrade: raid bosses rotate, Spotlight Hours
+  are weekly and events turn over daily. The only real gaps are that one visitor per window pays
+  the upstream fetch, and that `HARD_TTL_S` would expire the cache outright after seven days of
+  zero traffic, leaving the stale-fallback with nothing to serve. If that second case ever
+  matters, an auxiliary worker calling `refreshAllFeeds` **hourly** closes it
 - **Anything that reads the game.** See [[Never Touch the Game]]
 - **Ads.** Would breach the Leek Duck terms. See [[Attribution Obligations]]
 
