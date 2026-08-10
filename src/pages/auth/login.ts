@@ -74,7 +74,15 @@ export async function GET({ url }: APIContext): Promise<Response> {
   const verifier = randomToken(32);
   const next = safeNext(url.searchParams.get('next'));
 
-  const payload = btoa(JSON.stringify({ state, verifier, next }))
+  /*
+   * Set only by the callback, after Discord has said it cannot proceed without
+   * showing the user something. It is carried in the signed-ish state payload
+   * as well as the URL so the callback can tell "this attempt was already the
+   * retry" and fail properly instead of bouncing forever.
+   */
+  const consent = url.searchParams.get('consent') === '1';
+
+  const payload = btoa(JSON.stringify({ state, verifier, next, consent }))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
@@ -82,7 +90,13 @@ export async function GET({ url }: APIContext): Promise<Response> {
   return new Response(null, {
     status: 302,
     headers: {
-      location: authorizeUrl(cfg, url, state, await pkceChallenge(verifier)),
+      location: authorizeUrl(
+        cfg,
+        url,
+        state,
+        await pkceChallenge(verifier),
+        consent ? 'consent' : 'none',
+      ),
       'set-cookie': stateCookie(payload, url),
       'cache-control': 'no-store',
     },

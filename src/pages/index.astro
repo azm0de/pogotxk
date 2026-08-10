@@ -196,12 +196,21 @@ function homeWhen(event: CalendarEvent): string {
         has to read exactly what the text used to.
       */}
       <h1>
+        {/*
+          `fetchpriority="high"` because this is the LCP element now. It did not
+          use to be — the community banner was, and this deliberately stayed
+          un-hinted so the two were not competing for the same early bandwidth.
+          Moving the banner down into its own section left the logo as the
+          largest thing above the fold with no priority hint on it at all, which
+          Lighthouse caught as "fetchpriority=high should be applied".
+        */}
         <img
           class="hero-logo"
           src="/art/logo-txk-classic.webp"
           width="850"
           height="793"
           alt="Pokémon GO Texarkana"
+          fetchpriority="high"
         />
       </h1>
       <p class="lede">

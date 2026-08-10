@@ -345,6 +345,67 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     });
   }, [data, activeTypes, showCampsiteOnly, query]);
 
+  /**
+   * The same set, ordered for reading rather than for the map.
+   *
+   * Meetup spot first, then alphabetical — the same comparator the admin's
+   * MeetupEditor already uses, so the one place staff pick a location and the
+   * one place members browse them agree on the order.
+   *
+   * `numeric` matters more than it looks: several POIs are numbered holes on
+   * the disc golf course, and a plain string sort puts "Hole #10" between
+   * "Hole #1" and "Hole #2". `sensitivity: 'base'` keeps the order from
+   * depending on capitalisation, which the imported names are inconsistent
+   * about.
+   */
+  const listedPois = useMemo(
+    () =>
+      [...visiblePois].sort(
+        (a, b) =>
+          Number(b.isMeetupSpot) - Number(a.isMeetupSpot) ||
+          a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }),
+      ),
+    [visiblePois],
+  );
+
+  /**
+   * Jump to a location from the list.
+   *
+   * The filter-clearing and the `pendingFocusRef` fallback are belt and braces,
+   * not the usual path: the list only ever renders `visiblePois`, so a row that
+   * can be clicked already has a marker. They cover the render before markers
+   * exist, and any future caller that is not the list — a "nearest gym" action,
+   * say — where the target genuinely could be filtered out. When that happens
+   * the marker-sync effect picks the slug up the moment the marker is real,
+   * which is exactly how `/map?poi=slug` already works.
+   */
+  const focusPoi = useCallback(
+    (slug: string) => {
+      const poi = data?.pois.find((p) => p.slug === slug);
+      if (!poi) return;
+
+      setActiveTypes((prev) => (prev.has(poi.type) ? prev : new Set(prev).add(poi.type)));
+      setShowCampsiteOnly((prev) => (prev && !poi.isCampsite ? false : prev));
+
+      const marker = markersRef.current.get(slug);
+      const cluster = clusterRef.current;
+      const map = mapRef.current;
+      if (!marker || !cluster || !map) {
+        pendingFocusRef.current = slug;
+        return;
+      }
+
+      // zoomToShowLayer first: a marker inside a collapsed cluster ignores
+      // openPopup() outright. This is the bug that made deep links look broken.
+      cluster.zoomToShowLayer(marker, () => {
+        marker.openPopup();
+        map.setView([poi.lat, poi.lng], Math.max(map.getZoom(), 18));
+        setStatus(`Showing ${poi.name}.`);
+      });
+    },
+    [data],
+  );
+
   // --- initialise the map once data lands ---------------------------------
   useEffect(() => {
     if (!data || !containerRef.current || mapRef.current) return;
@@ -397,7 +458,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     // they are a different kind of thing.
     for (const photo of data.communityPhotos) {
       const marker = L.marker([photo.lat, photo.lng], {
-        icon: photoIcon(),
+        icon: photoIcon(photo.alt ?? 'Community photo'),
         alt: photo.alt ?? 'Community photo',
       });
       const popup = el('div', 'popup');
@@ -471,8 +532,12 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
           isCampsite: poi.isCampsite,
           isMeetupSpot: poi.isMeetupSpot,
           isLive: flare !== null,
+          // The name has to go *inside* the icon markup. `alt` below only lands
+          // on an <img> icon, and these are divIcons — so every pin was a
+          // focusable role="button" with no accessible name at all.
+          label: `${poi.name} — ${TYPE_LABEL[poi.type]}`,
         }),
-        // Screen readers announce this; keyboard users can tab to the marker.
+        // Kept for the non-divIcon path and as documentation of intent.
         alt: `${poi.name} — ${TYPE_LABEL[poi.type]}`,
         keyboard: true,
         riseOnHover: true,
@@ -546,6 +611,10 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
           isCampsite: source.isCampsite,
           isMeetupSpot: source.isMeetupSpot,
           isLive,
+          // `setIcon` replaces the icon's whole DOM, so omitting the label here
+          // would silently strip the accessible name off any pin the moment a
+          // flare went up or came down — the pins most worth reaching.
+          label: `${source.name} — ${TYPE_LABEL[source.type]}`,
         }),
       );
       marker.setZIndexOffset(isLive ? 1000 : 0);
@@ -792,6 +861,45 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
               </button>
             ))}
           </div>
+
+          {/*
+            Every location, listed. At 104 there is no reason to make anyone hunt
+            for a pin — the list is short enough to read end to end, and it is
+            the only way to find a place by name without knowing where it sits.
+
+            It shows what the map shows: the search box and the type chips above
+            filter both, so the count below is always the answer to "how many am
+            I looking at".
+          */}
+          <div className="poi-list-head">
+            <h3>Locations</h3>
+            <span className="poi-count">
+              {data && visiblePois.length === data.pois.length
+                ? `all ${data.pois.length}`
+                : `${visiblePois.length} of ${data?.pois.length ?? 0}`}
+            </span>
+          </div>
+
+          {listedPois.length === 0 ? (
+            <p className="poi-empty">No locations match that search.</p>
+          ) : (
+            <ul className="poi-list">
+              {listedPois.map((poi) => (
+                <li key={poi.slug}>
+                  <button type="button" className="poi-row" onClick={() => focusPoi(poi.slug)}>
+                    <span className={`chip-dot chip-dot--${poi.type}`} aria-hidden="true" />
+                    <span className="poi-row-name">{poi.name}</span>
+                    {poi.isMeetupSpot && <span className="poi-row-tag">Meetup spot</span>}
+                    {poi.isCampsite && !poi.isMeetupSpot && (
+                      <span className="poi-row-star" aria-label="Campsite">
+                        ★
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
 
           {/* Tile attribution deliberately lives in Leaflet's own control, not
               here — it has to stay visible whether or not this panel is open. */}

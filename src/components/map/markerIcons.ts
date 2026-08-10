@@ -41,15 +41,38 @@ const CAMPSITE_BADGE = `<span class="pin-badge" aria-hidden="true">
   </svg>
 </span>`;
 
+/**
+ * Escapes text before it goes into a divIcon's `html` string.
+ *
+ * These are location names out of the database, so `&` in "Boy Scouts & Co" is
+ * enough to break the markup — and the same hole would take a `<script>`.
+ */
+function esc(text: string): string {
+  return text.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
+  );
+}
+
 export interface PinOptions {
   type: PoiType;
   isCampsite: boolean;
   isMeetupSpot: boolean;
   /** Renders the pin larger and pulsing — used for an active flare. */
   isLive?: boolean;
+  /**
+   * The pin's accessible name.
+   *
+   * Leaflet gives every keyboard-enabled marker `role="button"` and
+   * `tabindex="0"`, and a `divIcon` gives it nothing to be called — so every pin
+   * on the map was an unnamed button. Marker options do not help: `alt` is only
+   * written onto an `<img>` icon, which this is not. The name has to be inside
+   * the HTML.
+   */
+  label?: string;
 }
 
-export function poiIcon({ type, isCampsite, isMeetupSpot, isLive }: PinOptions): L.DivIcon {
+export function poiIcon({ type, isCampsite, isMeetupSpot, isLive, label }: PinOptions): L.DivIcon {
   const classes = [
     'pin',
     `pin--${type}`,
@@ -62,7 +85,9 @@ export function poiIcon({ type, isCampsite, isMeetupSpot, isLive }: PinOptions):
 
   return L.divIcon({
     className: 'pin-wrap',
-    html: `<span class="${classes}">${pin(GLYPHS[type])}${isCampsite ? CAMPSITE_BADGE : ''}</span>`,
+    html: `<span class="${classes}">${pin(GLYPHS[type])}${isCampsite ? CAMPSITE_BADGE : ''}</span>${
+      label ? `<span class="sr-only">${esc(label)}</span>` : ''
+    }`,
     iconSize: [32, 44],
     // Anchor at the point of the teardrop so the pin sits on its coordinate.
     iconAnchor: [16, 43],
@@ -71,7 +96,7 @@ export function poiIcon({ type, isCampsite, isMeetupSpot, isLive }: PinOptions):
 }
 
 /** Community photo pins read as photographs, not game locations. */
-export function photoIcon(): L.DivIcon {
+export function photoIcon(label?: string): L.DivIcon {
   return L.divIcon({
     className: 'pin-wrap',
     html: `<span class="pin pin--photo">
@@ -80,7 +105,7 @@ export function photoIcon(): L.DivIcon {
         <circle class="pin-head" cx="16" cy="16" r="6.2"/>
         <circle class="pin-glyph" cx="16" cy="16" r="2.8"/>
       </svg>
-    </span>`,
+    </span>${label ? `<span class="sr-only">${esc(label)}</span>` : ''}`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
     popupAnchor: [0, -14],

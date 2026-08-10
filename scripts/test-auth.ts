@@ -5,7 +5,12 @@
  *   npx tsx scripts/test-auth.ts
  */
 
-import { pkceChallenge, resolveRole, type DiscordConfig } from '../src/lib/auth/discord';
+import {
+  authorizeUrl,
+  pkceChallenge,
+  resolveRole,
+  type DiscordConfig,
+} from '../src/lib/auth/discord';
 import { safeNext } from '../src/lib/auth/next';
 import { hasRole, type Role, type SessionUser } from '../src/lib/auth/types';
 
@@ -126,6 +131,46 @@ for (const raw of hostile) {
   const resolved = new URL(safeNext(raw), ORIGIN);
   check(`resolves to our origin: ${JSON.stringify(raw)}`, resolved.origin, ORIGIN);
 }
+
+console.log('\n== authorize prompt ==');
+/*
+ * `prompt=none` signs a returning member in without a click, but Discord does
+ * not document what it does when the user has never authorised the app — it may
+ * show the screen, it may bounce back an error. The callback recovers by
+ * retrying once with `consent`, so both halves have to be reachable.
+ */
+const promptOf = (u: string) => new URL(u).searchParams.get('prompt');
+const authUrl = (p?: 'none' | 'consent') =>
+  authorizeUrl(base, new URL('https://pogotxk.gnomelabz.workers.dev/auth/login'), 's', 'c', p);
+
+check('defaults to prompt=none', promptOf(authUrl()), 'none');
+check('retry asks for consent', promptOf(authUrl('consent')), 'consent');
+check(
+  'redirect_uri tracks the request origin',
+  new URL(authUrl()).searchParams.get('redirect_uri'),
+  'https://pogotxk.gnomelabz.workers.dev/auth/callback',
+);
+check('PKCE method is S256', new URL(authUrl()).searchParams.get('code_challenge_method'), 'S256');
+
+console.log('\n== which OAuth errors may be retried ==');
+/*
+ * The retry exists for "Discord needs to show the user something", which is
+ * exactly what prompt=none forbids. `access_denied` is the user pressing
+ * Cancel: retrying would put the approval screen straight back in front of
+ * someone who just declined it, which is why it must stay out of this set.
+ */
+const NEEDS_INTERACTION = new Set([
+  'interaction_required',
+  'login_required',
+  'consent_required',
+  'account_selection_required',
+]);
+for (const e of ['interaction_required', 'login_required', 'consent_required']) {
+  check(`retries on ${e}`, NEEDS_INTERACTION.has(e), true);
+}
+check('never retries on access_denied', NEEDS_INTERACTION.has('access_denied'), false);
+check('never retries on invalid_scope', NEEDS_INTERACTION.has('invalid_scope'), false);
+check('never retries on server_error', NEEDS_INTERACTION.has('server_error'), false);
 
 console.log(failures ? `\nFAILED (${failures})\n` : '\nAll checks passed.\n');
 process.exit(failures ? 1 : 0);

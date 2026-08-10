@@ -47,7 +47,7 @@ const nav = [
   { href: '/raids', label: 'Raids' },
   { href: '/blog', label: 'News' },
   { href: '/gallery', label: 'Gallery' },
-  { href: '/go', label: 'Go', highlight: true },
+  { href: '/go', label: 'Go', highlight: true, describe: 'the PoGo TXK app' },
 ];
 
 const path = Astro.url.pathname;
@@ -186,12 +186,28 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           {
             nav.map((item) => (
               <li>
+                {/*
+                  Appended in an `sr-only` span, not set as an `aria-label`.
+
+                  "Go" alone reads as a verb with no object — a screen-reader
+                  user pulling up a list of links sees it beside "Map" and
+                  "Events" with no way to tell what it does. `aria-label` fixes
+                  that for assistive tech but leaves `textContent` as "Go", which
+                  is what Lighthouse's link-text audit reads, so it kept failing
+                  while looking fixed.
+
+                  This way the name is genuinely descriptive for both, the
+                  visible chip is untouched, and the accessible name still
+                  *starts* with the visible word — WCAG 2.5.3, so speech input
+                  users saying "click Go" still match.
+                */}
                 <a
                   href={item.href}
                   class={item.highlight ? 'nav-highlight' : undefined}
                   aria-current={isCurrent(item.href) ? 'page' : undefined}
                 >
                   {item.label}
+                  {item.describe && <span class="sr-only"> — {item.describe}</span>}
                 </a>
               </li>
             ))

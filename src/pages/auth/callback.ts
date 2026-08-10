@@ -41,7 +41,26 @@ interface StatePayload {
   state: string;
   verifier: string;
   next: string;
+  /** True when this attempt is already the `prompt=consent` retry. */
+  consent?: boolean;
 }
+
+/**
+ * Errors that mean "I cannot finish without putting something in front of the
+ * user" — precisely what `prompt=none` forbids. These are the OIDC names;
+ * Discord's own behaviour here is undocumented, so the set is deliberately
+ * wider than any one of them.
+ *
+ * `access_denied` is NOT in here, and must not be. That is the user pressing
+ * Cancel, and retrying would shove the approval screen back in the face of
+ * someone who just declined it.
+ */
+const NEEDS_INTERACTION = new Set([
+  'interaction_required',
+  'login_required',
+  'consent_required',
+  'account_selection_required',
+]);
 
 function decodeState(raw: string | undefined): StatePayload | null {
   if (!raw) return null;
@@ -61,15 +80,33 @@ export async function GET(ctx: APIContext): Promise<Response> {
   const cfg = discordConfig(env);
   if (!cfg) return fail('Discord sign-in is not configured', url, 503);
 
+  // Read the state before handling errors: it carries the retry flag and the
+  // `next` destination, both of which are needed to recover rather than fail.
+  const stored = decodeState(cookies.get(OAUTH_STATE_COOKIE)?.value);
+
   // Discord reports user-facing failures (e.g. "access_denied") this way.
   const oauthError = url.searchParams.get('error');
-  if (oauthError) return fail(oauthError, url);
+  if (oauthError) {
+    // First sign-in under `prompt=none`. Send them round once more asking for
+    // consent properly — and only once, which `stored.consent` guarantees.
+    if (NEEDS_INTERACTION.has(oauthError) && stored && !stored.consent) {
+      const retry = new URL('/auth/login', url.origin);
+      retry.searchParams.set('consent', '1');
+      // Re-validated by `safeNext` on the way back in, so a tampered cookie
+      // cannot smuggle a destination through this hop.
+      if (stored.next && stored.next !== '/') retry.searchParams.set('next', stored.next);
+      return new Response(null, {
+        status: 302,
+        headers: { location: retry.toString(), 'cache-control': 'no-store' },
+      });
+    }
+    return fail(oauthError, url);
+  }
 
   const code = url.searchParams.get('code');
   const returnedState = url.searchParams.get('state');
   if (!code || !returnedState) return fail('Missing code or state', url);
 
-  const stored = decodeState(cookies.get(OAUTH_STATE_COOKIE)?.value);
   if (!stored) return fail('Sign-in session expired, please try again', url);
   if (stored.state !== returnedState) return fail('State mismatch', url);
 

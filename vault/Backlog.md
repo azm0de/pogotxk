@@ -52,6 +52,33 @@ matter of finding the right menu.
       members at the right edge — a wider or different frame would let everyone back in. See
       [[Design System]] for why the bin was not retouched out
 
+### Nick also owns the Discord *application*, not just the server
+
+Worth separating, because it was assumed the other way round for a while: the Developer Portal
+app (client id `1534670096256073778`) and the Discord server are different systems with
+different permissions. Nick holds both. Everything below is Developer Portal, so none of it
+needs server admin — it needs him.
+
+- [ ] **Ask to be added to the application's Team**, rather than asking for the two items below
+      one at a time. The Developer Portal supports Teams: the owner creates one, moves the app
+      into it, and adds members. After that, redirect URIs and secret rotation stop being a
+      favour with a wait attached. This is the ask worth making
+- [ ] **Confirm the redirect URI is registered**, exactly, no trailing slash:
+      `https://pogotxk.gnomelabz.workers.dev/auth/callback`. This cannot be checked from
+      outside — Discord serves the same 44KB app shell for a registered and an unregistered
+      URI and only validates after sign-in. It *can* be checked in ten seconds by opening the
+      sign-in link and looking: the approval screen means it is registered, "Invalid OAuth2
+      redirect_uri" means it is not. Do that before raising it
+- [ ] **Rotate the client secret** — it passed through a chat transcript during setup. Have him
+      send the new one via a password manager share, never chat or email, then
+      `printf '%s' 'NEW' | npx wrangler secret put DISCORD_CLIENT_SECRET`
+
+> [!note] None of this blocks signing in
+> `DISCORD_BOOTSTRAP_ADMIN_ID` short-circuits `resolveRole` to `admin` regardless of guild
+> membership — asserted in `scripts/test-auth.ts` as "bootstrap id → admin even outside guild".
+> Provided that secret holds Justin's own Discord user id, admin access does not wait on any of
+> this. If sign-in lands as a guest instead, that id is the thing to check.
+
 - [x] ~~`DISCORD_GUILD_ID` + `DISCORD_BOOTSTRAP_ADMIN_ID`~~ — set 2026-08-06. Neither needed
       admin: Developer Mode plus right-click → Copy ID. The membership check is now **on**,
       so people outside the Discord sign in as guests

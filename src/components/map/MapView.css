@@ -420,6 +420,112 @@
   display: none;
 }
 
+/* --- the location list ---------------------------------------------------
+ *
+ * The panel is `position: absolute` over the map with `overflow: hidden`, so a
+ * 104-row list has to cap its own height or it grows straight past the bottom
+ * of the screen and takes the rows with it. The list scrolls; the panel does
+ * not.
+ */
+.poi-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.poi-list-head h3 {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.poi-count {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.poi-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(34vh, 300px);
+  overflow-y: auto;
+  /* Without this, flicking past the end of the list scrolls the page behind the
+     map — which on a full-bleed map page means nothing visibly happens and the
+     list appears stuck. */
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.poi-list li + li .poi-row {
+  border-top: 1px solid var(--border);
+}
+
+.poi-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.poi-row:hover {
+  background: var(--bg-sunken);
+}
+/* Inset, because an outset ring on the first or last row is clipped by the
+   list's own rounded corner and reads as a broken half-outline. */
+.poi-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.poi-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+}
+.poi-row-tag {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-solid);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.poi-row-star {
+  flex: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+.poi-empty {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+/* The panel is anchored to the bottom on a phone, so a 34vh list leaves almost
+   no map. Half that still shows six or seven rows. */
+@media (max-width: 640px) {
+  .poi-list {
+    max-height: min(30vh, 210px);
+  }
+}
+
 .map-search input {
   width: 100%;
   padding: 9px 12px;
@@ -503,7 +609,21 @@
 @media (max-width: 640px) {
   .map-panel {
     left: 8px;
-    right: 8px;
+    /*
+     * 52px, not 8px, to clear Leaflet's zoom control.
+     *
+     * The panel and that control are both anchored to the bottom right of the
+     * map, and the control carries `z-index: 800` against this panel's 600 — so
+     * it has always painted over the panel's bottom-right corner, long before
+     * there was a list here. It only mattered once that corner held 104
+     * clickable rows instead of a chip or two: a tap meant to open a location
+     * was landing on "zoom in".
+     *
+     * Narrowing the panel is the fix that holds. Lifting the control with a
+     * margin would need to track the panel's height, which changes every time
+     * it opens or closes.
+     */
+    right: 52px;
     bottom: 8px;
     width: auto;
   }

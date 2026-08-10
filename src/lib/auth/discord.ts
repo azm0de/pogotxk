@@ -59,11 +59,25 @@ export async function pkceChallenge(verifier: string): Promise<string> {
     .replace(/=+$/, '');
 }
 
+/**
+ * `none` skips Discord's approval screen for anyone who has already authorised
+ * the app — a returning member signs in without touching anything.
+ *
+ * Discord documents that case and only that case. What it does when the user
+ * has *never* authorised is not written down anywhere: it may show the screen
+ * regardless, or it may bounce back with an error. That is not a good thing to
+ * be guessing about on the one flow that gates every member's access, so the
+ * callback catches the "needs interaction" family of errors and retries once
+ * with `consent`. Whichever way Discord actually behaves, first sign-in works.
+ */
+export type AuthPrompt = 'none' | 'consent';
+
 export function authorizeUrl(
   cfg: DiscordConfig,
   url: URL,
   state: string,
   challenge: string,
+  prompt: AuthPrompt = 'none',
 ): string {
   const params = new URLSearchParams({
     client_id: cfg.clientId,
@@ -73,7 +87,7 @@ export function authorizeUrl(
     state,
     code_challenge: challenge,
     code_challenge_method: 'S256',
-    prompt: 'none',
+    prompt,
   });
   return `${AUTHORIZE_URL}?${params}`;
 }
