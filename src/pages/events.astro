@@ -14,7 +14,6 @@
 
 import Base from '~/layouts/Base.astro';
 import EventCard from '~/components/events/EventCard.astro';
-import SubscribeCard from '~/components/events/SubscribeCard.astro';
 import { env } from 'cloudflare:workers';
 import { listPublicMeetups, meetupToCalendarEvent } from '~/lib/db/meetups';
 import {
@@ -61,30 +60,17 @@ const grouped = groupEvents([...meetupEvents, ...(global?.events ?? [])]);
 // The past is context, not content — a dozen cards is plenty.
 const past = grouped.past.slice(0, 12);
 
-interface Feed {
-  id: string;
-  name: string;
-  blurb: string;
-  href: string;
-  webcal: string;
-}
-
-function feed(id: string, name: string, blurb: string): Feed {
-  const href = new URL(`/calendar/${id}.ics`, base).toString();
-  // webcal:// is not a real scheme, just https with a handler registration —
-  // swapping the prefix is exactly what every calendar app expects.
-  return { id, name, blurb, href, webcal: href.replace(/^https?:/, 'webcal:') };
-}
-
-const feeds: Feed[] = [
-  feed('meetups', 'Community meetups', 'Texarkana meetups, raid hours and community days.'),
-  ...(globalAvailable
-    ? [
-        feed('all', 'Everything', 'Community meetups plus the global Pokémon GO calendar.'),
-        feed('game', 'Global Pokémon GO events', 'Just the worldwide in-game event calendar.'),
-      ]
-    : []),
-];
+/*
+ * The subscribe panel is gone from this page, and with it the `Feed` list that
+ * only existed to populate it.
+ *
+ * `/calendar/meetups.ics`, `/calendar/all.ics` and `/calendar/game.ics` are all
+ * still served — anyone already subscribed keeps receiving updates, because a
+ * calendar client polls the URL it stored and never revisits this page. What is
+ * gone is the way to *find* them, so there is no autodiscovery either. Add
+ * `<link rel="alternate" type="text/calendar">` to the head slot if they should
+ * stay discoverable without the panel.
+ */
 
 /* ------------------------------------------------------------ formatting -- */
 
@@ -141,18 +127,49 @@ const credit = global?.attribution ?? null;
 
 <Base
   title="Events"
-  description="Pokémon GO meetups, raid hours and community days in Texarkana, plus the global in-game event calendar — with a calendar feed you can subscribe to."
+  description="Pokémon GO meetups, raid hours and community days in Texarkana, plus the global in-game event calendar."
 >
   <div class="events">
     <header class="events-hero">
+      {/*
+        Decorative: the `h1` right beside it already says what this is, and a
+        description of forty Pokémon walking down a road tells a screen-reader
+        user nothing about the events below.
+
+        1280x720 is the whole source, so `sizes` never asks for more than exists
+        — the card caps at 932px and the largest file is the original's width.
+        1073KB of JPEG became 182KB of WebP at that size, 62KB at 640.
+      */}
+      <picture class="events-hero-art">
+        <img
+          src="/hero/pokestop-1280.webp"
+          srcset="/hero/pokestop-640.webp 640w, /hero/pokestop-960.webp 960w, /hero/pokestop-1280.webp 1280w"
+          sizes="(min-width: 1010px) 932px, calc(100vw - 28px)"
+          width="1280"
+          height="720"
+          alt=""
+          decoding="async"
+        />
+      </picture>
+
       <h1>Events</h1>
       <p class="events-lede">
         Community meetups around Texarkana alongside the global Pokémon GO calendar. All times
         are shown in Texarkana local time ({nowZone}).
       </p>
-    </header>
 
-    <SubscribeCard feeds={feeds} />
+      {/*
+        The artwork carries this notice printed along its bottom edge, and the
+        crop above cuts that edge off. Removing a rights notice while keeping the
+        image is not a trade worth making, so it is reproduced here instead —
+        same principle as the press photographs, whose bylines render *on* the
+        image. See vault/Attribution Obligations.
+      */}
+      <p class="events-hero-credit">
+        Artwork ©2016–2020 Niantic, Inc. ©2016–2020 Pokémon. ©1995–2020 Nintendo / Creatures
+        Inc. / GAME FREAK inc.
+      </p>
+    </header>
 
     {
       !globalAvailable && (
@@ -265,14 +282,69 @@ const credit = global?.attribution ?? null;
     gap: 24px;
   }
 
+  /* --- the hero card -------------------------------------------------------
+   *
+   * `isolation: isolate` matters here. The art sits at z-index −2 and the scrim
+   * at −1; without a stacking context on the card those escape to the root and
+   * paint behind the page itself, which is the same trap the home page's hero
+   * video hit.
+   */
+  .events-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px) clamp(14px, 2.5vw, 20px);
+    color: #fff;
+  }
+  .events-hero-art {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+  }
+  .events-hero-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* High: the card is far wider than the 16:9 source, so `cover` keeps a
+       horizontal band, and the trainers and Pokémon are in the upper half. */
+    object-position: center 34%;
+  }
+  /*
+   * Never lighter than 0.70 anywhere, and that is measured rather than chosen.
+   * The artwork contains pure white cloud, so at 0.62 the credit line came out
+   * at 4.23:1 — under AA. At 0.70 the worst case is h1 7.8:1, lede 6.9:1 and
+   * the credit 5.6:1.
+   */
+  .events-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      105deg,
+      rgb(6 8 12 / 0.84) 0%,
+      rgb(6 8 12 / 0.74) 58%,
+      rgb(6 8 12 / 0.7) 100%
+    );
+  }
+
   .events-hero h1 {
     margin: 0 0 6px;
     font-size: clamp(1.7rem, 4vw, 2.3rem);
+    color: #fff;
   }
   .events-lede {
     margin: 0;
     max-width: 62ch;
-    color: var(--text-muted);
+    color: rgb(255 255 255 / 0.92);
+  }
+  .events-hero-credit {
+    margin: clamp(14px, 3vw, 22px) 0 0;
+    font-size: 0.68rem;
+    line-height: 1.45;
+    color: rgb(255 255 255 / 0.78);
   }
 
   .events-note {

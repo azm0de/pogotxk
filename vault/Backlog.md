@@ -93,6 +93,24 @@ needs server admin — it needs him.
 > thing keeping Justin an admin — see the ordering warning in [[Configuration]] before
 > changing any of this.
 
+## The calendar feeds are live but unreachable
+
+The subscribe panel came off `/events` on 2026-08-10 by request. The consequence is worth
+stating plainly, because it is invisible:
+
+- `/calendar/meetups.ics`, `/calendar/all.ics` and `/calendar/game.ics` **still serve**.
+  Anyone already subscribed keeps getting updates — a calendar client polls the URL it
+  stored and never revisits the page — so nothing broke for existing subscribers
+- What is gone is any way to **find** them. There is no `<link rel="alternate">`
+  autodiscovery either, so the feeds are effectively unlisted
+- `SubscribeCard.astro` and its CSS are still in the tree, now unimported. An unimported
+  Astro component ships nothing, so it costs nothing to keep, and it is the whole widget
+  back in one line if it is ever wanted
+
+- [ ] Decide: leave them unlisted, add head autodiscovery, or delete the routes and the
+      component together. Leaving it undecided is the only bad option — half a feature that
+      still costs a build
+
 ## The one real Lighthouse finding left
 
 Audited 2026-08-10, mobile and desktop, against production. Accessibility 93 → **97** and
