@@ -197,12 +197,17 @@ function homeWhen(event: CalendarEvent): string {
       */}
       <h1>
         {/*
-          `fetchpriority="high"` because this is the LCP element now. It did not
-          use to be — the community banner was, and this deliberately stayed
-          un-hinted so the two were not competing for the same early bandwidth.
-          Moving the banner down into its own section left the logo as the
-          largest thing above the fold with no priority hint on it at all, which
-          Lighthouse caught as "fetchpriority=high should be applied".
+          Deliberately NO `fetchpriority="high"`, despite Lighthouse's LCP audit
+          asking for it. This is the LCP element, so the advice looks right — it
+          was tried, and the trace says otherwise.
+          Without the hint Chrome already assigns this image **High** on its own,
+          because it is large and in the initial viewport. Adding the attribute
+          did not raise that; the request came back **Medium**, and the audit
+          still reported `priorityHinted: false`, so it never satisfied the check
+          it was added for. Measured production LCP was worse with it than
+          without across three runs.
+          Do not re-add it on the strength of the audit alone. Check the priority
+          in the network trace first.
         */}
         <img
           class="hero-logo"
@@ -210,7 +215,6 @@ function homeWhen(event: CalendarEvent): string {
           width="850"
           height="793"
           alt="Pokémon GO Texarkana"
-          fetchpriority="high"
         />
       </h1>
       <p class="lede">
