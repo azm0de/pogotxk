@@ -93,6 +93,28 @@ needs server admin — it needs him.
 > thing keeping Justin an admin — see the ordering warning in [[Configuration]] before
 > changing any of this.
 
+## The one real Lighthouse finding left
+
+Audited 2026-08-10, mobile and desktop, against production. Accessibility 93 → **97** and
+SEO 92 → **100** are done and live. Best Practices is 100. What remains is payload, and it
+is transport-independent — it does not go away at the edge:
+
+- [ ] **One community photograph is 1.8MB.** `legacy/2025gofest.jpg` is served at full size
+      into a 400×300 grid tile, and is most of the page's 4.4MB. Lighthouse puts the
+      recoverable total at ~2.8MB across the photo set.
+      `/media/[...key].ts` documents why resizing is not done there: Astro's Cloudflare
+      image service rewrites through `/cdn-cgi/image/`, which needs the zone, so it lands
+      with the custom domain. Until then the options are to generate WebP derivatives under
+      new R2 keys and point the grid at those — the existing objects must stay untouched,
+      they are served `immutable` for a year — or to accept it. **Not** a rewrite in place
+- [ ] **`target-size` will not reach 100 and should not.** 104 pins in one small park sit
+      closer than 24px apart. WCAG 2.5.8 exempts targets whose position is essential, which
+      a geographic pin is; spreading them out to satisfy a checker would break the map. The
+      cluster icons are already 38×38
+- [ ] **Mobile LCP is ~5s** against a ~1.5s FCP, and the hero logo is the LCP element at
+      102KB. Worth a look, but see [[Bugs Worth Remembering]] before reaching for
+      `fetchpriority` — that has already been tried and measured, and it made it worse
+
 ## Worth doing next
 
 - [ ] **Custom domain.** Point `pokemontxk.com` at the Worker and retire the old site, then set

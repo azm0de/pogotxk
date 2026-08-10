@@ -237,6 +237,38 @@ wrong thing — a people-first gallery instead of the landmark rail. See [[Desig
 > Check what the measurement actually means before acting on it — and when a tool reports a
 > defect in code that already passed review, suspect the tool before the code.
 
+## Advice from a tool, taken without measuring
+
+**Lighthouse asked for `fetchpriority="high"` and it made things worse.** The hero
+logo is the LCP element, and the LCP audit's checklist said *"fetchpriority=high should
+be applied"*. It was applied. Three warmed production runs each way:
+
+| | perf | LCP | FCP | logo request priority |
+|---|---|---|---|---|
+| with the hint | 77 / 77 / 78 | 5.0–5.2s | 2.0–2.1s | **Medium** |
+| without it | 77 / 81 / 82 | 4.6–5.2s | 1.5–2.1s | **High** |
+
+Chrome already assigns a large in-viewport image High on its own. The attribute did not
+raise that — the request came back *Medium* — and the audit still reported
+`priorityHinted: false` with the attribute present in the served HTML, so it never
+satisfied the check it was added for.
+
+> Two lessons, and the second is the general one. A priority hint is a hint, and the
+> browser's own heuristic may already be doing better; check the request priority in
+> the network trace rather than assuming the attribute won. And an audit that keeps
+> failing after a fix is applied is telling you the fix is not the fix — the temptation
+> is to assume the report is stale.
+
+**Lighthouse against `wrangler dev` measures the dev server, not the site.** The local
+preview scored 69–77 mobile while production scored 91 on the same build, because
+`wrangler dev` serves over HTTP/1.1 with no Brotli: five render-blocking stylesheets
+that the edge multiplexes cost ~700ms locally and appeared as the top opportunity.
+Nearly an hour of "performance problems" were an artefact of the harness.
+
+> Audit the thing you ship, from where it is served. A local preview is fine for
+> accessibility and SEO, which are transport-independent — those numbers held exactly
+> (93 → 97 and 92 → 100 locally, and the same on production after deploying).
+
 ## See also
 
 [[Platform Limits and Traps]] · [[Migration from the Old Site]]
