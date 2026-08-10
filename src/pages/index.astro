@@ -1879,30 +1879,11 @@ function homeWhen(event: CalendarEvent): string {
     .on-now-dot {
       animation: none;
     }
-    /*
-     * Swap the source, because there is nothing else to swap.
-     *
-     * An animated WebP used as a `background-image` has no CSS switch — it is
-     * not an animation the cascade can set to `none`, and there is no element to
-     * call `pause()` on the way the hero video has. The only way to honour
-     * reduced motion here is to serve a different file, so this one is a single
-     * frame of the same fish at 12KB.
-     */
-    .campsite-band {
-      --art-src: url('/art/magikarp-still.webp');
-    }
+    /* The campsite artwork's reduced-motion swap is NOT here — it has to come
+       after the rule it overrides. See below, next to `.campsite-band`. */
   }
 
   /* --- campsite artwork -----------------------------------------------------
-   * Zapdos — Instinct's bird, and the section's own accent is already that
-   * colour: `--poi-campsite` (#f2a33c) is what the ★ Campsite markers use. The
-   * art lands where its team colour already means something on this site rather
-   * than being dropped somewhere it merely fits.
-   *
-   * Barely negative on the right, unlike the hero: there is no card in the way
-   * here, so nearly the whole bird stays on screen.
-   */
-  /*
    * Magikarp, flopping. 16 frames over 1.6s as an animated WebP.
    *
    * Encoded **lossless**, which is not the usual choice for a 147KB asset — but
@@ -1919,17 +1900,64 @@ function homeWhen(event: CalendarEvent): string {
   .campsite-band {
     --art-src: url('/art/magikarp-anim.webp');
     --art-ratio: 1.04;
-    --art-right: calc(-1 * clamp(12px, 2vw, 46px));
-    --art-bottom: 10px;
+    /*
+     * Parked under the Instagram tile, which is the last column of the "Find
+     * us" grid directly above this band — the band's top edge and that tile's
+     * bottom edge are the same line.
+     *
+     * Derived from the grid rather than nudged into place, the same way Lucario
+     * is positioned in the hero:
+     *
+     *   outer gutter        (100% − sectionWidth) / 2
+     * + the section padding 20px
+     * + half a column       (sectionWidth − 40 − 3×10 gaps) / 8
+     * − half the artwork    var(--art-w) / 2
+     *
+     * The grid is `repeat(auto-fit, minmax(180px, 1fr))`, so four columns need
+     * 750px of content. That holds everywhere this rule applies: the mobile
+     * override below takes over at 820px, where there is still 781px.
+     */
+    --art-right: calc(
+      (100% - min(1100px, 100%)) / 2 + 20px + (min(1100px, 100%) - 70px) / 8 - var(--art-w) / 2
+    );
+    --art-top: 0px;
+    --art-bottom: auto;
     /*
      * Capped by the section's *height*, not by the 798px of clear width beside
      * the text. `overflow-x: clip` leaves `overflow-y` computing to `visible`,
-     * so anything taller than the band spills up into "Find us" rather than
-     * being cropped — this is why the band also takes extra bottom padding
-     * below, to buy the art somewhere to be.
+     * so anything taller than the band is not cropped — it spills out of it.
+     *
+     * The padding below is what catches that, and it is load-bearing rather
+     * than decorative: at 1440px the fish is 317px tall against 295px of
+     * content, so without the extra 72px it would hang into the footer. Raising
+     * `--art-w` past this without raising the padding to match will do exactly
+     * that. (Anchored to the top now, the overflow goes down; it used to go up
+     * into "Find us".)
      */
     --art-w: clamp(170px, 23vw, 330px);
     padding-bottom: clamp(0px, 5vw, 76px);
+  }
+
+  /*
+   * Swap the source, because there is nothing else to swap.
+   *
+   * An animated WebP used as a `background-image` has no CSS switch — it is not
+   * an animation the cascade can set to `none`, and there is no element to call
+   * `pause()` on the way the hero video has. The only way to honour reduced
+   * motion here is to serve a different file, so this one is a single frame of
+   * the same fish at 12KB.
+   *
+   * This block must stay BELOW `.campsite-band` above. It lived up with the
+   * other reduced-motion rules until 2026-08-10 and did nothing at all: a media
+   * query adds no specificity, both selectors are `.campsite-band`, so the later
+   * one wins on source order alone and the animated file was served to everyone.
+   * Nothing after this point may set `--art-src` — the mobile override below
+   * deliberately does not.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .campsite-band {
+      --art-src: url('/art/magikarp-still.webp');
+    }
   }
 
   .campsite {
@@ -1972,6 +2000,11 @@ function homeWhen(event: CalendarEvent): string {
        sitting in no longer exists. */
     .campsite-band {
       --art-right: -40px;
+      /* `--art-top: auto` is load-bearing. The base rule now sets `top: 0` to
+         sit under the Instagram tile, and with both `top` and `bottom` set on an
+         absolutely positioned box the top wins — so this `bottom` would be
+         quietly ignored and the fish would stay pinned to the band's top edge. */
+      --art-top: auto;
       --art-bottom: -6px;
       --art-w: 210px;
       --art-opacity: 0.17;
