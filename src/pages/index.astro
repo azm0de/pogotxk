@@ -161,13 +161,25 @@ function homeWhen(event: CalendarEvent): string {
       now passes them through.
     */}
     {/*
-      No `poster`. The element is transparent until `playing` fires, so a poster
-      would never actually be seen — but the browser fetches it regardless, which
-      cost every phone 61KB for an image behind an invisible element. The static
-      hero is the loading state.
+      There IS a poster now, and it is the whole fallback strategy.
+
+      It used to be left off on the reasoning that the element is transparent
+      until `playing` fires, so a poster would never be seen and would cost every
+      phone 51KB behind an invisible element. True — but it made *playing* the
+      only route to a hero, and a phone has several ways to refuse: Low Power
+      Mode on iOS blocks autoplay outright, so does Data Saver, and Reduce Motion
+      makes us decline on purpose. Every one of those landed on Lucario.
+
+      So the band now comes up when the still loads rather than when the video
+      plays, and the video fades in over it for whoever can have it. The poster
+      is a frame of this same clip, so the two are the same picture — a phone
+      that cannot play video still gets the forest, which is what "match the
+      desktop site" actually asks for. It is rendered by the video element, so it
+      inherits the same `object-fit` and the same mobile strip geometry for free.
     */}
     <video
       class="hero-video"
+      poster="/hero/eevee-forest-still.webp"
       data-src="/media/hero/eevee-forest.mp4"
       muted
       loop
@@ -583,9 +595,24 @@ function homeWhen(event: CalendarEvent): string {
       const still = matchMedia('(prefers-reduced-motion: reduce)');
       const thrifty = navigator.connection && navigator.connection.saveData;
 
-      // Set on `playing`, not on load: until frames are actually going up there
-      // is nothing to darken, and the scrim would just be a grey slab.
-      video.addEventListener('playing', () => band.setAttribute('data-hero-video', ''));
+      /*
+       * Raised when the POSTER has loaded, not when the video reaches `playing`.
+       *
+       * The old rule was "nothing to darken until frames are going up", which
+       * was right when the poster did not exist: the scrim over an empty element
+       * is a grey slab. But it made playback the only route to a hero, and a
+       * phone can refuse playback in at least three ways it never reports —
+       * iOS Low Power Mode, Data Saver, and Reduce Motion, which we decline on
+       * purpose. All three landed on the Lucario fallback.
+       *
+       * Keying it to the poster keeps the original guarantee — the scrim only
+       * ever goes over a picture that actually loaded — while giving every
+       * device the forest. A decode failure or a 404 on the still leaves the
+       * attribute unset and the hero exactly as it was without any of this.
+       */
+      const art = new Image();
+      art.addEventListener('load', () => band.setAttribute('data-hero-video', ''));
+      art.src = video.getAttribute('poster');
 
       const sync = () => {
         if (!still.matches && !thrifty) {
@@ -597,8 +624,11 @@ function homeWhen(event: CalendarEvent): string {
           // hero is already the fallback, so there is nothing to handle.
           video.play().catch(() => {});
         } else {
+          // The poster stays up. Reduced motion asks for a still image, not for
+          // no image, and the attribute belongs to the poster now — clearing it
+          // would take the hero away from exactly the people being accommodated,
+          // which is what it used to do.
           video.pause();
-          band.removeAttribute('data-hero-video');
         }
       };
 
@@ -885,15 +915,22 @@ function homeWhen(event: CalendarEvent): string {
      *
      * Letting the box take the clip's own ratio instead, floored at 72% of the
      * band, gives 72% at 1000, 78% at 1200 and the whole frame from ~1585px up
-     * — both subjects in view at every width this rule covers. `height: auto`
-     * rather than a hardcoded `aspect-ratio`, so it tracks the file if the clip
-     * is ever recut; `[data-hero-video]` is only set on `playing`, so the
-     * intrinsic ratio is always known by the time this applies. `max-height`
+     * — both subjects in view at every width this rule covers. `max-height`
      * catches beyond ~1912px, where the clip would otherwise outgrow the band.
+     *
+     * `aspect-ratio` is declared rather than left to the intrinsic size, and it
+     * became necessary when the poster arrived. This used to rely on the
+     * attribute being set on `playing`, which guaranteed metadata had loaded and
+     * the real ratio was known. It is set on the poster now, and a device that
+     * declines playback — reduced motion, data saver — never gets a `src` at
+     * all: `height: auto` on a video with nothing but a poster is not reliably
+     * the poster's ratio, and where it is not, the box collapses to the 150px
+     * default. The number matches the file; recut the clip and it moves.
      */
     .hero-band[data-hero-video] .hero-video {
       bottom: auto;
       height: auto;
+      aspect-ratio: 1600 / 670;
       min-height: 72%;
       max-height: 100%;
     }
