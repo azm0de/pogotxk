@@ -232,17 +232,25 @@ function homeWhen(event: CalendarEvent): string {
         >
       </div>
 
-      {
-        totalPois > 0 && (
-          <dl class="stats">
-            <div><dt>PokéStops</dt><dd>{counts?.pokestops ?? 0}</dd></div>
-            <div><dt>Gyms</dt><dd>{counts?.gyms ?? 0}</dd></div>
-            <div><dt>Power Spots</dt><dd>{counts?.powerspots ?? 0}</dd></div>
-            <div><dt>★ Campsite</dt><dd>{counts?.campsite ?? 0}</dd></div>
-          </dl>
-        )
-      }
     </div>
+
+    {/*
+      A sibling of `.hero-copy`, not a child of it, and that is load-bearing on
+      desktop: it gives the counts their own grid row, which lets the map end on
+      the same line as the buttons without anyone having to know how tall this
+      block is. Stacked below 820px it simply follows the copy, exactly where it
+      read before.
+    */}
+    {
+      totalPois > 0 && (
+        <dl class="stats">
+          <div><dt>PokéStops</dt><dd>{counts?.pokestops ?? 0}</dd></div>
+          <div><dt>Gyms</dt><dd>{counts?.gyms ?? 0}</dd></div>
+          <div><dt>Power Spots</dt><dd>{counts?.powerspots ?? 0}</dd></div>
+          <div><dt>★ Campsite</dt><dd>{counts?.campsite ?? 0}</dd></div>
+        </dl>
+      )
+    }
 
     {/*
       The real map, not a picture of one. It is the thing people came for, so
@@ -1042,11 +1050,43 @@ function homeWhen(event: CalendarEvent): string {
   .hero {
     display: grid;
     grid-template-columns: 1.15fr 1fr;
-    gap: clamp(20px, 4vw, 48px);
+    /* Columns only. The rows are spaced by `.stats`' own top margin, so that
+       one number keeps setting the distance under the buttons the way it did
+       when the counts were still inside `.hero-copy`. A row gap here would be
+       added on top of it. */
+    column-gap: clamp(20px, 4vw, 48px);
+    row-gap: 0;
     align-items: center;
     max-width: 1100px;
     margin: 0 auto;
     padding: clamp(28px, 6vw, 64px) 20px clamp(20px, 4vw, 40px);
+  }
+
+  /*
+   * Two columns, two rows: copy and map share the first, the counts have the
+   * second to themselves.
+   *
+   * That is what lands the map's bottom edge on the same line as "Join the
+   * Discord". The first row is only as tall as the copy down to the end of the
+   * buttons — the counts are not in it — so `align-self: end` puts the map on
+   * that line exactly, with no measurement of the counts block and nothing to
+   * re-tune if its type ever changes. Centred, the map used to finish 65px
+   * short of the buttons at 1200px.
+   */
+  @media (min-width: 821px) {
+    .hero-copy {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .hero > .stats {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .hero-map {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: end;
+    }
   }
 
   /* No font-size or line-height any more: the h1's only child is an image, and
@@ -2043,6 +2083,10 @@ function homeWhen(event: CalendarEvent): string {
     }
     .hero-map {
       aspect-ratio: 16 / 9;
+      /* Stacked, this is the gap the grid's row gap used to provide. That was
+         turned off so the counts could set their own spacing on desktop, and
+         one column means the map now sits directly under them. */
+      margin-top: clamp(20px, 4vw, 48px);
     }
 
     /*
