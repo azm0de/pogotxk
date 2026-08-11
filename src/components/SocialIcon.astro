@@ -1,10 +1,21 @@
 ---
 /**
- * The four social marks, as each brand's actual app icon.
+ * The four social marks, in two treatments.
  *
  * Inlined as SVG rather than fetched: these sit in the most-linked section on
  * the site, and an external request that fails leaves four blank squares. Being
  * vector, they also stay sharp at any size and cost no extra requests.
+ *
+ * Default is each brand's actual app icon — the coloured, rounded-square tile.
+ * That works on the home page, where the marks sit on panels beside a text
+ * label and are the thing you are meant to look at.
+ *
+ * `bare` is the header treatment: the glyph alone in `currentColor`, no tile.
+ * Four saturated tiles (blurple, blue, a pink-orange gradient and a
+ * purple-to-cyan) crowded against the logo on a red bar was the busiest thing
+ * in the header, and none of that colour survives being read at 24px anyway.
+ * The glyph shapes are what carry the recognition, so the header keeps those
+ * and drops the rest.
  *
  * Niantic publishes no vector Campfire logo — campfire.nianticlabs.com is a
  * Google Sites page serving rasters, and the "Campfire" logos on the vector
@@ -25,9 +36,14 @@ interface Props {
    * Pass false only where the icon is the only thing naming the link.
    */
   decorative?: boolean;
+  /**
+   * Glyph only, filled with `currentColor`, no brand tile behind it. The
+   * caller sets the colour.
+   */
+  bare?: boolean;
 }
 
-const { name, size = 44, decorative = true } = Astro.props;
+const { name, size = 44, decorative = true, bare = false } = Astro.props;
 
 const LABEL: Record<Props['name'], string> = {
   discord: 'Discord',
@@ -36,9 +52,28 @@ const LABEL: Record<Props['name'], string> = {
   instagram: 'Instagram',
 };
 
-// Namespaces the gradient/clip ids. Derived from the name rather than randomised
-// so the markup is byte-stable across renders; each icon appears once per page,
-// and were one repeated the duplicate defs would be identical anyway.
+/*
+ * Shared between both treatments, so the tile and the bare glyph can never
+ * drift into being different drawings of the same logo. Each is authored in its
+ * own coordinate space and placed by a transform rather than being re-fitted by
+ * hand — the numbers below are just bounding-box arithmetic.
+ */
+
+/** Discord's wordless mark, in its native 24x24 box. Bounds x -0.3..23.6, y 2.9..21.5. */
+const DISCORD_D =
+  'M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286ZM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189Zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z';
+
+/**
+ * The f, drawn to sit on the baseline. Bounds x 14.2..33.7, y 10.4..48 — the
+ * flat bottom is the stem meeting the baseline, which is where the tile clips
+ * it and where a standalone f ends anyway.
+ */
+const FACEBOOK_D =
+  'M32.6 30.9 33.65 24.3H27.3v-4.28c0-1.8.89-3.56 3.72-3.56h2.9v-5.62s-2.63-.45-5.15-.45c-5.25 0-8.69 3.18-8.69 8.95v5.07h-5.81v6.6h5.81V48h7.15V30.9Z';
+
+// Namespaces the gradient/clip/mask ids. Derived from the name rather than
+// randomised so the markup is byte-stable across renders; each icon appears once
+// per page, and were one repeated the duplicate defs would be identical anyway.
 const uid = `si-${name}`;
 ---
 
@@ -51,35 +86,105 @@ const uid = `si-${name}`;
   aria-label={decorative ? undefined : LABEL[name]}
   focusable="false"
 >
+  {/* ----------------------------------------------------- bare glyphs -- */}
+
   {
-    name === 'discord' && (
+    bare && name === 'discord' && (
+      /* 42 wide of the 48 box: 42/23.96. Centred on both axes off the path's
+         own bounds, which start slightly left of zero. */
+      <g transform="translate(3.6 2.7) scale(1.75)">
+        <path fill="currentColor" d={DISCORD_D} />
+      </g>
+    )
+  }
+
+  {
+    bare && name === 'facebook' && (
+      /* Sized to height rather than width — the f is a narrow glyph and
+         stretching it to match Discord's width would just distort it. 42 tall
+         of the 48 box: 42/37.61. */
+      <g transform="translate(-2.7 -8.6) scale(1.117)">
+        <path fill="currentColor" d={FACEBOOK_D} />
+      </g>
+    )
+  }
+
+  {
+    bare && name === 'instagram' && (
+      /* Already an outline drawing, so this is the tile version scaled about
+         the centre by 36/22. The stroke is lightened rather than scaled with
+         it: 4.4 would be correct arithmetically and reads as a slab at 24px. */
+      <>
+        <rect
+          x="6"
+          y="6"
+          width="36"
+          height="36"
+          rx="10.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3.8"
+        />
+        <circle cx="24" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="3.8" />
+        <circle cx="35" cy="13" r="2.6" fill="currentColor" />
+      </>
+    )
+  }
+
+  {
+    bare && name === 'campfire' && (
+      /*
+        A mask rather than an even-odd compound path, for two reasons.
+        The tip needs the same rounding the tile version gets by stroking the
+        flame in its own fill — and a stroke applied to a compound path would
+        also rim the dome, closing the notch it is supposed to open. Masking
+        keeps the stroke on the flame alone.
+
+        The dome runs to y=48, past the flame's stroked bottom edge at 46.5, so
+        the notch stays open at the base instead of being capped by a sliver of
+        the flame's own outline.
+      */
+      <>
+        <mask id={`${uid}-m`} maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+          <path
+            fill="#fff"
+            stroke="#fff"
+            stroke-width="2"
+            stroke-linejoin="round"
+            d="M24 5.5C28.6 16.6 44 30.9 44 45.5H4C4 30.9 19.4 16.6 24 5.5Z"
+          />
+          <path fill="#000" d="M31.6 48v-7.1a7.6 7.6 0 0 0-15.2 0V48Z" />
+        </mask>
+        <rect width="48" height="48" fill="currentColor" mask={`url(#${uid}-m)`} />
+      </>
+    )
+  }
+
+  {/* ------------------------------------------------------ brand tiles -- */}
+
+  {
+    !bare && name === 'discord' && (
       <>
         <rect width="48" height="48" rx="11" fill="#5865F2" />
         <g transform="translate(9.6 9.6) scale(1.2)">
-          <path
-            fill="#fff"
-            d="M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286ZM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189Zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"
-          />
+          <path fill="#fff" d={DISCORD_D} />
         </g>
       </>
     )
   }
 
   {
-    name === 'facebook' && (
+    !bare && name === 'facebook' && (
       <>
         <rect width="48" height="48" rx="11" fill="#0866FF" />
         {/* The f sits on the baseline and bleeds off the bottom, as on the real icon. */}
-        <path
-          fill="#fff"
-          d="M32.6 30.9 33.65 24.3H27.3v-4.28c0-1.8.89-3.56 3.72-3.56h2.9v-5.62s-2.63-.45-5.15-.45c-5.25 0-8.69 3.18-8.69 8.95v5.07h-5.81v6.6h5.81V48h7.15V30.9Z"
-        />
+        <path fill="#fff" d={FACEBOOK_D} />
       </>
     )
   }
 
   {
-    name === 'instagram' && (
+    !bare && name === 'instagram' && (
       <>
         <defs>
           <radialGradient id={`${uid}-g`} cx="0.3" cy="1.07" r="1.2">
@@ -108,7 +213,7 @@ const uid = `si-${name}`;
   }
 
   {
-    name === 'campfire' && (
+    !bare && name === 'campfire' && (
       <>
         <defs>
           {/* Purple at the top through blue to cyan at the base. */}

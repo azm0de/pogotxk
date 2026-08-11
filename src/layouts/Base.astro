@@ -130,7 +130,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
                 target="_blank"
                 aria-label={`${social.label} (opens in a new tab)`}
               >
-                <SocialIcon name={social.name} size={24} />
+                <SocialIcon name={social.name} size={22} bare />
               </a>
             </li>
           ))
@@ -418,23 +418,26 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       .header-socials a {
         display: block;
         line-height: 0;
-        border-radius: 7px;
-        opacity: 0.92;
+        /* The marks are bare glyphs here, so this is what colours them —
+           `currentColor` inside the SVG resolves against it. Slightly under
+           white at rest so they read as secondary to the wordmark, which is the
+           only thing in the header allowed to be pure white. */
+        color: rgb(255 255 255 / 0.88);
+        border-radius: 5px;
         transition:
           transform 0.16s ease,
-          opacity 0.16s ease;
+          color 0.16s ease;
       }
       .header-socials a:hover {
-        opacity: 1;
+        color: #fff;
         transform: translateY(-1px) scale(1.06);
       }
       .header-socials a:focus-visible {
         outline: 2px solid #fff;
-        outline-offset: 2px;
+        outline-offset: 3px;
       }
       .header-socials svg {
         display: block;
-        border-radius: 6px;
       }
 
       /* Hidden until the panel breakpoint takes over below. 44px because it is
