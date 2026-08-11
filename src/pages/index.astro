@@ -1857,6 +1857,11 @@ function homeWhen(event: CalendarEvent): string {
        were the same number, which is no longer true and is why every size below
        had to come down with it. */
     --art-ratio: 0.708;
+    /* The sprite's head and tail both angle to the viewer's left, and he stands
+       on the left of the page — so unmirrored he looks out over the edge. Same
+       reasoning as Lucario's flip in the hero: turn the subject back in toward
+       the content it is standing beside. */
+    --art-flip: -1;
     /* Barely any bleed now. The old −150px hid nearly half of him off-page; in
        clear space there is no reason to throw the image away. */
     --art-left: calc(-1 * clamp(8px, 2.5vw, 44px));
