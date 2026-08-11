@@ -1803,58 +1803,72 @@ function homeWhen(event: CalendarEvent): string {
   }
 
   /* --- "Happening now" artwork ----------------------------------------------
-   * Mew on the left, Incineroar on the right. The hero and the Campsite
-   * explainer both come in from the right, so alternating here keeps the page
-   * from reading as a column of art stacked down one margin.
+   * Mew, on the left. Incineroar stood on the right until he was dropped; the
+   * `--art-2nd` opt-in in global.css that carried him is untouched and still
+   * there for whatever wants the slot next.
    *
-   * These were previously anchored to the band's bottom corners on the
-   * assumption that the 1100px content cap left a margin for them to stand in.
-   * It does not, below roughly 1400px: at 1000px the section fills the band edge
-   * to edge, so Mew's box ran x −80→120 and Incineroar's 865→1045 — straight
-   * through the cards. And every surface in this section is opaque (the cards
-   * are #fff, the attribution carries its own panel), so at `z-index: -1`
-   * neither one rendered at all. Vertically it was no better: the attribution
-   * ran to the band's bottom edge, which is exactly where both were anchored.
+   * Coming in from the left still earns its keep alone: the hero and the
+   * Campsite explainer both enter from the right, so this one arriving from the
+   * other side keeps the page from reading as a column of art stacked down a
+   * single margin.
    *
-   * So they get their own strip rather than borrowing a margin that is not
+   * This was previously anchored to the band's bottom corner on the assumption
+   * that the 1100px content cap left a margin to stand in. It does not, below
+   * roughly 1400px: at 1000px the section fills the band edge to edge, so Mew's
+   * box ran x −80→120, straight through the cards. And every surface in this
+   * section is opaque (the cards are #fff, the attribution carries its own
+   * panel), so at `z-index: -1` he did not render at all. Vertically it was no
+   * better: the attribution ran to the band's bottom edge, which is exactly
+   * where he was anchored.
+   *
+   * So the art gets its own strip rather than borrowing a margin that is not
    * there. `padding-bottom` opens genuinely empty band below the attribution and
-   * both are anchored into it, which makes them visible at every width instead
-   * of only on a wide desktop.
+   * he is anchored into it, which makes him visible at every width instead of
+   * only on a wide desktop.
    */
   .onnow-band {
     /*
      * Narrow screens keep the strip: the attribution fills the width, so there
      * is nothing to stand beside and the art goes underneath it instead.
      *
-     * The floor is 132px and not 120px, and the cap 280px and not 265px, because
-     * Incineroar is the tall one: at 19vw/265px he cleared the attribution by
-     * 2px at 1000 wide and 1px at 375, which is not clearance, it is luck.
+     * The 132px floor was set for Incineroar, who was the tall one. He is gone
+     * and Mew is now the only thing standing here — but the new Mew is taller
+     * than he is wide, so the strip still earns its depth and the number stays.
+     * The 280px cap is unreachable: 20vw only passes 280 at 1400px wide, and
+     * from 900 up the block below replaces this padding entirely.
      */
     padding-bottom: clamp(132px, 20vw, 280px);
 
-    --art-src: url('/art/mew.webp');
-    --art-ratio: 0.99;
+    /*
+     * Mew, drifting. 25 frames on a 2s loop.
+     *
+     * Kept at the trimmed source size of 255x360 on purpose: downscaling made
+     * the file *bigger* — 230px wide encoded to 281KB against 255px at 192KB —
+     * because resampling adds per-frame noise that defeats WebP's inter-frame
+     * prediction. The weight is frame count, not resolution, so it is halved
+     * frames rather than pixels that took 329KB down to 168KB.
+     *
+     * The source carries no frame delays at all (every duration is 0), so the
+     * 2s cycle is authored rather than preserved. Trimmed to the union of all
+     * 50 frames — a per-frame crop would make him jitter.
+     */
+    --art-src: url('/art/mew-anim.webp');
+    /* 255/360. The old Mew was 0.99 — near enough square that width and height
+       were the same number, which is no longer true and is why every size below
+       had to come down with it. */
+    --art-ratio: 0.708;
     /* Barely any bleed now. The old −150px hid nearly half of him off-page; in
        clear space there is no reason to throw the image away. */
     --art-left: calc(-1 * clamp(8px, 2.5vw, 44px));
     --art-bottom: clamp(6px, 1.5vw, 18px);
-    --art-w: clamp(100px, 16vw, 225px);
-
     /*
-     * `--art-2nd` is the opt-in: it turns `content: none` into `content: ''` and
-     * brings the ::before into existence.
-     *
-     * Incineroar is sized off a different number from Mew even though they share
-     * the strip: at a trimmed ratio of 0.55 he is 1.82x as tall as he is wide, so
-     * the width that fits is set by the strip's height, not by matching Mew's
-     * width. At 1440 that is 132px wide and 240px tall against a 265px strip.
+     * Sized against the strip's height, not chosen. Height is width / 0.708, and
+     * it has to clear `--art-bottom` inside `padding-bottom`: at 375 that is
+     * 80px wide -> 113 tall + 6 = 119 against a 132px strip, and at 899 it is
+     * 108 -> 152 + 13.5 = 166 against 180. The old 16vw/225px cap would have
+     * been 318px tall here and run straight up through the attribution.
      */
-    --art-2nd: '';
-    --art2-src: url('/art/incineroar.webp');
-    --art2-ratio: 0.55;
-    --art2-right: calc(-1 * clamp(6px, 2vw, 38px));
-    --art2-bottom: clamp(6px, 1.5vw, 18px);
-    --art2-w: clamp(62px, 9.5vw, 132px);
+    --art-w: clamp(80px, 12vw, 118px);
   }
 
   /*
@@ -1902,20 +1916,21 @@ function homeWhen(event: CalendarEvent): string {
        * end of this query he would have been half again too wide.
        *
        * The px one is height in disguise. The art is bottom-aligned with the
-       * box, so anything taller than the box rises past its top, and there are
-       * only 36px of clear band up there before the "See 5 more" pill. At a 0.99
-       * ratio 180px of width is 182px of height, which is 33px of rise. Mew is
-       * the round one, so width and height are nearly the same number; keep that
-       * in mind before raising it.
+       * box, so anything taller than the box rises past its top, and measured at
+       * 1200 there are exactly 36px of clear band up there between the "See 5
+       * more" pill and the attribution, which is 148px tall.
+       *
+       * That ceiling used to leave Mew 180px wide, because at his old 0.99 ratio
+       * width and height were the same number. At 0.708 the same 180px would be
+       * 254px tall, 70px past what there is room for — so height is what sets
+       * the width now.
+       *
+       * 122 and not the 131 the arithmetic allows: 131 measured out at 1px below
+       * the pill, and the note further up this file about the old art clearing
+       * things "by 2px at 1000 wide and 1px at 375" already records what that is
+       * worth. 122 leaves 12px.
        */
-      --art-w: min(180px, calc((100% - var(--attr-w)) / 2 - var(--attr-gap)));
-
-      --art2-bottom: clamp(24px, 3vw, 44px);
-      --art2-left: calc((100% + var(--attr-w)) / 2 + var(--attr-gap));
-      --art2-right: auto;
-      /* Same two ceilings, but Incineroar is 1.82x as tall as he is wide, so the
-         height budget caps him at 100px where Mew gets 180. */
-      --art2-w: min(100px, calc((100% - var(--attr-w)) / 2 - var(--attr-gap)));
+      --art-w: min(122px, calc((100% - var(--attr-w)) / 2 - var(--attr-gap)));
     }
 
     /* `:global`, because the aside belongs to Attribution.astro and Astro would
@@ -1925,6 +1940,25 @@ function homeWhen(event: CalendarEvent): string {
     .onnow-band :global(.g-attribution) {
       max-width: var(--attr-w);
       margin-inline: auto;
+    }
+  }
+
+  /*
+   * Reduced motion gets one frame, at 10KB.
+   *
+   * Same constraint as the campsite Magikarp: an animated WebP used as a
+   * `background-image` has no CSS switch — it is not an animation the cascade
+   * can set to `none`, and there is no element to call `pause()` on. Serving a
+   * different file is the only lever there is.
+   *
+   * This sits BELOW `.onnow-band`, and that is load-bearing. A media query adds
+   * no specificity, so this and the base rule are an exact tie decided purely on
+   * source order — above it, this would lose and quietly do nothing. That is
+   * precisely how the Magikarp swap shipped and sat dead until it was caught.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .onnow-band {
+      --art-src: url('/art/mew-still.webp');
     }
   }
 
@@ -2128,18 +2162,17 @@ function homeWhen(event: CalendarEvent): string {
     /*
      * `.onnow-band` deliberately has no override here any more.
      *
-     * It used to drop to atmosphere at 0.15/0.14 opacity for the same reason as
-     * the two above — no margin left once the content box fills the screen. But
-     * opacity was never the thing standing between those two and the reader:
-     * they sit at `z-index: -1` and every surface in that section is opaque, so
-     * behind a card they rendered at 0.15 of nothing. Pushing them to opposite
-     * ends only moved which card hid them.
+     * It used to drop to atmosphere at 0.15 opacity for the same reason as the
+     * two above — no margin left once the content box fills the screen. But
+     * opacity was never the thing standing between the art and the reader: it
+     * sits at `z-index: -1` and every surface in that section is opaque, so
+     * behind a card it rendered at 0.15 of nothing. Moving it only changed which
+     * card did the hiding.
      *
      * The strip fixes that at every width, which is exactly what the mobile
-     * override could not do — its own sizes (200px wide, `--art2-top: 30px`)
-     * fought the strip and put Incineroar back up among the cards. The base
-     * clamps already fit: at 375 they are 100px and 62px wide against a 132px
-     * strip, clearing it by 25px and 13px.
+     * override could not do — its own sizes fought the strip and pushed the art
+     * back up among the cards. The base clamp already fits: at 375 Mew is 80px
+     * wide, so 113px tall plus a 6px offset against a 132px strip.
      */
   }
 </style>
