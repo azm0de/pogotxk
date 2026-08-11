@@ -141,12 +141,24 @@ function homeWhen(event: CalendarEvent): string {
       background that is muted by definition. Re-encoded to 1600 wide, 30fps and
       no audio: 656KB, which is 1.2% of what was handed over.
 
-      `data-src`, not `src`, and `preload="none"`: the script below only promotes
-      it above 900px and only when motion is allowed, so a phone on cell data
-      never fetches it at all. Everything is keyed off `data-hero-video`, which
-      goes on the band when the video actually reaches `playing` — so a blocked
-      autoplay, a decode failure or reduced motion all land on exactly the hero
-      that exists today rather than on a dark band over nothing.
+      `data-src`, not `src`, and `preload="none"`: the script below promotes it
+      only when motion is allowed and the browser is not in data-saver mode.
+      Everything is keyed off `data-hero-video`, which goes on the band when the
+      video actually reaches `playing` — so a blocked autoplay, a decode failure
+      or reduced motion all land on exactly the hero that exists without it
+      rather than on a dark band over nothing.
+
+      Served from R2 via /media, NOT from /hero in the static assets, and that is
+      the difference between this playing on an iPhone and not.
+
+      Cloudflare's asset layer does not do byte ranges: ask it for `bytes=0-1`
+      and it returns 200 with the whole 656KB and no `Accept-Ranges`. Desktop
+      Chrome shrugs; iOS Safari probes with a range request before it will play
+      any `<video>`, reads a 200-with-everything as unstreamable, and refuses.
+      `playing` then never fires, `data-hero-video` never gets set, and every
+      iPhone sat on the Lucario fallback — which is exactly the "mobile is not
+      showing the video" report, twice. R2 serves ranges natively and /media
+      now passes them through.
     */}
     {/*
       No `poster`. The element is transparent until `playing` fires, so a poster
@@ -156,7 +168,7 @@ function homeWhen(event: CalendarEvent): string {
     */}
     <video
       class="hero-video"
-      data-src="/hero/eevee-forest.mp4"
+      data-src="/media/hero/eevee-forest.mp4"
       muted
       loop
       playsinline
