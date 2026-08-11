@@ -819,9 +819,15 @@ function homeWhen(event: CalendarEvent): string {
     z-index: -2;
     width: 100%;
     height: 100%;
-    /* `cover` on a 2.39:1 source in a ~1.7:1 band crops the sides, and the two
-       subjects sit at 33% and 76% across — centred keeps the middle 70%, which
-       holds both. Move this and you start cutting one of them off. */
+    /* Fills the band, which is what a phone wants: stacked, the band is taller
+       than it is wide, and a clip sized to its own 2.39:1 ratio would be a
+       thin strip over a lot of empty. The sides are heavily cropped as a
+       result — unavoidable at that shape.
+
+       From 900px up this is overridden below, where there is enough width for
+       the clip to be shown closer to whole. Centred either way: the two
+       subjects sit at 33% and 76% across, so any `object-position` off centre
+       drops one of them first. */
     object-fit: cover;
     object-position: center;
   }
@@ -859,11 +865,16 @@ function homeWhen(event: CalendarEvent): string {
    * holds both of them.
    *
    * Below the strip the scrim goes fully opaque and becomes the hero's
-   * background. That is why there is no `background` on `.hero-band` itself: it
-   * would paint *over* the video. `.hero-band` sets no stacking context, so the
-   * z-index −2 video escapes to the root and paints beneath any background its
-   * own parent draws. Doing this in the scrim — which is already the layer above
-   * the video — sidesteps that entirely.
+   * background. It is done in the scrim — already the layer above the video —
+   * rather than as a `background` on `.hero-band`, because by default that
+   * would paint *over* the video: `.hero-band` sets no stacking context, so the
+   * z-index −2 video escapes to the root and ends up beneath any background its
+   * own parent draws.
+   *
+   * The 900px-and-up block does take the other route and puts the backdrop on
+   * the band, which is why it also sets `isolation: isolate` — that is the part
+   * that makes a band background legal. Neither approach works without its own
+   * half, so do not move one without the other.
    */
   @media (max-width: 899px) {
     .hero-band {
@@ -928,6 +939,59 @@ function homeWhen(event: CalendarEvent): string {
         transparent 100%
       );
       mask-image: linear-gradient(to bottom, #000 calc(100% - var(--hero-out)), transparent 100%);
+    }
+
+    /*
+     * Stop stretching the clip to the band's height.
+     *
+     * The source is 2.39:1 and the band is nowhere near it — 1.46:1 at 1200px,
+     * 1.2:1 at 1000 — so `cover` was binding on height and eating the sides.
+     * The comment above still claimed a "~1.7:1 band" keeping "the middle 70%";
+     * the band has grown since, and the real numbers were 61% at 1200 and 50%
+     * at 1000. That last one matters: the two subjects sit at 33% and 76%
+     * across, and a centred 50% window is 25%–75%, so the second one was being
+     * cropped out of its own hero.
+     *
+     * Letting the box take the clip's own ratio instead, floored at 72% of the
+     * band, gives 72% at 1000, 78% at 1200 and the whole frame from ~1585px up
+     * — both subjects in view at every width this rule covers. `height: auto`
+     * rather than a hardcoded `aspect-ratio`, so it tracks the file if the clip
+     * is ever recut; `[data-hero-video]` is only set on `playing`, so the
+     * intrinsic ratio is always known by the time this applies. `max-height`
+     * catches beyond ~1912px, where the clip would otherwise outgrow the band.
+     */
+    .hero-band[data-hero-video] .hero-video {
+      bottom: auto;
+      height: auto;
+      min-height: 72%;
+      max-height: 100%;
+    }
+
+    /*
+     * What fills the strip below the clip. The page behind the hero is white,
+     * so without this the scrim over it read as a grey slab.
+     *
+     * `isolation` is not optional here, and it is the whole reason this looks
+     * the way it does. The video and scrim sit at z-index −2 and −1, and the
+     * note above is explicit that the trick only works because "nothing between
+     * here and the root paints an opaque background" — with no stacking context
+     * on the band, those two escape to the root, and the band's own background
+     * paints straight over them. Adding the backdrop without this turns the
+     * entire hero into a flat dark rectangle.
+     *
+     * The colour is the clip's own bottom edge, averaged over its last 2% of
+     * rows: rgb(46 49 46). Matching it is what makes the masked bottom of the
+     * video dissolve into the strip rather than step into it. It then fades out
+     * over `--hero-out`, the same distance the video and scrim already use.
+     */
+    .hero-band[data-hero-video] {
+      isolation: isolate;
+      background: linear-gradient(
+        to bottom,
+        rgb(46 49 46) 0%,
+        rgb(46 49 46) calc(100% - var(--hero-out)),
+        transparent 100%
+      );
     }
   }
 
