@@ -69,14 +69,46 @@ const description = tag
   </Fragment>
 
   <div class="blog">
-    <header class="blog-head">
-      <div>
-        <h1>{tag ? <>Tagged <span class="blog-tagname">{tag}</span></> : 'Community news'}</h1>
-        <p>
-          Meetup recaps, raid plans and Campsite updates from the PoGo TXK crew.{' '}
-          <a class="blog-feed" href="/rss.xml">RSS feed</a>
-        </p>
-      </div>
+    <header class="blog-hero">
+      {/*
+        Decorative: the `h1` beside it already says what this is, and describing
+        a picnic full of trainers tells a screen-reader user nothing about the
+        posts below.
+
+        1280x720 is the whole source and the card caps at 876px, so the widest
+        variant is the most any layout can ask for. 1126KB of JPEG became 236KB
+        of WebP at full width, and 77KB at 640.
+      */}
+      <picture class="blog-hero-art">
+        <img
+          src="/hero/outing-1280.webp"
+          srcset="/hero/outing-640.webp 640w, /hero/outing-960.webp 960w, /hero/outing-1280.webp 1280w"
+          sizes="(min-width: 1004px) 876px, calc(100vw - 32px)"
+          width="1280"
+          height="720"
+          alt=""
+          decoding="async"
+        />
+      </picture>
+
+      <h1>{tag ? <>Tagged <span class="blog-tagname">{tag}</span></> : 'Community news'}</h1>
+      <p class="blog-lede">
+        Meetup recaps, raid plans and Campsite updates from the PoGo TXK crew.{' '}
+        <a class="blog-feed" href="/rss.xml">RSS feed</a>
+      </p>
+
+      {/*
+        The artwork carries this notice printed along its bottom edge, and the
+        crop above cuts that edge off. Removing a rights notice while keeping the
+        image is not a trade worth making, so it is reproduced here instead —
+        same as the PokéStop art on /events, and the same principle as the press
+        photographs whose bylines render *on* the image. See
+        vault/Attribution Obligations.
+      */}
+      <p class="blog-hero-credit">
+        Artwork ©2016–2020 Niantic, Inc. ©2016–2020 Pokémon. ©1995–2020 Nintendo / Creatures
+        Inc. / GAME FREAK inc.
+      </p>
     </header>
 
     {
@@ -181,22 +213,124 @@ const description = tag
     padding: clamp(24px, 5vw, 48px) clamp(16px, 4vw, 32px) 72px;
   }
 
-  .blog-head h1 {
+  /* --- the hero card -------------------------------------------------------
+   *
+   * Built the same way as the /events and /raids heroes, deliberately: art at
+   * z-index −2, scrim at −1, and `isolation: isolate` so neither escapes to the
+   * root stacking context and paints behind the page itself.
+   */
+  .blog-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px) clamp(14px, 2.5vw, 20px);
+    color: #fff;
+    /* A column so the credit can be pushed to the bottom edge below. */
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Shorter than the /raids hero on purpose — this page is a list, and the
+     posts should not start below the fold to make room for a picture. */
+  @media (min-width: 760px) {
+    .blog-hero {
+      min-height: clamp(220px, 26vw, 320px);
+    }
+  }
+
+  .blog-hero-art {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+  }
+  .blog-hero-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* 45% keeps the trainers and the table in the band; centre drifts up into
+       sky and mountain, which is the half with nothing in it. */
+    object-position: center 45%;
+  }
+
+  /*
+   * The /raids scrim unchanged, but re-measured against this artwork rather
+   * than assumed to carry over — it is the brightest of the three, with white
+   * sky, snow and a lot of pale green. Worst case over the region text can
+   * occupy is 5.21:1 at 876x320, 5.19:1 at 736x260, 5.49:1 at 343x205 and
+   * 5.56:1 at 288x230, the credit every time, against a 4.5 threshold.
+   *
+   * Pixel stops, and 90deg rather than any tilt, for the reasons written out at
+   * length on `.raids-hero::before`: text occupies a fixed ~546px of the left
+   * however wide the card gets, and `margin-top: auto` puts the smallest text
+   * at the bottom where a tilted gradient is at its lightest.
+   */
+  .blog-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      90deg,
+      rgb(6 8 12 / 0.72) 0px,
+      rgb(6 8 12 / 0.68) 580px,
+      rgb(6 8 12 / 0.22) 880px,
+      rgb(6 8 12 / 0.12) 100%
+    );
+  }
+
+  .blog-hero h1 {
     font-size: clamp(1.7rem, 4vw, 2.3rem);
     margin: 0 0 6px;
+    color: #fff;
   }
-  .blog-head p {
+  .blog-lede {
     margin: 0;
-    color: var(--text-muted);
-    max-width: 60ch;
+    max-width: 62ch;
+    color: rgb(255 255 255 / 0.92);
   }
+  .blog-hero-credit {
+    margin: clamp(14px, 3vw, 22px) 0 0;
+    font-size: 0.68rem;
+    line-height: 1.45;
+    color: rgb(255 255 255 / 0.78);
+    /*
+     * Not decoration — this is what keeps the notice inside the scrim's dark
+     * plateau. It is a longer line than the one on /raids and ran to 588px
+     * inked, eight past the 580px the plateau holds, which put its tail in the
+     * ramp where the alpha falls away. Measured there it came out 4.07:1,
+     * under AA. Wrapping it at 520 keeps the whole notice at x <= 550 and the
+     * measured 5.21:1.
+     *
+     * Capping the text was the right lever rather than widening the plateau:
+     * this is the only element that overruns it, and stretching the dark zone
+     * would dim the artwork on every card to fix one line of small print.
+     */
+    max-width: 520px;
+  }
+  /* Only where the card has a floor to push against — below 760px it is only as
+     tall as its content, so `auto` would collapse to nothing. */
+  @media (min-width: 760px) {
+    .blog-hero-credit {
+      margin-top: auto;
+      padding-top: clamp(14px, 3vw, 22px);
+    }
+  }
+
+  /* Both of these were coloured for dark text on the page background and are
+     now sitting on the scrim. `--accent` is the *dark* red — it measured 2.2:1
+     here — and the feed link was inheriting the same. */
   .blog-tagname {
-    color: var(--accent);
+    color: #ffb3bc;
   }
   .blog-feed {
     margin-left: 8px;
     font-size: 0.85rem;
     font-weight: 600;
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .blog-tags {
