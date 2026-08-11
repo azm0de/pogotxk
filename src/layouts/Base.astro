@@ -1,5 +1,6 @@
 ---
 import '~/styles/global.css';
+import PokeBall from '~/components/PokeBall.astro';
 import SocialIcon from '~/components/SocialIcon.astro';
 import { SOCIALS } from '~/lib/socials';
 
@@ -46,7 +47,7 @@ const nav = [
   { href: '/live', label: 'Live' },
   { href: '/raids', label: 'Raids' },
   { href: '/blog', label: 'News' },
-  { href: '/go', label: 'Go', highlight: true, describe: 'the PoGo TXK app' },
+  { href: '/go', label: 'Go', ball: true, describe: 'the PoGo TXK app' },
 ];
 
 const path = Astro.url.pathname;
@@ -123,31 +124,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         aria-controls="primary-nav"
         aria-label="Open menu"
       >
-        <svg
-          class="pokeball"
-          viewBox="0 0 40 40"
-          width="30"
-          height="30"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <circle cx="20" cy="20" r="17" fill="#fff" />
-          {/* Upper half only: sweep-flag 1 from the leftmost point runs over the
-              top. Brighter than the header's own #c8071c so the two reds are
-              not mistaken for one another. */}
-          <path d="M3 20a17 17 0 0 1 34 0Z" fill="#ff2f3d" />
-          {/* Weights are set for 30px, not for the 4x view where they were
-              drawn. At 4/3/3 the black swallowed most of a 25px ball and it
-              read as a dark disc. */}
-          <path d="M3 20h34" stroke="#0f0f11" stroke-width="3.2" />
-          {/* The outer ring is WHITE, not black. On a red header a red-topped
-              ball with a dark outline loses its own silhouette — the top half
-              sinks into the background and what is left reads as a dark ring
-              with a white dot in it. White draws the edge the background
-              cannot. */}
-          <circle cx="20" cy="20" r="17" fill="none" stroke="#fff" stroke-width="2.6" />
-          <circle cx="20" cy="20" r="5.8" fill="#fff" stroke="#0f0f11" stroke-width="2.4" />
-        </svg>
+        <PokeBall size={30} />
       </button>
 
       <nav id="primary-nav" aria-label="Primary">
@@ -170,12 +147,26 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
                   *starts* with the visible word — WCAG 2.5.3, so speech input
                   users saying "click Go" still match.
                 */}
+                {/*
+                  The ball replaces the word rather than joining it, but the word
+                  is still in the markup — `.nav-go-label` is clipped to sr-only
+                  in the row and made visible again in the phone panel.
+
+                  Both halves of that matter. In the panel it has to be a word:
+                  the menu button that opened the panel is itself a Poké Ball, so
+                  a second one in the list underneath would be two identical
+                  marks doing different jobs. And in the row it has to still be
+                  *there*, because an icon whose label is `display: none` leaves
+                  the accessible name as " — the PoGo TXK app", and leaves
+                  Lighthouse's link-text audit reading an empty link.
+                */}
                 <a
                   href={item.href}
-                  class={item.highlight ? 'nav-highlight' : undefined}
+                  class:list={[item.highlight && 'nav-highlight', item.ball && 'nav-go']}
                   aria-current={isCurrent(item.href) ? 'page' : undefined}
                 >
-                  {item.label}
+                  {item.ball && <PokeBall size={26} class="nav-go-ball" />}
+                  {item.ball ? <span class="nav-go-label">{item.label}</span> : item.label}
                   {item.describe && <span class="sr-only"> — {item.describe}</span>}
                 </a>
               </li>
@@ -521,7 +512,17 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         outline: 2px solid #fff;
         outline-offset: 2px;
       }
-      .nav-toggle .pokeball {
+      /*
+       * `:global` on the ball, and it is required rather than stylistic.
+       *
+       * The mark is its own component now, so it renders with PokeBall.astro's
+       * scope and not this file's. Scoped, these selectors compile to
+       * `.pokeball[data-astro-cid-hkbrpulz]`, the ball carries no such attribute,
+       * and every rule below silently stops matching — which is exactly what
+       * happened to this animation the moment the SVG moved out of this file.
+       * The `.nav-toggle` half stays scoped, so nothing leaks.
+       */
+      .nav-toggle :global(.pokeball) {
         display: block;
         /* Global reduced-motion already flattens these to 0.01ms. */
         transition: transform 0.2s ease;
@@ -530,13 +531,13 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
          rotating. A Poké Ball turned 180° just puts the red half underneath,
          which reads as an upside-down ball rather than as an open menu; a lit
          button reads as "active" and leaves the mark the right way up. */
-      .nav-toggle .pokeball circle:last-of-type {
+      .nav-toggle :global(.pokeball circle:last-of-type) {
         transition: fill 0.2s ease;
       }
-      .nav-toggle[aria-expanded='true'] .pokeball {
+      .nav-toggle[aria-expanded='true'] :global(.pokeball) {
         transform: scale(1.06);
       }
-      .nav-toggle[aria-expanded='true'] .pokeball circle:last-of-type {
+      .nav-toggle[aria-expanded='true'] :global(.pokeball circle:last-of-type) {
         fill: #ffe14d;
       }
 
@@ -671,6 +672,62 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         border-color: #fff;
       }
 
+      /* --- /go, as the ball ------------------------------------------------
+       *
+       * No chip behind it. The others earn their pill by being words that need
+       * a boundary; this one is already a shape, and a full-colour mark in a row
+       * of white text is louder than any pill would make it.
+       *
+       * Round, and sized to a 40px box rather than to the 26px art, so the
+       * target stays a comfortable one on a touch screen where this is the
+       * densest thing in the row.
+       */
+      nav a.nav-go {
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border-radius: 999px;
+        line-height: 0;
+      }
+      nav a.nav-go:hover {
+        background: rgb(255 255 255 / 0.13);
+        border-color: rgb(255 255 255 / 0.28);
+      }
+      /* `:global` for the same reason as the toggle above — the ball is a child
+         component and carries none of this file's scope. */
+      nav a.nav-go :global(.pokeball) {
+        transition: transform 0.16s ease;
+      }
+      nav a.nav-go:hover :global(.pokeball) {
+        transform: scale(1.08);
+      }
+      /*
+       * The current-page state cannot be the white chip the other items use —
+       * filling the box white would leave a white-ringed ball on white and erase
+       * its own outline. A ring around it instead, which is the same "this one
+       * is selected" signal without touching the mark.
+       */
+      nav a.nav-go[aria-current='page'] {
+        background: rgb(255 255 255 / 0.16);
+        border-color: #fff;
+      }
+      /* Clipped rather than removed: an icon whose label is `display: none` has
+         no accessible name left but the description, and reads as an empty link
+         to Lighthouse. The phone panel below un-clips it. */
+      .nav-go-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
       .site-footer {
         padding: 28px clamp(12px, 3vw, 24px);
         border-top: 1px solid var(--border);
@@ -762,6 +819,47 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         nav a {
           padding: 11px 14px;
           font-size: 0.95rem;
+        }
+
+        /*
+         * In the panel /go is a word again, and the ball goes away.
+         *
+         * The control that opened this panel is a Poké Ball sitting a few pixels
+         * above it. A second one in the list would be the same mark meaning two
+         * different things on one screen — and in a stacked list of words, a
+         * lone icon is the odd row out rather than the prominent one.
+         */
+        nav a.nav-go {
+          display: block;
+          width: auto;
+          height: auto;
+          padding: 11px 14px;
+          border-radius: 999px;
+          line-height: inherit;
+        }
+        nav a.nav-go :global(.pokeball) {
+          display: none;
+        }
+        /*
+         * And the current-page state goes back to the white chip the other rows
+         * use. The ring treatment above is built for a mark, which carries its
+         * own colour — a word does not, and it keeps `color: var(--accent-solid)`
+         * from the generic `[aria-current]` rule, so over a 16%-white wash it
+         * came out dark red on red. Unnoticeable in the row, where the label is
+         * clipped and there is nothing to read; plainly broken here, where it is
+         * the only visible thing in the chip.
+         */
+        nav a.nav-go[aria-current='page'] {
+          background: #fff;
+          border-color: #fff;
+        }
+        .nav-go-label {
+          position: static;
+          width: auto;
+          height: auto;
+          margin: 0;
+          overflow: visible;
+          clip: auto;
         }
       }
     </style>
