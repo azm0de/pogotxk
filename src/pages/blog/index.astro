@@ -27,10 +27,70 @@ const MAX_PAGE = 10_000;
 const rawPage = Math.floor(Number(params.get('page')) || 1);
 const page = Number.isFinite(rawPage) ? Math.min(Math.max(1, rawPage), MAX_PAGE) : 1;
 
-const [{ posts, total }, tags] = await Promise.all([
+interface Photo {
+  id: number;
+  r2_key: string;
+  alt: string | null;
+  caption: string | null;
+  credit: string | null;
+  source_title: string | null;
+  source_date: string | null;
+  source_url: string | null;
+  created_at: string | null;
+  width: number | null;
+  height: number | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+/*
+ * The photo band is a fixture of the page, not part of the paged post feed:
+ * repeating it under page 3 would be noise, and showing every community photo
+ * beneath a list filtered to one tag is answering a question nobody asked. It is
+ * only queried where it is rendered.
+ */
+const wantPhotos = !tag && page === 1;
+
+const [{ posts, total }, tags, photoRows] = await Promise.all([
   listPublishedPosts(env.DB, { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, tag }),
   listPublicTags(env.DB),
+  wantPhotos
+    ? env.DB.prepare(
+        `SELECT id, r2_key, alt, caption, credit, source_title, source_date, source_url,
+                created_at, width, height, lat, lng
+           FROM media
+          WHERE kind = 'community_photo'`,
+      )
+        .all<Photo>()
+        .then((r) => r.results)
+        .catch(() => [] as Photo[])
+    : Promise.resolve([] as Photo[]),
 ]);
+
+/**
+ * Sorted here rather than in the query, because `source_date` is a label and not
+ * a date column. Press photos carry the string their article printed — "November
+ * 3, 2024" — while uploads carry an ISO timestamp, and the column is rendered
+ * verbatim, so it cannot simply be normalised to one format without changing
+ * what the caption says.
+ *
+ * `ORDER BY` over that is a string sort, which is how /gallery came to render
+ * its newest photo last: "November" sorts above "July" above "December" above
+ * "2026-08-06", alphabetically. Parsing both shapes and sorting on the instant
+ * is the fix. Anything unparseable falls back to `created_at`, then to the
+ * epoch, so a bad value sinks to the bottom instead of jumping to the top.
+ */
+const photoTime = (p: Photo) => {
+  const printed = p.source_date ? Date.parse(p.source_date) : Number.NaN;
+  if (!Number.isNaN(printed)) return printed;
+  const created = p.created_at ? Date.parse(p.created_at) : Number.NaN;
+  return Number.isNaN(created) ? 0 : created;
+};
+const photos = [...photoRows].sort((a, b) => photoTime(b) - photoTime(a) || b.id - a.id);
+
+/** A tall photo should be allowed to be tall, rather than cropping the community
+    out of its own gallery. */
+const isPortrait = (p: Photo) => (p.width && p.height ? p.height > p.width * 1.15 : false);
 
 const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -189,6 +249,72 @@ const description = tag
             <span aria-hidden="true" />
           )}
         </nav>
+      )
+    }
+
+    {
+      photos.length > 0 && (
+        <section class="photos" id="photos" aria-labelledby="photos-heading">
+          <div class="photos-head">
+            <h2 id="photos-heading">From the community</h2>
+            <p>
+              Trainers from all three teams at Spring Lake Park. Several of these were taken by
+              the Texarkana Gazette — their photographers are credited on each image, and the
+              original articles are linked.
+            </p>
+          </div>
+
+          <ul class="photo-grid">
+            {photos.map((photo) => (
+              <li class={isPortrait(photo) ? 'is-tall' : undefined}>
+                <figure>
+                  <img
+                    src={`/media/${photo.r2_key}`}
+                    alt={photo.alt ?? photo.caption ?? 'PoGo TXK community photo'}
+                    width={photo.width ?? undefined}
+                    height={photo.height ?? undefined}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption>
+                    {photo.caption && <p class="photo-caption">{photo.caption}</p>}
+                    <p class="photo-credit">
+                      {photo.credit}
+                      {photo.source_url && photo.source_title && (
+                        <>
+                          {' · '}
+                          <a href={photo.source_url} rel="noopener noreferrer" target="_blank">
+                            {photo.source_title}
+                          </a>
+                          {photo.source_date && ` (${photo.source_date})`}
+                        </>
+                      )}
+                    </p>
+                    {photo.lat && photo.lng && (
+                      <p class="photo-where">
+                        <a href={`/map?lat=${photo.lat}&lng=${photo.lng}`}>
+                          Where this was taken →
+                        </a>
+                      </p>
+                    )}
+                  </figcaption>
+                </figure>
+              </li>
+            ))}
+          </ul>
+
+          {/*
+            Moved here with the photographs, not left behind on the old route.
+            The first sentence is a licence condition and the second is the
+            promise the community was given; neither belongs to a page more than
+            it belongs to the pictures.
+          */}
+          <p class="photo-rights">
+            Press photographs remain the property of their publications and are reproduced with
+            credit. If you appear in a photo and would rather not, tell any ambassador on Discord
+            and it comes down — no reason needed.
+          </p>
+        </section>
       )
     }
   </div>
@@ -487,5 +613,121 @@ const description = tag
       height: auto;
       aspect-ratio: 16 / 9;
     }
+  }
+
+  /* --- the photographs -----------------------------------------------------
+   * Was /gallery. A band on this page rather than a route of its own: two
+   * published posts and nine photographs did not need two nav items between
+   * them, and both are the same thing — what the community has been doing.
+   *
+   * A band and not an interleaved feed, deliberately. A post is a dated article
+   * with an excerpt, tags and a page of its own; a photograph is an image whose
+   * credit is a licence condition. Mixed into one stream they would need a card
+   * shape that suits neither.
+   */
+  .photos {
+    margin-top: 44px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+  }
+  .photos-head {
+    max-width: 62ch;
+    margin-bottom: 20px;
+  }
+  .photos-head h2 {
+    margin: 0 0 6px;
+    font-size: 1.3rem;
+  }
+  .photos-head p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
+
+  .photo-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-auto-rows: 190px;
+    gap: 12px;
+  }
+  .photo-grid li {
+    /* Photographs are the content here, so they get to break the grid rhythm. */
+    grid-row: span 1;
+  }
+  .photo-grid li.is-tall {
+    grid-row: span 2;
+  }
+
+  .photo-grid figure {
+    margin: 0;
+    height: 100%;
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--bg-sunken);
+  }
+  .photo-grid figure img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .photo-grid figcaption {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 46px 13px 11px;
+    /* The credit is a licensing obligation. It sits on the image so it cannot be
+       separated from it by a layout change or a screenshot.
+
+       Which makes legibility the scrim's job, and a two-stop
+       `transparent -> 0.82` was not doing it: the gradient only reached full
+       strength at the very bottom edge, so every line above the last one sat on
+       bare photograph. Over the bright foliage shots the white text all but
+       disappeared. These stops hold the scrim near-opaque for the whole height
+       the text occupies and only fade across the top third. */
+    background: linear-gradient(
+      to top,
+      rgb(0 0 0 / 0.93) 0%,
+      rgb(0 0 0 / 0.89) 38%,
+      rgb(0 0 0 / 0.74) 62%,
+      rgb(0 0 0 / 0.36) 84%,
+      transparent 100%
+    );
+    color: #fff;
+    /* Belt and braces for the brightest images, where even a heavy scrim leaves
+       thin white type fighting a high-frequency background. */
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+  }
+  .photo-caption {
+    margin: 0 0 4px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+  .photo-credit {
+    margin: 0;
+    font-size: 0.68rem;
+    opacity: 0.9;
+  }
+  .photo-credit a {
+    color: #fff;
+  }
+  .photo-where {
+    margin: 4px 0 0;
+    font-size: 0.68rem;
+  }
+  .photo-where a {
+    color: #fff;
+    opacity: 0.85;
+  }
+
+  .photo-rights {
+    margin: 24px 0 0;
+    max-width: 68ch;
+    font-size: 0.8rem;
+    color: var(--text-muted);
   }
 </style>

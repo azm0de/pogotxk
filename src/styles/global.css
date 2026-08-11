@@ -157,6 +157,28 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/*
+ * Anything an anchor lands on has to clear the sticky header, or the browser
+ * scrolls the target to y=0 and the bar covers its first line.
+ *
+ * This was found via `/blog#photos`, but the one that matters is `#main`: the
+ * skip link jumps there, so the first thing a keyboard user was sent to landed
+ * underneath the header. That is the whole job of a skip link, done wrong, and
+ * it predates the anchor that exposed it.
+ *
+ * The numbers track `.site-header`'s own height in Base.astro — 72px, stepping
+ * to 64 below 430 — plus a little air. They are literals on both sides because
+ * that height is a literal there too; if it moves, this moves with it.
+ */
+:target {
+  scroll-margin-top: 86px;
+}
+@media (max-width: 430px) {
+  :target {
+    scroll-margin-top: 78px;
+  }
+}
+
 body {
   margin: 0;
   font-family: var(--font);
