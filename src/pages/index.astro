@@ -1059,7 +1059,14 @@ function homeWhen(event: CalendarEvent): string {
     align-items: center;
     max-width: 1100px;
     margin: 0 auto;
-    padding: clamp(28px, 6vw, 64px) 20px clamp(20px, 4vw, 40px);
+    /* The top value is the space above the logo, so it is the one that sets how
+       high the mark sits under the header. Trimmed from 6vw/64px, which left 66px
+       at 1000px — the logo now starts about 16px higher there. Scaled rather than
+       given a flat nudge because the two ends are not alike: desktop had 66px of
+       room above the logo and a phone only 34px, so the same subtraction that
+       reads as a small lift on a wide screen would crowd the header on a narrow
+       one. This lifts ~16px at 1000px and 4px at 375px. */
+    padding: clamp(24px, 4.4vw, 46px) 20px clamp(20px, 4vw, 40px);
   }
 
   /*
