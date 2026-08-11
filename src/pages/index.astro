@@ -27,7 +27,7 @@ const db = env.DB;
  * meetups and no posts, and the page still has to look deliberate rather than
  * broken — so each section renders a real fallback instead of an empty shell.
  */
-const [counts, meetups, posts, photos, landmarks] = await Promise.all([
+const [counts, meetups, posts, photos] = await Promise.all([
   db
     .prepare(
       `SELECT
@@ -49,28 +49,6 @@ const [counts, meetups, posts, photos, landmarks] = await Promise.all([
         WHERE kind = 'community_photo' ORDER BY created_at DESC LIMIT 4`,
     )
     .all<{ r2_key: string; alt: string | null; credit: string | null }>()
-    .then((r) => r.results)
-    .catch(() => []),
-
-  /*
-   * The landmarks themselves — a T-33 trainer jet, the park mural, the water
-   * spring. Sixty-three of the 104 POIs carry a photograph, and until now the
-   * only way to see one was to tap its pin on the map.
-   *
-   * Gyms first: they are where people actually stand around together, so the
-   * rail opens on the places that matter for a raid. Then by name, which is
-   * arbitrary but stable — the order must not shuffle between requests.
-   */
-  db
-    .prepare(
-      `SELECT p.slug, p.name, p.type, m.r2_key
-         FROM pois p
-         JOIN media m ON m.id = p.hero_media_id
-        WHERE p.status = 'published'
-        ORDER BY (p.type = 'gym') DESC, p.name
-        LIMIT 18`,
-    )
-    .all<{ slug: string; name: string; type: string; r2_key: string }>()
     .then((r) => r.results)
     .catch(() => []),
 ]);
@@ -448,15 +426,6 @@ function homeWhen(event: CalendarEvent): string {
       }
     </section>
 
-    <section class="card empty-art-bg">
-      <h2>Right now</h2>
-      <p class="empty">
-        Raid flares from the community appear on the live board. Fire one when you are at a gym
-        and need people.
-      </p>
-      <a class="card-link" href="/live">Open the live board →</a>
-    </section>
-
     <section class="card card--raids">
       <h2>In game today</h2>
       {
@@ -526,64 +495,6 @@ function homeWhen(event: CalendarEvent): string {
               </a>
             </li>
           ))}
-        </ul>
-      </section>
-    )
-  }
-
-  {/*
-    The places themselves, with their faces on. Sits last because it is the
-    "go and look" note the page ends on, immediately before the ways to reach
-    us — a local recognises three of these instantly, and that recognition is
-    the moment the page stops being a generic fan site.
-
-    A rail rather than a grid because the photographs are overwhelmingly
-    portrait phone shots — eighteen of those in a grid is a wall of vertical
-    crops, and a row that runs off the edge is also the true statement: there
-    are more of these than fit.
-  */}
-  {
-    landmarks.length > 0 && (
-      <section class="section places" aria-labelledby="places-heading">
-        <div class="section-head">
-          <h2 id="places-heading">Places you already know</h2>
-          <a href="/map">All {totalPois} on the map →</a>
-        </div>
-
-        <ul class="place-rail">
-          {landmarks.map((place) => (
-            <li>
-              <a href={`/map?poi=${encodeURIComponent(place.slug)}`}>
-                {/* alt="" deliberately: the name is right there as visible
-                    text, and the link takes its accessible name from it.
-                    Real alt text here would read every place twice. */}
-                <img
-                  src={`/media/${place.r2_key}`}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                />
-                <span class="place-label">
-                  <span class="place-type">
-                    <span class={`place-dot place-dot--${place.type}`} aria-hidden="true" />
-                    {place.type === 'gym' ? 'Gym' : 'PokéStop'}
-                  </span>
-                  <strong>{place.name}</strong>
-                </span>
-              </a>
-            </li>
-          ))}
-
-          <li class="place-more">
-            <a href="/map">
-              <span>See all {totalPois} on the map</span>
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M13.2 5.4 11.8 6.8l4.2 4.2H4v2h12l-4.2 4.2 1.4 1.4 6.6-6.6z"></path>
-              </svg>
-            </a>
-          </li>
         </ul>
       </section>
     )
@@ -1241,165 +1152,6 @@ function homeWhen(event: CalendarEvent): string {
     font-size: 0.85rem;
     color: var(--text-muted);
     max-width: 30ch;
-  }
-
-
-  /* --- the landmark rail ----------------------------------------------------
-     Sits tight under the hero: it is the hero's evidence, not a separate
-     topic, so it gets less air above it than a real section would. */
-  .places {
-    padding-top: 10px;
-  }
-
-  .place-rail {
-    list-style: none;
-    margin: 0;
-    /* Headroom for the focus ring. `overflow-x: auto` forces `overflow-y` to
-       compute to `auto` as well, so anything drawn outside the box is clipped
-       — and the global :focus-visible ring reaches 5px out (3px wide, 2px
-       offset). 8px clears it with room for the hover lift. */
-    padding: 8px 0;
-    display: flex;
-    gap: 10px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
-  }
-
-  .place-rail li {
-    /* Without `0 0 auto` a flex child shrinks to share the row, and eighteen
-       tiles would compress to slivers instead of scrolling. */
-    flex: 0 0 auto;
-    scroll-snap-align: start;
-  }
-
-  /*
-   * `:not(.place-more)` matters. Without it this rule also matched the trailing
-   * "See all 104 on the map" tile and its `color: #fff` outranked
-   * `.place-more > a { color: var(--accent) }` — two classes beat one — so that
-   * tile rendered white on the page background and was invisible. It shipped
-   * that way. Caught by auditing computed contrast on the rendered page rather
-   * than reading the stylesheet.
-   */
-  .place-rail li:not(.place-more) > a {
-    position: relative;
-    display: block;
-    width: 148px;
-    aspect-ratio: 3 / 4;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    background: var(--bg-sunken);
-    overflow: hidden;
-    text-decoration: none;
-    color: #fff;
-    transition:
-      transform 0.18s ease,
-      box-shadow 0.18s ease;
-  }
-  .place-rail li:not(.place-more) > a:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-  }
-
-  /* Beats the global `img { height: auto }`, which would otherwise let a
-     portrait photo set the tile's height and break the 3:4 ratio. */
-  .place-rail img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .place-label {
-    position: absolute;
-    inset-inline: 0;
-    bottom: 0;
-    display: grid;
-    gap: 1px;
-    padding: 26px 10px 9px;
-    /* Same gradient strength as the community photo credits, so text over a
-       photograph means one thing across the page. */
-    background: linear-gradient(transparent, rgb(0 0 0 / 0.82));
-  }
-  .place-label strong {
-    font-size: 0.82rem;
-    font-weight: 700;
-    line-height: 1.25;
-    /* Two lines, then ellipsis: "Walk Through History Marker #4" is real. */
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  /* The type is carried by the word, and the colour only reinforces it — a
-     blue label on a near-black gradient would sit near the contrast floor,
-     and colour alone is never the signal on this site. */
-  .place-type {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.62rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: rgb(255 255 255 / 0.88);
-  }
-  .place-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex: none;
-  }
-  .place-dot--gym {
-    background: var(--poi-gym);
-  }
-  .place-dot--pokestop {
-    background: var(--poi-pokestop);
-  }
-
-  .place-more > a {
-    display: grid;
-    place-content: center;
-    justify-items: center;
-    gap: 7px;
-    width: 148px;
-    aspect-ratio: 3 / 4;
-    padding: 12px;
-    border: 1px dashed var(--border-strong);
-    border-radius: var(--radius);
-    text-align: center;
-    text-decoration: none;
-    color: var(--accent);
-    font-size: 0.82rem;
-    font-weight: 700;
-    line-height: 1.3;
-  }
-  .place-more > a:hover {
-    border-color: var(--accent);
-    border-style: solid;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .place-rail li:not(.place-more) > a {
-      transition: none;
-    }
-    .place-rail li:not(.place-more) > a:hover {
-      transform: none;
-    }
-  }
-
-  /* On a phone the rail runs edge to edge. The negative margin is exactly the
-     section's own padding and the same value is added back as padding, so the
-     scroll area widens without the page gaining any horizontal overflow. */
-  @media (max-width: 720px) {
-    .place-rail {
-      margin-inline: -20px;
-      padding-inline: 20px;
-    }
   }
 
   .grid {
