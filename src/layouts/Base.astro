@@ -108,36 +108,6 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       </a>
 
       {/*
-        The same four links as the home page's "Find us", from the same source —
-        see `~/lib/socials`. Marks only: there is no room for labels beside eight
-        nav items, and these are four icons a member already recognises.
-
-        They sit with the brand rather than after the nav, so the left of the
-        header is "who we are and where to find us" and the right stays purely
-        navigation.
-
-        `aria-label` goes on the link and the mark stays decorative. Naming both
-        would have a screen reader announce "Discord Discord" — the exact trap
-        SocialIcon's `decorative` prop documents.
-      */}
-      <ul class="header-socials">
-        {
-          SOCIALS.map((social) => (
-            <li>
-              <a
-                href={social.href}
-                rel="noopener noreferrer"
-                target="_blank"
-                aria-label={`${social.label} (opens in a new tab)`}
-              >
-                <SocialIcon name={social.name} size={22} bare />
-              </a>
-            </li>
-          ))
-        }
-      </ul>
-
-      {/*
         A Poké Ball rather than three lines. It only exists below 820px, where
         the nav collapses into a panel.
 
@@ -215,6 +185,41 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         </ul>
       </nav>
 
+      {/*
+        The same four links as the home page's "Find us", from the same source —
+        see `~/lib/socials`. Marks only: there is no room for labels beside eight
+        nav items, and these are four icons a member already recognises.
+
+        After the nav, not tucked against the brand where they used to sit. That
+        is a source order change rather than a CSS one on purpose: they are
+        anchored to the right edge now, and reordering them visually with `order`
+        would leave a keyboard user tabbing brand -> socials -> nav while the eye
+        reads brand -> nav -> socials. Moving the markup keeps the two in step.
+
+        Still before nothing important: the Poké Ball toggle stays immediately
+        ahead of the nav it opens, which is the adjacency its own note below
+        depends on.
+
+        `aria-label` goes on the link and the mark stays decorative. Naming both
+        would have a screen reader announce "Discord Discord" — the exact trap
+        SocialIcon's `decorative` prop documents.
+      */}
+      <ul class="header-socials">
+        {
+          SOCIALS.map((social) => (
+            <li>
+              <a
+                href={social.href}
+                rel="noopener noreferrer"
+                target="_blank"
+                aria-label={`${social.label} (opens in a new tab)`}
+              >
+                <SocialIcon name={social.name} size={22} bare />
+              </a>
+            </li>
+          ))
+        }
+      </ul>
     </header>
 
     <script is:inline>
@@ -338,25 +343,75 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       .site-header {
         display: flex;
         align-items: center;
-        justify-content: space-between;
         gap: 16px;
-        height: var(--header-h);
+        /*
+         * 72, not the shared `--header-h`. That token is still 60 and the admin
+         * bar still uses it — this is the public header only.
+         *
+         * The extra 12px are for the mark. Stacked, it is near enough square, so
+         * at the old 48px it rendered 51px wide and three tiers of type had to
+         * share that: "Pokémon", "GO" and "TEXARKANA" were shapes rather than
+         * words. Nothing offsets content by the header height, so this is free
+         * to change — checked, there is no scroll-margin or sticky offset keyed
+         * to it anywhere.
+         */
+        height: 72px;
         padding: 0 clamp(12px, 3vw, 24px);
-        background: var(--accent-solid);
         color: #fff;
+        /*
+         * Flat red read as a coloured strip rather than as part of the ball.
+         * The bar now darkens toward the black band, which is how a curved
+         * surface behaves above a shadow line, and takes a 1px lit edge along
+         * the top.
+         *
+         * Only ever *darker* than `--accent-solid`, never lighter, and that is a
+         * contrast constraint rather than taste: the nav chips are 0.9 white on
+         * this, which measures 4.92:1 against the flat colour. Lifting the mid
+         * band even 7% takes it to 4.5:1 and a little further puts it under AA.
+         * The lit edge is 1px of inset shadow for that reason — no text can sit
+         * on it.
+         */
+        background: linear-gradient(
+          180deg,
+          var(--accent-solid) 0%,
+          var(--accent-solid) 58%,
+          #b00518 100%
+        );
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
         /*
          * The Poké Ball's band. Red above, white below, and this is the line
          * between them — solid black and deliberately thick, because on the ball
          * it is the heaviest part of the design, not a hairline.
-         *
-         * Safe to add height here: `--header-h` is only ever used to set these
-         * two headers' own height. Nothing offsets content by it, so the extra
-         * 4px cannot desynchronise a sticky or scroll-margin calculation.
          */
         border-bottom: 4px solid var(--ink-900);
         position: sticky;
         top: 0;
         z-index: 900;
+      }
+
+      /*
+       * Lifts off the page once it stops sitting on it. A sticky bar with no
+       * elevation reads as painted onto the content it is covering.
+       *
+       * Scroll-driven, so no listener and no class toggling — the same
+       * progressive enhancement the nav's edge fade already uses. Without
+       * support the header simply never gains the shadow, which is exactly the
+       * header we had. The inset highlight is repeated in the keyframe because a
+       * `box-shadow` animation replaces the whole list, not one layer of it.
+       */
+      @supports (animation-timeline: scroll()) {
+        .site-header {
+          animation: header-elevate linear both;
+          animation-timeline: scroll();
+          animation-range: 0 72px;
+        }
+        @keyframes header-elevate {
+          to {
+            box-shadow:
+              inset 0 1px 0 rgb(255 255 255 / 0.18),
+              0 8px 20px -6px rgb(0 0 0 / 0.45);
+          }
+        }
       }
 
       .brand {
@@ -366,16 +421,18 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         color: inherit;
         text-decoration: none;
       }
-      /* Sized by height, never width — the header is a fixed 60px and the logo
+      /* Sized by height, never width — the bar is a fixed height and the logo
          has to sit inside it with air above and below. `width: auto` lets the
          intrinsic ratio decide the rest.
 
-         48px, not the 40px the wide lockup used: the stacked mark spends its
-         height on three tiers instead of two, so it needs every pixel the
-         56px content box will give it. */
+         58 of the 68px content box. The stacked mark spends its height on three
+         tiers where the wide lockup spends it on two, so it needs every pixel
+         the bar will give it: this is what took the rendered mark from 51px
+         wide to 62px, which is the difference between reading "TEXARKANA" and
+         seeing a smudge under the GO. */
       .brand-logo {
         display: block;
-        height: 48px;
+        height: 58px;
         width: auto;
       }
 
@@ -392,28 +449,35 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       .site-header nav {
         min-width: 0;
         position: relative;
-        /* The nav and the social marks travel together on the right, with the
-           brand holding the left. Without this, `space-between` distributes
-           three children evenly and strands the nav mid-header. */
-        margin-left: auto;
+        /*
+         * The nav takes exactly its own width and the two side zones split
+         * whatever is left, which is what centres it on the bar rather than
+         * near the middle. See `.brand` and `.header-socials` below — they are
+         * the `1fr` halves of that.
+         */
+        flex: 0 0 auto;
       }
 
+      /*
+       * The other half of the centring pair, and they moved to do it.
+       *
+       * These used to sit tucked against the brand behind a hairline, so that
+       * the left of the bar was "who we are and where to find us" and the right
+       * was purely navigation. That grouping was real, but it left both clusters
+       * on one side and 422px of nothing in the middle of a 1100px bar, which is
+       * most of why the header read as unfinished. Anchored to the far edge they
+       * balance the mark instead, and the marks are recognisable enough not to
+       * need the brand's company to be read as ours.
+       */
       .header-socials {
         list-style: none;
         margin: 0;
-        padding: 0 0 0 13px;
+        padding: 0;
         display: flex;
         align-items: center;
-        gap: 8px;
-        /* Same reasoning as `.brand`: the nav absorbs every bit of flex by
-           scrolling, so these keep their natural width or are hidden outright. */
-        flex: 0 0 auto;
-        /* A hairline, not just a gap — it separates the marks from the logo
-           without reading as a second brand element. */
-        border-left: 1px solid rgb(255 255 255 / 0.22);
-        /* The header's own 16px gap plus this padding would set them adrift from
-           the brand they belong to; a negative start pulls the rule in close. */
-        margin-left: -3px;
+        justify-content: flex-end;
+        gap: 10px;
+        flex: 1 1 0;
       }
       .header-socials a {
         display: block;
@@ -525,34 +589,59 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         }
       }
 
-      /* `0 0 auto`, not `0 1 auto`. Allowed to shrink, the brand used to give up
-         six pixels and render "PoGo …" — truncated just enough to look like a
-         bug, not enough to save room. It is an image now, but the reasoning
-         holds: a squeezed logo is worse than a smaller one, so the brand keeps
-         its natural width and the nav absorbs every bit of flex by scrolling.
-         The breakpoint below steps the height down rather than letting flex
-         distort it. */
+      /*
+       * One of the two zones the nav is centred between. `1 1 0` makes this and
+       * `.header-socials` split the leftover width evenly, so the nav lands on
+       * the bar's true centre — with a 62px mark on one side and 126px of marks
+       * on the other, anything simpler leaves it centred by eye and off by
+       * thirty-odd pixels.
+       *
+       * Growing is safe where shrinking would not be. A flex item's automatic
+       * minimum size is its content, so this can never squeeze the logo — the
+       * old `0 0 auto` was guarding against a *text* wordmark that truncated to
+       * "PoGo …", and that has been an image for some time. The breakpoint below
+       * still steps the height down rather than letting flex distort it.
+       */
       .brand {
-        flex: 0 0 auto;
+        flex: 1 1 0;
       }
       nav a {
         display: block;
-        padding: 7px 12px;
+        padding: 8px 14px;
         border-radius: 999px;
-        color: rgb(255 255 255 / 0.82);
+        /* 0.9, up from 0.82. Measured on the flat bar: 0.9 white is 4.92:1 and
+           0.82 is 4.34:1 — the old value was already under AA for body-sized
+           text, and it read as greyed-out besides. */
+        color: rgb(255 255 255 / 0.9);
         text-decoration: none;
         font-size: 0.88rem;
         font-weight: 600;
         white-space: nowrap;
+        /* Transparent at rest so the chip's box never shifts when the border
+           appears on hover. */
+        border: 1px solid transparent;
+        transition:
+          background-color 0.16s ease,
+          border-color 0.16s ease,
+          color 0.16s ease;
       }
       nav a:hover {
-        background: rgb(255 255 255 / 0.1);
+        background: rgb(255 255 255 / 0.13);
+        border-color: rgb(255 255 255 / 0.28);
         color: #fff;
       }
       /* `--accent-solid`, not `--accent`: this is dark text on a white chip, and
          in dark mode `--accent` is the *light* red meant for the opposite job —
          it measured 3.0:1 here. */
       nav a[aria-current='page'] {
+        background: #fff;
+        color: var(--accent-solid);
+        border-color: #fff;
+        /* The selected chip is the one thing on the bar that should look like it
+           is sitting on top of it rather than in it. */
+        box-shadow: 0 2px 6px rgb(0 0 0 / 0.28);
+      }
+      nav a[aria-current='page']:hover {
         background: #fff;
         color: var(--accent-solid);
       }
@@ -569,10 +658,18 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       nav a.nav-highlight {
         background: var(--ink-900);
         color: #fff;
+        border-color: var(--ink-900);
+        box-shadow: 0 2px 6px rgb(0 0 0 / 0.32);
+      }
+      nav a.nav-highlight:hover {
+        background: var(--ink-900);
+        border-color: rgb(255 255 255 / 0.4);
+        color: #fff;
       }
       nav a.nav-highlight[aria-current='page'] {
         background: #fff;
         color: var(--accent-solid);
+        border-color: #fff;
       }
 
       .site-footer {
@@ -595,8 +692,11 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
          It steps down in height instead — still legible, and it hands ~30px
          back to the seven nav items it is competing with. */
       @media (max-width: 430px) {
+        .site-header {
+          height: 64px;
+        }
         .brand-logo {
-          height: 42px;
+          height: 50px;
         }
       }
 
