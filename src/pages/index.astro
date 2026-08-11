@@ -610,9 +610,23 @@ function homeWhen(event: CalendarEvent): string {
        * device the forest. A decode failure or a 404 on the still leaves the
        * attribute unset and the hero exactly as it was without any of this.
        */
+      const reveal = () => band.setAttribute('data-hero-video', '');
+
       const art = new Image();
-      art.addEventListener('load', () => band.setAttribute('data-hero-video', ''));
+      art.addEventListener('load', reveal);
       art.src = video.getAttribute('poster');
+
+      /*
+       * Either signal is enough, and the second one is not redundant.
+       *
+       * Keying the band to the poster alone means a poster that 404s leaves the
+       * attribute unset — and since the video's own opacity is gated on it, the
+       * clip would then play perfectly and invisibly behind Lucario. That is
+       * worse than what this replaced, and it is not hypothetical: the poster
+       * answered 404 for about a minute after the deploy, while the worker was
+       * live and its assets were not.
+       */
+      video.addEventListener('playing', reveal);
 
       const sync = () => {
         if (!still.matches && !thrifty) {
