@@ -158,17 +158,6 @@ const credit = global?.attribution ?? null;
         are shown in Texarkana local time ({nowZone}).
       </p>
 
-      {/*
-        The artwork carries this notice printed along its bottom edge, and the
-        crop above cuts that edge off. Removing a rights notice while keeping the
-        image is not a trade worth making, so it is reproduced here instead —
-        same principle as the press photographs, whose bylines render *on* the
-        image. See vault/Attribution Obligations.
-      */}
-      <p class="events-hero-credit">
-        Artwork ©2016–2020 Niantic, Inc. ©2016–2020 Pokémon. ©1995–2020 Nintendo / Creatures
-        Inc. / GAME FREAK inc.
-      </p>
     </header>
 
     {
@@ -294,13 +283,17 @@ const credit = global?.attribution ?? null;
     isolation: isolate;
     overflow: hidden;
     border-radius: var(--radius-lg);
-    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px) clamp(14px, 2.5vw, 20px);
+    /* Symmetric now. The bottom was the short side because the credit line sat
+       in it; with that gone an uneven pad just reads as the text having slipped
+       upward. */
+    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px);
     color: #fff;
-    /* A column so the credit can be pushed to the bottom edge below. Without
-       it the taller card would stack heading, lede and credit at the top and
-       leave a pool of empty scrim underneath. */
+    /* The column used to exist to push the credit to the bottom edge. With only
+       the heading and lede left, it centres them instead — anchored to the top
+       of a 380px card they would sit above a pool of empty scrim. */
     display: flex;
     flex-direction: column;
+    justify-content: center;
   }
 
   /*
@@ -360,23 +353,6 @@ const credit = global?.attribution ?? null;
     max-width: 62ch;
     color: rgb(255 255 255 / 0.92);
   }
-  .events-hero-credit {
-    margin: clamp(14px, 3vw, 22px) 0 0;
-    font-size: 0.68rem;
-    line-height: 1.45;
-    color: rgb(255 255 255 / 0.78);
-  }
-  /* Only where the card has a floor to push against. `margin-top: auto` inside
-     the flex column drops this to the bottom edge; the padding keeps the gap to
-     the lede that the margin was providing. Below 760px the card is only as
-     tall as its content, so `auto` would collapse to nothing. */
-  @media (min-width: 760px) {
-    .events-hero-credit {
-      margin-top: auto;
-      padding-top: clamp(14px, 3vw, 22px);
-    }
-  }
-
   .events-note {
     margin: 0;
     padding: 12px 16px;

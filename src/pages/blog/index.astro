@@ -97,18 +97,6 @@ const description = tag
         <a class="blog-feed" href="/rss.xml">RSS feed</a>
       </p>
 
-      {/*
-        The artwork carries this notice printed along its bottom edge, and the
-        crop above cuts that edge off. Removing a rights notice while keeping the
-        image is not a trade worth making, so it is reproduced here instead —
-        same as the PokéStop art on /events, and the same principle as the press
-        photographs whose bylines render *on* the image. See
-        vault/Attribution Obligations.
-      */}
-      <p class="blog-hero-credit">
-        Artwork ©2016–2020 Niantic, Inc. ©2016–2020 Pokémon. ©1995–2020 Nintendo / Creatures
-        Inc. / GAME FREAK inc.
-      </p>
     </header>
 
     {
@@ -224,11 +212,17 @@ const description = tag
     isolation: isolate;
     overflow: hidden;
     border-radius: var(--radius-lg);
-    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px) clamp(14px, 2.5vw, 20px);
+    /* Symmetric now. The bottom was the short side because the credit line sat
+       in it; with that gone an uneven pad just reads as the text having slipped
+       upward. */
+    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px);
     color: #fff;
-    /* A column so the credit can be pushed to the bottom edge below. */
+    /* The column used to exist to push the credit to the bottom edge. With only
+       the heading and lede left, it centres them instead — anchored to the top
+       of a 320px card they would sit above a pool of empty scrim. */
     display: flex;
     flex-direction: column;
+    justify-content: center;
   }
 
   /* Shorter than the /raids hero on purpose — this page is a list, and the
@@ -259,7 +253,14 @@ const description = tag
    * than assumed to carry over — it is the brightest of the three, with white
    * sky, snow and a lot of pale green. Worst case over the region text can
    * occupy is 5.21:1 at 876x320, 5.19:1 at 736x260, 5.49:1 at 343x205 and
-   * 5.56:1 at 288x230, the credit every time, against a 4.5 threshold.
+   * 5.56:1 at 288x230, against a 4.5 threshold.
+   *
+   * Those were the credit line at 0.78 white, the lightest text on the card,
+   * and it has since been removed — so they are a floor with room to spare now
+   * rather than the real worst case. The lede is 0.92 and the heading is solid
+   * white. Worth keeping because they are what any future 0.78 text is checked
+   * against; it was the credit overrunning the dark plateau by 8px that
+   * measured 4.07:1 and had to be wrapped.
    *
    * Pixel stops, and 90deg rather than any tilt, for the reasons written out at
    * length on `.raids-hero::before`: text occupies a fixed ~546px of the left
@@ -289,33 +290,6 @@ const description = tag
     margin: 0;
     max-width: 62ch;
     color: rgb(255 255 255 / 0.92);
-  }
-  .blog-hero-credit {
-    margin: clamp(14px, 3vw, 22px) 0 0;
-    font-size: 0.68rem;
-    line-height: 1.45;
-    color: rgb(255 255 255 / 0.78);
-    /*
-     * Not decoration — this is what keeps the notice inside the scrim's dark
-     * plateau. It is a longer line than the one on /raids and ran to 588px
-     * inked, eight past the 580px the plateau holds, which put its tail in the
-     * ramp where the alpha falls away. Measured there it came out 4.07:1,
-     * under AA. Wrapping it at 520 keeps the whole notice at x <= 550 and the
-     * measured 5.21:1.
-     *
-     * Capping the text was the right lever rather than widening the plateau:
-     * this is the only element that overruns it, and stretching the dark zone
-     * would dim the artwork on every card to fix one line of small print.
-     */
-    max-width: 520px;
-  }
-  /* Only where the card has a floor to push against — below 760px it is only as
-     tall as its content, so `auto` would collapse to nothing. */
-  @media (min-width: 760px) {
-    .blog-hero-credit {
-      margin-top: auto;
-      padding-top: clamp(14px, 3vw, 22px);
-    }
   }
 
   /* Both of these were coloured for dark text on the page background and are

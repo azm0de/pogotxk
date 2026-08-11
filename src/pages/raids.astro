@@ -76,15 +76,6 @@ function tierNote(tier: string): string | null {
         screen and the weather that boosts it.
       </p>
 
-      {/*
-        The artwork carries no rights notice of its own — unlike the PokéStop
-        art on the events page, whose printed notice the crop was cutting off —
-        but it is still somebody else's, so it is credited rather than used
-        bare. See vault/Attribution Obligations.
-      */}
-      <p class="raids-hero-credit">
-        Artwork ©Pokémon. ©Nintendo / Creatures Inc. / GAME FREAK inc.
-      </p>
     </header>
 
     {/* Below the card rather than inside it: these are opaque panel chips, and
@@ -170,11 +161,17 @@ function tierNote(tier: string): string | null {
     isolation: isolate;
     overflow: hidden;
     border-radius: var(--radius-lg);
-    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px) clamp(14px, 2.5vw, 20px);
+    /* Symmetric now. The bottom was the short side because the credit line sat
+       in it; with that gone an uneven pad just reads as the text having slipped
+       upward. */
+    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px);
     color: #fff;
-    /* A column so the credit can be pushed to the bottom edge below. */
+    /* The column used to exist to push the credit to the bottom edge. With only
+       the heading and lede left, it centres them instead — anchored to the top
+       of a 520px card they would sit above a lot of empty scrim. */
     display: flex;
     flex-direction: column;
+    justify-content: center;
   }
 
   /* Taller from 760px up, so more of the artwork survives the crop.
@@ -226,9 +223,14 @@ function tierNote(tier: string): string | null {
    *
    * Measured, not chosen. Worst case over the region text can occupy is
    * 5.19:1 at 1116x520, 5.23:1 at 936x400, 5.19:1 at 703x312, 5.52:1 at
-   * 345x195 and 5.55:1 at 292x240 — the credit every time, against a 4.5
-   * threshold. For reference the lightest flat alpha that still clears AA
-   * anywhere text sits is 0.639, so the 0.68 plateau keeps real margin.
+   * 345x195 and 5.55:1 at 292x240, against a 4.5 threshold. For reference the
+   * lightest flat alpha that still clears AA anywhere text sits is 0.639, so
+   * the 0.68 plateau keeps real margin.
+   *
+   * Those figures were the credit line, at 0.78 white — the lightest text on
+   * the card. It has since been removed, so they are now a floor with room to
+   * spare rather than the real worst case: the lede is 0.92 and the heading is
+   * solid white. Anything added back at 0.78 or lighter is covered by them.
    */
   .raids-hero::before {
     content: '';
@@ -254,21 +256,6 @@ function tierNote(tier: string): string | null {
     max-width: 62ch;
     color: rgb(255 255 255 / 0.92);
   }
-  .raids-hero-credit {
-    margin: clamp(14px, 3vw, 22px) 0 0;
-    font-size: 0.68rem;
-    line-height: 1.45;
-    color: rgb(255 255 255 / 0.78);
-  }
-  /* Only where the card has a floor to push against — below 760px it is only as
-     tall as its content, so `auto` would collapse to nothing. */
-  @media (min-width: 760px) {
-    .raids-hero-credit {
-      margin-top: auto;
-      padding-top: clamp(14px, 3vw, 22px);
-    }
-  }
-
   /* Carries the gap `.g-head`'s own margin-bottom used to provide. */
   .raids-nav {
     margin-bottom: 22px;
