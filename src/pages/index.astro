@@ -635,8 +635,8 @@ function homeWhen(event: CalendarEvent): string {
           // The attribute alone is not always enough for autoplay policy; the
           // property is what browsers actually check.
           video.muted = true;
-          // A refused autoplay is a normal outcome, not an error — the static
-          // hero is already the fallback, so there is nothing to handle.
+          // A refused autoplay is a normal outcome, not an error — the poster is
+          // already up, so there is nothing to handle here.
           video.play().catch(() => {});
         } else {
           // The poster stays up. Reduced motion asks for a still image, not for
@@ -649,6 +649,42 @@ function homeWhen(event: CalendarEvent): string {
 
       sync();
       still.addEventListener('change', sync);
+
+      /*
+       * Ask again, because asking once is why the hero was a still picture.
+       *
+       * `play()` at script time is a request, not a guarantee, and a refusal is
+       * silent — it rejects, gets caught, and nothing ever tries again. On
+       * production the clip was fully loaded, `readyState` 4, no error, and
+       * simply paused; calling `play()` by hand a moment later started it
+       * immediately. So the media was never the problem, the single attempt was.
+       *
+       * Two more chances, both cheap:
+       *
+       * `canplay` covers the ordinary race — the first call can land before the
+       * element has anything to play, particularly with `preload="none"`, where
+       * assigning `src` and playing happen in the same tick.
+       *
+       * The first real interaction covers the policies no amount of retrying
+       * gets past on its own. A user gesture is the universal key: it satisfies
+       * Chrome's autoplay rules, and on iOS it is what permits playback in Low
+       * Power Mode, which blocks autoplay outright and is the most likely reason
+       * a phone shows the poster forever. `scroll` counts and is the thing
+       * someone does first on a page like this.
+       *
+       * `once` on each, and both no-ops when the video is already running or
+       * when reduced motion or data-saver has opted out.
+       */
+      const retry = () => {
+        if (still.matches || thrifty) return;
+        if (!video.paused) return;
+        video.play().catch(() => {});
+      };
+
+      video.addEventListener('canplay', retry, { once: true });
+      for (const evt of ['pointerdown', 'touchstart', 'keydown', 'scroll']) {
+        addEventListener(evt, retry, { once: true, passive: true });
+      }
     })();
   </script>
 </Base>
@@ -1158,10 +1194,16 @@ function homeWhen(event: CalendarEvent): string {
   }
 
   /* Holds the live map island. The island sizes to this box, so the height
-     lives here rather than inside the component. */
+     lives here rather than inside the component.
+
+     Square, up from 4:3. There is room for it for free: the card is bottom
+     aligned to the buttons and shares its grid row with the copy, which runs
+     557px at 1280 against the map's 353 — so the map can grow to the copy's
+     height before the hero gets any taller at all. A square lands at 471 there,
+     well inside that, and shows appreciably more park. */
   .hero-map {
     position: relative;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 1 / 1;
     border-radius: var(--radius-lg);
     border: 1px solid var(--border);
     background: var(--bg-sunken);
@@ -1944,7 +1986,10 @@ function homeWhen(event: CalendarEvent): string {
       grid-template-columns: 1fr;
     }
     .hero-map {
-      aspect-ratio: 16 / 9;
+      /* Taller than the old 16:9 here too, but nowhere near the square the wide
+         layout gets — full width on a phone, a square card would be 345px of
+         map and push everything under it off the screen. */
+      aspect-ratio: 4 / 3;
       /* Stacked, this is the gap the grid's row gap used to provide. That was
          turned off so the counts could set their own spacing on desktop, and
          one column means the map now sits directly under them. */
