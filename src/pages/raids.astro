@@ -177,11 +177,13 @@ function tierNote(tier: string): string | null {
     flex-direction: column;
   }
 
-  /* Taller from 760px up, so more of the artwork survives the crop — at the
-     natural content height this is a ~5:1 slot for a 16:9 image. */
+  /* Taller from 760px up, so more of the artwork survives the crop.
+     At 380px the card showed 60% of the image; at these heights it shows
+     80-83% at every width, which is as far as this can go before the boss
+     list — the actual point of the page — starts below the fold. */
   @media (min-width: 760px) {
     .raids-hero {
-      min-height: clamp(260px, 30vw, 380px);
+      min-height: clamp(320px, 40vw, 520px);
     }
   }
 
@@ -201,18 +203,32 @@ function tierNote(tier: string): string | null {
   }
 
   /*
-   * The events hero's scrim, unchanged, because it was measured against this
-   * artwork too rather than assumed to carry over. This image is much brighter
-   * — pure white cloud, yellow, hot pink — so it was the case most likely to
-   * need a darker one, and did not: worst case anywhere in the padded content
-   * box is h1 8.06:1, lede 7.13:1, credit 5.68:1, all clear of AA.
+   * Dark only where the words are.
    *
-   * Checked at 1116x380 and 345x195 (both measured off the live page), plus
-   * 772x260, 292x240 and a no-crop case. The narrow ones matter: the mobile
-   * card lands at almost exactly 16:9, so `cover` flips to binding on height
-   * and very nearly the whole image shows — including the bright right edge
-   * that the wide crop cuts away. The worst pixel is always bottom-right,
-   * where the art is brightest and the gradient is at its lightest 0.70.
+   * The lede is capped at 62ch, which measures 516px of inked text — and that
+   * is a fixed width, not a proportion, so text occupies the leftmost ~546px
+   * of the card no matter how wide the card gets. At 1280 that is 49% of it,
+   * leaving the entire right half needlessly under 0.70 black. Hence stops in
+   * PIXELS rather than percentages: they hold the dark plateau over the text
+   * and let everything past it open up.
+   *
+   * That also makes narrow cards take care of themselves. On a 345px phone
+   * card the light stops fall past the end of the gradient line entirely, so
+   * the whole thing stays at ~0.70 — which is what a card whose text spans its
+   * full width needs.
+   *
+   * 90deg, not the events hero's 105deg, and that part is load-bearing. With
+   * any tilt the alpha depends on y as well as x, and `margin-top: auto` puts
+   * the credit — the smallest text, so the tightest contrast — at the very
+   * bottom of the card. Raising the card to 520px dropped the credit into the
+   * lighter end of a tilted gradient and took it to 4.37:1, under AA. Flat
+   * horizontal, the credit's vertical position stops mattering.
+   *
+   * Measured, not chosen. Worst case over the region text can occupy is
+   * 5.19:1 at 1116x520, 5.23:1 at 936x400, 5.19:1 at 703x312, 5.52:1 at
+   * 345x195 and 5.55:1 at 292x240 — the credit every time, against a 4.5
+   * threshold. For reference the lightest flat alpha that still clears AA
+   * anywhere text sits is 0.639, so the 0.68 plateau keeps real margin.
    */
   .raids-hero::before {
     content: '';
@@ -220,10 +236,11 @@ function tierNote(tier: string): string | null {
     inset: 0;
     z-index: -1;
     background: linear-gradient(
-      105deg,
-      rgb(6 8 12 / 0.84) 0%,
-      rgb(6 8 12 / 0.74) 58%,
-      rgb(6 8 12 / 0.7) 100%
+      90deg,
+      rgb(6 8 12 / 0.72) 0px,
+      rgb(6 8 12 / 0.68) 580px,
+      rgb(6 8 12 / 0.22) 880px,
+      rgb(6 8 12 / 0.12) 100%
     );
   }
 
