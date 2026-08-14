@@ -99,8 +99,12 @@
  *
  * Scoped with :has so it applies only while empty; once flares arrive the
  * board must stay top-aligned and scroll from the top.
+ *
+ * `.go-intro` is the same case wearing different copy — it is what fills that
+ * space for someone who cannot post — so it centres on the same terms.
  */
-.go-board:has(.go-empty) {
+.go-board:has(.go-empty),
+.go-board:has(.go-intro) {
   display: grid;
   align-content: center;
 }
@@ -127,6 +131,69 @@
   border-color: var(--poi-campsite);
   color: var(--text);
   flex: none;
+}
+/*
+ * The link is the only way out of the gate, so it carries weight the
+ * surrounding sentence does not. Colour is left to the base `a` rule —
+ * `--accent` is the one red measured against this background.
+ */
+.go-gate a {
+  font-weight: 700;
+  text-underline-offset: 2px;
+}
+
+/* ------------------------------------------------------------ what this is -- */
+
+/*
+ * Shown instead of the empty-board sentence when the viewer cannot post. It
+ * replaces that line rather than sitting alongside it, so it inherits the
+ * centring above and adds no height to a screen whose action grid has to stay
+ * within thumb reach.
+ */
+.go-intro {
+  margin: 8px 4px;
+  padding: 18px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  text-align: center;
+}
+
+.go-intro-lede {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/*
+ * Left-aligned inside a centred box. Centring each line individually leaves
+ * three ragged axes, and the emoji column is the thing that makes them scan as
+ * a list at all — which only works if they share a left edge.
+ */
+.go-intro-list {
+  list-style: none;
+  margin: 14px auto 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+  width: fit-content;
+  max-width: 100%;
+  text-align: left;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+.go-intro-list li {
+  display: grid;
+  grid-template-columns: 1.5em 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.go-intro-foot {
+  margin: 14px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .go-flare {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MapPoi } from '~/lib/db/map';
 import type { SessionUser } from '~/lib/auth/types';
+import { DISCORD_INVITE } from '~/lib/socials';
 import './QuickActions.css';
 
 /**
@@ -354,9 +355,40 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
 
       <section className="go-board" aria-label="Active flares">
         {flares.length === 0 ? (
-          <p className="go-empty empty-art-bg">
-            Nothing active right now. Fire one below when you are at a gym and want company.
-          </p>
+          canPost ? (
+            <p className="go-empty empty-art-bg">
+              Nothing active right now. Fire one below when you are at a gym and want company.
+            </p>
+          ) : (
+            /*
+             * Someone who cannot post must not be told to "fire one below" at a
+             * row of buttons they cannot press. And this is the screen people
+             * install to a home screen, so an empty board is the one place with
+             * room to say what the app is actually for — which it previously
+             * did not, anywhere.
+             *
+             * No `empty-art-bg` here on purpose: the pin motif reads as "there
+             * is nothing here", which is the wrong thing to say underneath a
+             * description of what the thing does.
+             */
+            <div className="go-intro">
+              <p className="go-intro-lede">Flares, so nobody raids alone.</p>
+              <ul className="go-intro-list">
+                <li>
+                  <span aria-hidden="true">🔥</span> Call a raid and watch who is on their way
+                </li>
+                <li>
+                  <span aria-hidden="true">📣</span> Offer remote invites going spare
+                </li>
+                <li>
+                  <span aria-hidden="true">🔔</span> Get a ping the moment someone else flares
+                </li>
+              </ul>
+              <p className="go-intro-foot">
+                Built for one hand, at a gym, with the game open in the other app.
+              </p>
+            </div>
+          )
         ) : (
           <ul>
             {flares.map((flare) => {
@@ -399,11 +431,31 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
         )}
       </section>
 
+      {/*
+       * Sits directly above the action grid, so the way out of the gate is
+       * under the same thumb as the buttons it is gating.
+       *
+       * The guest wording used to read "ask an ambassador on Discord", which
+       * sends someone to ask for something nobody has to grant: `resolveRole`
+       * upgrades on guild membership alone, so joining is the whole of it and
+       * it takes effect on their next sign-in. Same wording as /live now.
+       */}
       {!canPost && (
         <p className="go-gate">
-          {signedIn
-            ? 'Your account is not a community member yet — ask an ambassador on Discord.'
-            : 'Sign in with Discord to fire a flare.'}
+          {signedIn ? (
+            <>
+              Flares are for community members.{' '}
+              <a href={DISCORD_INVITE} rel="noopener noreferrer" target="_blank">
+                Join the Discord
+              </a>{' '}
+              and your account will be upgraded on your next sign-in.
+            </>
+          ) : (
+            <>
+              <a href="/auth/login?next=%2Fgo">Sign in with Discord</a> to fire a flare, join
+              someone else&rsquo;s, or get a ping when one goes up.
+            </>
+          )}
         </p>
       )}
 

@@ -22,9 +22,17 @@ export interface Social {
   name: SocialName;
 }
 
+/**
+ * On its own as well as in the list, because the two are wanted in different
+ * places: the socials row renders every entry, while anything telling a guest
+ * how to become a member wants this one link and nothing else. Naming it here
+ * beats a `SOCIALS.find(...)` that has to be non-null-asserted at each use.
+ */
+export const DISCORD_INVITE = 'https://discord.com/invite/2sYR5YdRpH';
+
 export const SOCIALS: readonly Social[] = [
   {
-    href: 'https://discord.com/invite/2sYR5YdRpH',
+    href: DISCORD_INVITE,
     label: 'Discord',
     hint: 'Raids, chat, meetups',
     name: 'discord',
