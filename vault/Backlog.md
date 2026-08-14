@@ -28,23 +28,40 @@ deliberately** because they are Justin's rather than the agent's:
 - [ ] **Test the bubble on a real phone**, ideally over Pokémon GO. See [[Android App]]
 - [ ] **Rotate the Discord client secret** — it passed through a chat transcript during setup
 
-## Blocked on Discord admin — to raise with Nick
+## Discord server admin — landed, work it through with Nick
 
-Justin does not have admin on the community Discord. Nick is the Community Ambassador who
-does. Everything here needs **Manage Webhooks** or **Server Settings** access, so it waits
-for that conversation rather than being a task anyone can pick up.
+Justin has server admin as of 2026-08-13. What blocked this list is gone; what remains is
+that **the server is live**, with real members in it, so the order below matters more than
+the speed. Nothing a member can see happens until the repoint step.
 
-This is also the real reason the guild and role IDs stalled during setup — it was never a
-matter of finding the right menu.
-
-- [ ] **`DISCORD_WEBHOOK_URL`** — needs *Manage Webhooks*. Server Settings → Integrations →
-      Webhooks. Then, keeping it out of any transcript:
-      `printf '%s' 'PASTE_URL' | npx wrangler secret put DISCORD_WEBHOOK_URL`.
+- [ ] **`DISCORD_WEBHOOK_URL`** — Server Settings → Integrations → Webhooks. Point it at a
+      **private channel first**, test there, then edit the webhook's channel to the public
+      one: the URL is `.../webhooks/{id}/{token}` and neither part is channel-derived, so
+      repointing does not change it and the secret is set exactly once.
+      `npx wrangler secret put DISCORD_WEBHOOK_URL` and paste at the prompt — the
+      piped-literal form puts a bearer credential into shell history.
       Only `discord.com` / `discordapp.com` hosts are accepted — see [[Notifications]].
       This is the last piece of notifications; push itself is already live
-- [ ] **`DISCORD_ROLE_ADMIN` / `_AMBASSADOR` / `_MEMBER`** — needs Server Settings → Roles.
-      Until these are set, nobody is promoted automatically and roles stay hand-assigned in
-      the database. See [[Auth and Roles]]
+      - Set the webhook's **avatar** while there. `postFlareToDiscord` sends a `username` but
+        no `avatar_url`, so Discord falls back to the webhook's own — a grey blob by default
+      - **Close every test flare before repointing.** A webhook edits its own messages
+        through the channel it currently points at, so afterwards the old message ids are
+        unreachable and the strike-through fails silently
+      - Verify without firing anything: `GET /api/admin/config-check` now reports
+        `webhook.accepted`, which is `webhookUrl()`'s own verdict rather than mere presence.
+        A present-but-rejected value is indistinguishable from an absent one at runtime
+- [ ] **`DISCORD_ROLE_ADMIN` / `_AMBASSADOR`** — Server Settings → Roles → right-click →
+      Copy ID, with Developer Mode on. They go in `wrangler.jsonc` under `vars`, not the
+      dashboard, for the reason in [[Configuration]]. Until they are set nobody is promoted
+      automatically and roles stay hand-assigned. Safe to get wrong:
+      `DISCORD_BOOTSTRAP_ADMIN_ID` short-circuits `resolveRole` before any role is consulted.
+      See [[Auth and Roles]]
+
+> [!danger] Leave `DISCORD_ROLE_MEMBER` unset unless the Discord really gates on a role
+> It is the one setting here that can lock the community out. Set, it stops guild membership
+> from being enough — only holders of that exact role are `member` and everyone else drops to
+> `guest`, and `POST /api/flares` requires `member`. A wrong or over-narrow id means nobody
+> can fire a flare, and it presents as a permissions bug rather than a config one.
 - [ ] **A second admin.** Right now the site has exactly one, promoted by hand. If Nick is
       going to be an ambassador on the site as well, do it in the same sitting
 - [ ] **Tell Nick his GO Fest photo is now the landing banner**, and ask whether he has a frame
@@ -52,26 +69,39 @@ matter of finding the right menu.
       members at the right edge — a wider or different frame would let everyone back in. See
       [[Design System]] for why the bin was not retouched out
 
-### Nick also owns the Discord *application*, not just the server
+### The Discord *application* is a separate system from the server
 
 Worth separating, because it was assumed the other way round for a while: the Developer Portal
 app (client id `1534670096256073778`) and the Discord server are different systems with
-different permissions. Nick holds both. Everything below is Developer Portal, so none of it
-needs server admin — it needs him.
+different permissions.
 
-- [ ] **Ask to be added to the application's Team**, rather than asking for the two items below
-      one at a time. The Developer Portal supports Teams: the owner creates one, moves the app
-      into it, and adds members. After that, redirect URIs and secret rotation stop being a
-      favour with a wait attached. This is the ask worth making
-- [ ] **Confirm the redirect URI is registered**, exactly, no trailing slash:
-      `https://pogotxk.gnomelabz.workers.dev/auth/callback`. This cannot be checked from
-      outside — Discord serves the same 44KB app shell for a registered and an unregistered
-      URI and only validates after sign-in. It *can* be checked in ten seconds by opening the
-      sign-in link and looking: the approval screen means it is registered, "Invalid OAuth2
-      redirect_uri" means it is not. Do that before raising it
-- [ ] **Rotate the client secret** — it passed through a chat transcript during setup. Have him
-      send the new one via a password manager share, never chat or email, then
-      `printf '%s' 'NEW' | npx wrangler secret put DISCORD_CLIENT_SECRET`
+> [!important] An OAuth app is not attached to the guild, and does not need to be
+> It needs no bot, no install into the server, and no permission from whoever runs it —
+> `guilds.members.read` reads membership with the **signed-in user's own** access token.
+> App ownership and server ownership are unrelated. So "Nick owns the server" says nothing
+> about who owns the app, and if it turns out he does, creating our own costs very little:
+> `users.discord_id` is a global Discord id rather than a per-app one, so switching
+> applications preserves every user record. With one user in the table, the whole cost is a
+> new client id, a new secret, re-registering the redirect URI and one re-consent screen.
+
+- [x] ~~**Confirm the redirect URI is registered**~~ — **it is.** This was listed as
+      uncheckable from outside. It is not: `azm.0` completed a full OAuth round trip on
+      **2026-08-05T22:21:55Z**, which the callback cannot do unless
+      `https://pogotxk.gnomelabz.workers.dev/auth/callback` matched exactly. Sign-in, the
+      client secret and the callback are all proven working. A *new* host — the custom
+      domain — will still need registering separately
+- [ ] **Settle who owns the app**, which takes ten seconds and needs nobody: open
+      <https://discord.com/developers/applications> while signed in. Listed → it is yours,
+      and only the private channel needs Nick. Not listed → ask for Team membership, or
+      create your own per the note above. The app exists and is named **PogoTXK** — that
+      much is confirmed from its public record
+- [ ] **Rotate the client secret** — it passed through a chat transcript during setup. A
+      fresh app makes this automatic; an existing one needs Reset Secret. Have it sent via a
+      password manager share, never chat or email, then `npx wrangler secret put
+      DISCORD_CLIENT_SECRET` and paste at the prompt — the piped-literal form puts a
+      credential in shell history
+- [ ] **The app has no icon** (`icon: null`). Every member's first impression of this project
+      is a blank square on the Discord consent screen. Upload the Poké Ball logo
 
 > [!note] None of this blocks signing in
 > `DISCORD_BOOTSTRAP_ADMIN_ID` short-circuits `resolveRole` to `admin` regardless of guild
@@ -199,8 +229,11 @@ is transport-independent — it does not go away at the edge:
 - [x] ~~`/events` opened on 900px of subscribe UI~~ — collapsed into a `<details>`; the first
       event moved from 927px to 386px down the page
 - [x] ~~Two admin tabs led to 404s~~ — Media is built; Settings is out of the nav until it is
-- [ ] **`/go` is sparse for a signed-out visitor.** The empty board is centred now rather than
-      top-aligned, but the screen still says little about what the app does before you sign in
+- [x] ~~**`/go` is sparse for a signed-out visitor**~~ — the empty-board sentence used to read
+      "Fire one below…" to everyone, pointing a signed-out visitor at six disabled buttons.
+      When the viewer cannot post it is now replaced by three lines describing the app. The
+      guest wording was wrong as well as sparse: "ask an ambassador" sent people to ask for
+      something nobody has to grant, since `resolveRole` upgrades on guild membership alone
 
 ### From the visual pass, 2026-08-07
 

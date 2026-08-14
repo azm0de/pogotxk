@@ -65,12 +65,14 @@ curl -s https://pogotxk.gnomelabz.workers.dev/api/push/subscribe
 
 ## Not set — features that stay off until they are
 
+`DISCORD_GUILD_ID` and `DISCORD_BOOTSTRAP_ADMIN_ID` were listed here as well as above for a
+while. They are **set** — see the table above; this list is only what is genuinely missing.
+
 | Name | Type | Enables |
 |---|---|---|
 | `DISCORD_WEBHOOK_URL` | Secret | Flares into Discord — [[Notifications]] |
-| `DISCORD_GUILD_ID` | var | Guild membership check — [[Auth and Roles]] |
-| `DISCORD_BOOTSTRAP_ADMIN_ID` | var | First admin without a database edit |
-| `DISCORD_ROLE_ADMIN` / `_AMBASSADOR` / `_MEMBER` | var | Automatic role mapping |
+| `DISCORD_ROLE_ADMIN` / `_AMBASSADOR` | var | Automatic role mapping |
+| `DISCORD_ROLE_MEMBER` | var | A role-gated membership check. **Usually leave unset** — see [[Backlog]] |
 | `SITE_URL` | **build** var | Canonical host. Only needed at the domain cutover — see below |
 
 > [!important] `SITE_URL` is a build variable, not a runtime one
@@ -93,6 +95,12 @@ Two ways, no terminal needed for the first:
 2. `GET /api/admin/config-check` (admin session or `IMPORT_TOKEN`) returns booleans, lengths and
    whitespace/quote warnings — **never values** — and flags near-miss names like
    `DISCORD_CLIENTID`.
+
+> [!tip] For the webhook, ask for `webhook.accepted`, not `webhook.present`
+> `webhookUrl()` rejects any host that is not Discord's, and a rejected value behaves
+> *identically* to an absent one: `postFlareToDiscord` returns null and logs nothing either
+> way. `accepted` reports that verdict, so it is the only way to know flares will land
+> without posting a real embed into a real channel to find out.
 
 ## Never commit
 
