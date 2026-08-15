@@ -175,12 +175,19 @@ function tierNote(tier: string): string | null {
   }
 
   /* Taller from 760px up, so more of the artwork survives the crop.
-     At 380px the card showed 60% of the image; at these heights it shows
-     80-83% at every width, which is as far as this can go before the boss
-     list — the actual point of the page — starts below the fold. */
+     At 380px the card showed 60% of the image; 520px got that to 80-83%.
+     Raised again on request to show more of the scene: the source is 16:9 and
+     the card caps at 1116px wide, so at full width the image is 628px tall and
+     600px shows ~96% of it — near the ceiling, since past 628px the crop turns
+     horizontal instead and starts cutting the trainers off the sides.
+     Measured on the rendered page, not derived — 600px is the cap because the
+     nav/toolbar under the card has to stay in view, and it does at every size
+     tested: 1920x1080 shows 366px of it, 1440x900 186px, 1280x800 123px,
+     1024x768 203px, 390x844 581px. 1280x800 is the tightest and is what stops
+     this going further. */
   @media (min-width: 760px) {
     .raids-hero {
-      min-height: clamp(320px, 40vw, 520px);
+      min-height: clamp(360px, 44vw, 600px);
     }
   }
 
