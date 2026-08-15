@@ -62,10 +62,14 @@ made them scale and theme properly.
 
 ## Fonts
 
-Headings (`h1`–`h4`, via `--font-display`) use **Fredoka**, SIL OFL 1.1, self-hosted at
-`/fonts/fredoka-700.woff2` — no font CDN, per the project's own constraint. The OFL does not
+Headings (`h1`–`h4`, via `--font-display`) use **Baloo 2**, SIL OFL 1.1, self-hosted at
+`/fonts/baloo-2-700.woff2` — no font CDN, per the project's own constraint. The OFL does not
 require on-page credit for ordinary use, only that the license text travel with the font, which
-it does at `/fonts/fredoka-OFL.txt`. Body text stays system-ui.
+it does at `/fonts/baloo-2-OFL.txt`. Body text stays system-ui.
+
+(Shipped first as Fredoka, switched to Baloo 2 the same week — Fredoka's extra roundness read
+too close to a kids'-app tone; Baloo 2 keeps the rounded warmth without losing the "serious
+collector tool" register.)
 
 ## See also
 
