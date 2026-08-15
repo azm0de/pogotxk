@@ -180,8 +180,11 @@ is transport-independent — it does not go away at the edge:
 - [ ] **Settings page (`/admin/settings`).** Same story, but with no API either. Social links,
       hero copy, theme colours, Code of Conduct PDF. It is the only `adminOnly` nav entry the
       layout was built for
-- [ ] **Community POI submissions.** `poi_reports` and the moderation queue exist in the schema;
-      no UI yet
+- [ ] **Community POI problem reports.** `poi_reports` and the moderation queue exist in the
+      schema; no UI yet. Report-only by decision (2026-08-15) — a visitor can flag that an
+      existing POI moved, closed or has wrong info, never propose a new one. `poi_id` is
+      `NOT NULL` and the `'new'` kind is gone; new POIs stay admin-only, added straight in the
+      map editor. See [[Data Model]]
 - [ ] **KMZ import in admin.** Their source of truth is Google Earth. `lib/kml.ts` was planned
       and never built — upload a KMZ, diff against the database, approve changes
 
