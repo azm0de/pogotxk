@@ -639,35 +639,84 @@
 /* Leaflet's own attribution control. Required by OSM and CARTO, so it is
    styled to stay legible rather than hidden — it must survive the filter panel
    being collapsed. */
-.leaflet-control-attribution {
+/*
+ * The `.leaflet-container` and `.leaflet-control` qualifiers are load-bearing —
+ * do not "simplify" them away. Leaflet ships
+ * `.leaflet-container .leaflet-control-attribution` (0,2,0) at leaflet.css:413
+ * with `background: rgba(255,255,255,0.8)`. A bare `.leaflet-control-attribution`
+ * is only (0,1,0) and loses outright: the computed background really was
+ * rgba(255,255,255,0.8), a bright white pill sitting on the dark map in dark mode.
+ * `.leaflet-control` is added to every control by Control.addTo (leaflet-src.js:4933),
+ * so this reads (0,3,0) and beats Leaflet on specificity rather than on the order
+ * the bundler happens to emit the two stylesheets in.
+ */
+.leaflet-container .leaflet-control-attribution.leaflet-control {
   background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
   color: var(--text-muted);
   font-size: 0.66rem;
   padding: 2px 7px;
   border-radius: 8px 0 0 0;
 }
-.leaflet-control-attribution a {
+/*
+ * Not a live bug, but the same fragility: Leaflet's `.leaflet-control-attribution a`
+ * (leaflet.css:424) is also (0,2,0), so an unqualified rule here would tie and be
+ * settled by source order. Qualified to (0,3,0) so it cannot flip on a build change.
+ */
+.leaflet-container .leaflet-control-attribution.leaflet-control a {
   color: var(--accent);
 }
 
 /* Leaflet's default zoom control ships plain white/black and never picked up
    the panel's theme the way the attribution control did — same tokens as the
    filter panel, so it reads as part of this page rather than a stock widget. */
-.leaflet-control-zoom {
+/*
+ * Two rules, deliberately, because Leaflet styles this control differently once
+ * it thinks it is on a touch device.
+ *
+ * The base rule covers plain `.leaflet-bar` (leaflet.css:284, which sets no border).
+ * The `.leaflet-touch` rule exists because leaflet.css:468 ships
+ * `.leaflet-touch .leaflet-bar { border: 2px solid rgba(0,0,0,0.2) }` at (0,2,0),
+ * which beat our bare `.leaflet-control-zoom` (0,1,0) — measured computed value was
+ * `2px solid rgba(0,0,0,0.2)`, a visibly dark 2px ring where a near-invisible 1px
+ * hairline was intended. Note that `.leaflet-touch` was present on every desktop
+ * browser tested; Leaflet's touch detection fires on modern Chrome/Edge regardless
+ * of hardware, so this is not a mobile-only case. Width is restated explicitly
+ * because their default is 2px and ours is 1px.
+ */
+.leaflet-control-zoom.leaflet-bar {
   border: 1px solid var(--border);
   box-shadow: none;
 }
-.leaflet-control-zoom a {
+.leaflet-touch .leaflet-bar.leaflet-control-zoom {
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+/*
+ * Also qualified, though these were not visibly broken: Leaflet's `.leaflet-bar a`
+ * sets `background-color: #fff; color: black` at (0,2,0), which merely TIED our old
+ * bare `.leaflet-control-zoom a` and was being settled by source order. A tie we win
+ * by accident is a bug waiting on a bundler change, so these are (0,3,0) now.
+ */
+.leaflet-bar.leaflet-control-zoom a {
   background: var(--bg-panel);
   color: var(--text);
 }
-.leaflet-control-zoom a:hover {
+.leaflet-bar.leaflet-control-zoom a:hover {
   background: var(--bg-sunken);
 }
-.leaflet-control-zoom-in {
+/*
+ * The `.leaflet-bar a` qualifier is load-bearing. Leaflet's `.leaflet-bar a`
+ * (leaflet.css:288) sets `border-bottom: 1px solid #ccc` at (0,2,0) and beat our
+ * bare `.leaflet-control-zoom-in` (0,1,0) — the computed value really was
+ * rgb(204,204,204), a light-grey hairline cutting across the dark zoom button.
+ * `.leaflet-bar a.leaflet-control-zoom-in` is (0,3,0), and Leaflet's touch variant
+ * `.leaflet-touch .leaflet-bar a` (leaflet.css:324) sets only sizing, never a
+ * border, so there is no higher rule left to lose to.
+ */
+.leaflet-bar a.leaflet-control-zoom-in {
   border-bottom: 1px solid var(--border);
 }
-.leaflet-control-zoom a.leaflet-disabled {
+.leaflet-bar.leaflet-control-zoom a.leaflet-disabled {
   background: var(--bg-panel);
   color: var(--text-muted);
 }
