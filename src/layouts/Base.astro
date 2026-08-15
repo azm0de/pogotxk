@@ -194,22 +194,43 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         would have a screen reader announce "Discord Discord" — the exact trap
         SocialIcon's `decorative` prop documents.
       */}
-      <ul class="header-socials">
-        {
-          SOCIALS.map((social) => (
-            <li>
-              <a
-                href={social.href}
-                rel="noopener noreferrer"
-                target="_blank"
-                aria-label={`${social.label} (opens in a new tab)`}
-              >
-                <SocialIcon name={social.name} size={22} bare />
-              </a>
-            </li>
-          ))
-        }
-      </ul>
+      {/*
+        The socials and the account control share the right-hand zone, and the
+        wrapper is what carries the `flex: 1 1 0` that used to sit on the list
+        itself. That matters: the nav is centred by the two side zones being
+        equal, so hanging the account control off the end as a third sibling
+        would have shifted the nav left by exactly its width.
+      */}
+      <div class="header-right">
+        <ul class="header-socials">
+          {
+            SOCIALS.map((social) => (
+              <li>
+                <a
+                  href={social.href}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                  aria-label={`${social.label} (opens in a new tab)`}
+                >
+                  <SocialIcon name={social.name} size={22} bare />
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+
+        {/*
+          Filled in by the script below rather than rendered here, because four
+          pages under this layout are prerendered (/conduct, /privacy, /terms,
+          /offline). On those, `Astro.locals.user` is whatever it was at BUILD
+          time — which is nobody, forever. A server-rendered control would tell
+          a signed-in member they are signed out on a quarter of the site.
+
+          Starts empty and unlabelled so nothing flashes before we know the
+          answer; `hidden` comes off once it has something true to say.
+        */}
+        <div class="header-account" data-account hidden></div>
+      </div>
     </header>
 
     <script is:inline>
@@ -268,6 +289,117 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         window
           .matchMedia('(min-width: 821px)')
           .addEventListener('change', (e) => e.matches && setOpen(false));
+      })();
+    </script>
+
+    <script is:inline>
+      /*
+       * The account control.
+       *
+       * Built here rather than server-rendered because four pages under this
+       * layout are prerendered, and on those the server's idea of "who is
+       * signed in" is frozen at build time. One fetch is the honest answer.
+       *
+       * Everything is built with createElement and textContent. A Discord
+       * display name is chosen by its owner and arrives from an API, so it is
+       * untrusted string data — innerHTML here would be a stored XSS on every
+       * page of the site.
+       */
+      (() => {
+        const root = document.querySelector('[data-account]');
+        if (!root) return;
+
+        const el = (tag, props) => Object.assign(document.createElement(tag), props);
+        // Where to come back to. Deliberately not the hash — it never reaches
+        // the server, and `safeNext` would be judging a string it cannot see.
+        const here = location.pathname + location.search;
+        const next = encodeURIComponent(here);
+
+        const signedOut = () => {
+          root.append(
+            el('a', {
+              className: 'account-signin',
+              href: '/auth/login?next=' + next,
+              textContent: 'Sign in',
+            }),
+          );
+        };
+
+        const signedIn = (user) => {
+          const details = el('details', { className: 'account-menu' });
+          const summary = el('summary', { className: 'account-summary' });
+          summary.setAttribute('aria-label', 'Account menu');
+
+          if (user.avatarUrl) {
+            summary.append(
+              el('img', {
+                className: 'account-avatar',
+                src: user.avatarUrl,
+                alt: '',
+                width: 22,
+                height: 22,
+                loading: 'lazy',
+                decoding: 'async',
+              }),
+            );
+          } else {
+            summary.append(el('span', { className: 'account-avatar' }));
+          }
+          summary.append(
+            el('span', {
+              className: 'account-name',
+              textContent: user.displayName || user.username || 'Account',
+            }),
+          );
+
+          const panel = el('div', { className: 'account-panel' });
+          const who = el('p', { className: 'account-who', textContent: 'Signed in as ' });
+          who.append(el('strong', { textContent: user.username || user.displayName || '' }));
+          panel.append(who);
+
+          panel.append(
+            el('a', { href: '/auth/logout?next=' + next, textContent: 'Sign out' }),
+            el('a', {
+              href: '/auth/logout?switch=1&next=' + next,
+              textContent: 'Use a different Discord account',
+            }),
+            el('p', {
+              className: 'account-hint',
+              // Worth saying plainly. Signing out here does not sign you out of
+              // Discord, so without this the second link looks redundant right
+              // up until someone tries to swap accounts and cannot.
+              textContent:
+                'Signing out here does not sign you out of Discord. Use the second option to pick a different account.',
+            }),
+          );
+
+          details.append(summary, panel);
+          root.append(details);
+
+          // A menu that will not close is worse than no menu.
+          document.addEventListener('click', (e) => {
+            if (details.open && !details.contains(e.target)) details.open = false;
+          });
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && details.open) {
+              details.open = false;
+              summary.focus();
+            }
+          });
+        };
+
+        fetch('/api/me.json', { credentials: 'same-origin', headers: { accept: 'application/json' } })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (!data) return; // Stay hidden rather than assert either state.
+            data.user ? signedIn(data.user) : signedOut();
+            root.hidden = false;
+          })
+          .catch(() => {
+            /* Offline, or the endpoint is unreachable. Showing "Sign in" to
+               someone who is signed in would be a lie, and showing nothing
+               costs them only this shortcut — /go and /live still have theirs. */
+          });
       })();
     </script>
 
@@ -459,6 +591,15 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
        * balance the mark instead, and the marks are recognisable enough not to
        * need the brand's company to be read as ours.
        */
+      .header-right {
+        flex: 1 1 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 14px;
+        /* Never let the account name push the nav around; it truncates instead. */
+        min-width: 0;
+      }
       .header-socials {
         list-style: none;
         margin: 0;
@@ -467,7 +608,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         align-items: center;
         justify-content: flex-end;
         gap: 10px;
-        flex: 1 1 0;
+        flex: 0 0 auto;
       }
       .header-socials a {
         display: block;
@@ -492,6 +633,147 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       }
       .header-socials svg {
         display: block;
+      }
+
+      /* --- account control ------------------------------------------------ */
+
+      .header-account {
+        flex: 0 0 auto;
+        min-width: 0;
+      }
+      .header-account[hidden] {
+        display: none;
+      }
+
+      .account-signin {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid rgb(255 255 255 / 0.34);
+        color: #fff;
+        font: 600 0.82rem/1 inherit;
+        text-decoration: none;
+        white-space: nowrap;
+        transition:
+          background-color 0.16s ease,
+          border-color 0.16s ease;
+      }
+      .account-signin:hover {
+        background: rgb(255 255 255 / 0.14);
+        border-color: rgb(255 255 255 / 0.6);
+      }
+      .account-signin:focus-visible,
+      .account-summary:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 3px;
+      }
+
+      .account-menu {
+        position: relative;
+      }
+      /* The marker is a disclosure triangle by default in every engine, and it
+         would sit next to an avatar reading as a dropdown arrow that is not
+         ours. Both selectors are needed — WebKit still wants the pseudo. */
+      .account-summary {
+        list-style: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        max-width: 190px;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid rgb(255 255 255 / 0.28);
+        cursor: pointer;
+        user-select: none;
+      }
+      .account-summary::-webkit-details-marker {
+        display: none;
+      }
+      .account-summary:hover {
+        background: rgb(255 255 255 / 0.14);
+      }
+      .account-avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+        background: rgb(255 255 255 / 0.2);
+      }
+      .account-name {
+        font: 600 0.82rem/1 inherit;
+        color: #fff;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .account-panel {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 60;
+        min-width: 232px;
+        padding: 6px;
+        border-radius: 12px;
+        /* Not the header's red: this is a surface floating over the page, and
+           it has to read against whatever is under it rather than against the
+           bar it hangs from. */
+        background: #16212f;
+        border: 1px solid #2b3a51;
+        box-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.62);
+        color: #e8edf4;
+      }
+      .account-who {
+        margin: 0;
+        padding: 8px 10px 10px;
+        font-size: 0.78rem;
+        line-height: 1.35;
+        color: #9aa8ba;
+        border-bottom: 1px solid #26344a;
+        overflow-wrap: anywhere;
+      }
+      .account-who strong {
+        display: block;
+        color: #e8edf4;
+      }
+      .account-panel a {
+        display: block;
+        padding: 9px 10px;
+        border-radius: 8px;
+        color: inherit;
+        font-size: 0.86rem;
+        text-decoration: none;
+      }
+      .account-panel a:first-of-type {
+        margin-top: 4px;
+      }
+      .account-panel a:hover {
+        background: #223047;
+      }
+      .account-panel a:focus-visible {
+        outline: 2px solid #6ea8ff;
+        outline-offset: -2px;
+      }
+      .account-hint {
+        margin: 2px 10px 6px;
+        font-size: 0.72rem;
+        line-height: 1.4;
+        color: #7f8da0;
+      }
+
+      /* On a phone the header is already tight and the nav has collapsed into a
+         panel, so the name goes and the avatar carries the control alone. */
+      @media (max-width: 560px) {
+        .account-name {
+          display: none;
+        }
+        .account-summary {
+          padding: 0 6px;
+        }
       }
 
       /* Hidden until the panel breakpoint takes over below. 44px because it is
