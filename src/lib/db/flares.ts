@@ -74,6 +74,32 @@ export interface FlarePoi {
   lng: number;
 }
 
+/** Only these two kinds carry a boss — PATCH /api/flares/:id enforces the same rule. */
+export function flareCarriesBoss(kind: FlareKind): boolean {
+  return kind === 'raid' || kind === 'remote_invites';
+}
+
+/** Only a raid carries a tier — PATCH /api/flares/:id enforces the same rule. */
+export function flareCarriesTier(kind: FlareKind): boolean {
+  return kind === 'raid';
+}
+
+/**
+ * Whoever raised a flare, plus ambassadors/admins — the rule PATCH
+ * /api/flares/:id actually enforces (assertMayAlter), mirrored here so a
+ * client's buttons match what the API will actually accept.
+ *
+ * Ids are compared explicitly: `a?.id === b?.id` is true when BOTH are
+ * absent, which would hand every user a button on every authorless flare.
+ */
+export function mayAlterFlare(
+  author: FlareAuthor | null,
+  userId: number | null,
+  canModerate: boolean,
+): boolean {
+  return canModerate || (userId !== null && author !== null && author.id === userId);
+}
+
 export interface Flare {
   id: number;
   kind: FlareKind;
