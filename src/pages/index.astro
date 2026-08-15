@@ -12,7 +12,7 @@ import {
   meetupToCalendarEvent,
 } from '~/lib/db/meetups';
 import { listPublishedPosts } from '~/lib/db/posts';
-import { gameEventsFromPayload, groupEvents, type CalendarEvent } from '~/lib/ics';
+import { gameEventsFromPayload, groupEvents, type CalendarEvent } from '~/lib/events';
 import { getFeed, raidTierRank } from '~/lib/scrapedduck';
 import Attribution from '~/components/game/Attribution.astro';
 import { proxiedImageUrl } from '~/lib/game-image';
@@ -1720,9 +1720,15 @@ function homeWhen(event: CalendarEvent): string {
        reasoning as Lucario's flip in the hero: turn the subject back in toward
        the content it is standing beside. */
     --art-flip: -1;
-    /* Barely any bleed now. The old −150px hid nearly half of him off-page; in
-       clear space there is no reason to throw the image away. */
-    --art-left: calc(-1 * clamp(8px, 2.5vw, 44px));
+    /* Flush left, not bled. The old −150px hid nearly half of him off-page; a
+       later pass trimmed that to a "barely any bleed" clamp, but at every width
+       below the 900px breakpoint that clamp still ran negative and clipped
+       8–20% of him against `overflow-x: clip` — worse on a phone than the
+       820–899px range it was tuned to look fine at, since `2.5vw` never gets
+       small enough to vanish below that. `auto` (with `--art-right` also unset
+       down here) resolves to the same flush-left containment Magikarp already
+       gets on desktop: fully in frame at every mobile and tablet size. */
+    --art-left: auto;
     --art-bottom: clamp(6px, 1.5vw, 18px);
     /*
      * Sized against the strip's height, not chosen. Height is width / 0.708, and

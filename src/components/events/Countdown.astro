@@ -39,7 +39,7 @@ const { start, end = null, title } = Astro.props;
   const HOUR = 60 * MINUTE;
   const DAY = 24 * HOUR;
 
-  /** Matches DEFAULT_EVENT_MINUTES in ~/lib/ics — an event with no end runs an hour. */
+  /** Matches DEFAULT_EVENT_MINUTES in ~/lib/events — an event with no end runs an hour. */
   const DEFAULT_DURATION = HOUR;
 
   /**

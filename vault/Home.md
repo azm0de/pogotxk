@@ -51,7 +51,7 @@ Two of five production auditors never reported — see [[Backlog]].
 - [x] Map with all 104 locations, both overlays, 63 photos
 - [x] Admin console — map editor, meetups, posts, one-click import
 - [x] Discord sign-in with role mapping
-- [x] Blog, RSS, events, subscribable calendar feeds
+- [x] Blog, RSS, events
 - [x] Auto-updating raid bosses / eggs / research
 - [x] Realtime flare board over a Durable Object
 - [x] Installable web app at `/go`

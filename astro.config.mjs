@@ -43,14 +43,12 @@ function exportDurableObjects() {
 
 export default defineConfig({
   /**
-   * The host that actually serves this site — it feeds canonical URLs, RSS,
-   * sitemaps and the calendar feed URLs.
+   * The host that actually serves this site — it feeds canonical URLs, RSS
+   * and sitemaps.
    *
    * It must not be aspirational. This was set to https://pokemontxk.com while
    * that domain still pointed at the old Apache site, so every canonical link
-   * and all six /events subscribe links pointed at a 404. ICS is subscribe-once:
-   * anyone who added a dead feed URL gets an empty calendar forever, with no
-   * error to tell them why.
+   * pointed at a 404.
    *
    * Cutover to the custom domain is a build variable, not a code change: point
    * pokemontxk.com at the Worker, then set SITE_URL in the Workers Builds

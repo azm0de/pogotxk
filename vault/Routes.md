@@ -13,14 +13,13 @@ updated: 2026-08-05
 | `/map` | The map. `?poi=<slug>` deep-links to one pin |
 | `/go` | Quick actions. The installable PWA start URL |
 | `/live` | Flare board |
-| `/events` | Community meetups + global calendar, Live Now / Upcoming / Past |
+| `/events` | Community meetups + global calendar, Live Now / Upcoming / Past. No subscribable feed — see [[Backlog]] |
 | `/raids` `/eggs` `/research` | Auto from Leek Duck |
 | `/blog` `/blog/[slug]` | News |
 | `/gallery` | Community photos with credits |
 | `/about` `/conduct` `/terms` `/privacy` | Static |
 | `/offline` | Service worker fallback |
 | `/rss.xml` | Feed |
-| `/calendar/meetups.ics` `/game.ics` `/all.ics` | Subscribable calendars |
 
 ## Auth
 

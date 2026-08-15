@@ -21,22 +21,16 @@ import {
   gameEventsFromPayload,
   groupEvents,
   type CalendarEvent,
-} from '~/lib/ics';
+} from '~/lib/events';
 import { getFeed } from '~/lib/scrapedduck';
 import { DEFAULT_TZ } from '~/lib/time';
 
 export const prerender = false;
 
 /**
- * Calendar links are built from the host you are actually reading this on, not
- * from the configured canonical site.
- *
- * A subscribe URL is only useful if it resolves, and the host serving this page
- * demonstrably does. Preferring the canonical value is what produced six dead
- * subscribe links when `site` still named a domain that had not been pointed at
- * the Worker — and ICS is subscribe-once, so a dead URL is an empty calendar
- * forever rather than a visible error. Once the custom domain is live the two
- * agree anyway.
+ * Meetup deep links (map, /events#anchor) are built from the host you are
+ * actually reading this on, not from the configured canonical site — a link
+ * baked into meetup text is only useful if it resolves.
  */
 const base = new URL(Astro.url.origin);
 
@@ -59,18 +53,6 @@ const meetupEvents = meetups.map((meetup) => meetupToCalendarEvent(meetup, base)
 const grouped = groupEvents([...meetupEvents, ...(global?.events ?? [])]);
 // The past is context, not content — a dozen cards is plenty.
 const past = grouped.past.slice(0, 12);
-
-/*
- * The subscribe panel is gone from this page, and with it the `Feed` list that
- * only existed to populate it.
- *
- * `/calendar/meetups.ics`, `/calendar/all.ics` and `/calendar/game.ics` are all
- * still served — anyone already subscribed keeps receiving updates, because a
- * calendar client polls the URL it stored and never revisits this page. What is
- * gone is the way to *find* them, so there is no autodiscovery either. Add
- * `<link rel="alternate" type="text/calendar">` to the head slot if they should
- * stay discoverable without the panel.
- */
 
 /* ------------------------------------------------------------ formatting -- */
 
@@ -214,9 +196,8 @@ const credit = global?.attribution ?? null;
             Nothing on the calendar yet. Meetups are announced in{' '}
             <a href="https://discord.com/invite/2sYR5YdRpH" rel="noopener noreferrer" target="_blank">
               the Discord
-            </a>
-            first — subscribe to the feed above and they will land on your phone as soon as they
-            are posted.
+            </a>{' '}
+            first and show up here as soon as they are posted.
           </p>
         )
       }
