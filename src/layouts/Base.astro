@@ -352,24 +352,17 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
             }),
           );
 
+          // Two actions, nothing else. Who is signed in is already the
+          // summary's own avatar and name; a menu that opens over it should
+          // hold actions, not repeat that back as prose.
           const panel = el('div', { className: 'account-panel' });
-          const who = el('p', { className: 'account-who', textContent: 'Signed in as ' });
-          who.append(el('strong', { textContent: user.username || user.displayName || '' }));
-          panel.append(who);
-
           panel.append(
             el('a', { href: '/auth/logout?next=' + next, textContent: 'Sign out' }),
+            // Signing out here does not sign out of Discord — this is the only
+            // way off an account picked by mistake. See commit 4e12bcb.
             el('a', {
               href: '/auth/logout?switch=1&next=' + next,
               textContent: 'Use a different Discord account',
-            }),
-            el('p', {
-              className: 'account-hint',
-              // Worth saying plainly. Signing out here does not sign you out of
-              // Discord, so without this the second link looks redundant right
-              // up until someone tries to swap accounts and cannot.
-              textContent:
-                'Signing out here does not sign you out of Discord. Use the second option to pick a different account.',
             }),
           );
 
@@ -633,147 +626,6 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       }
       .header-socials svg {
         display: block;
-      }
-
-      /* --- account control ------------------------------------------------ */
-
-      .header-account {
-        flex: 0 0 auto;
-        min-width: 0;
-      }
-      .header-account[hidden] {
-        display: none;
-      }
-
-      .account-signin {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        height: 32px;
-        padding: 0 12px;
-        border-radius: 999px;
-        border: 1px solid rgb(255 255 255 / 0.34);
-        color: #fff;
-        font: 600 0.82rem/1 inherit;
-        text-decoration: none;
-        white-space: nowrap;
-        transition:
-          background-color 0.16s ease,
-          border-color 0.16s ease;
-      }
-      .account-signin:hover {
-        background: rgb(255 255 255 / 0.14);
-        border-color: rgb(255 255 255 / 0.6);
-      }
-      .account-signin:focus-visible,
-      .account-summary:focus-visible {
-        outline: 2px solid #fff;
-        outline-offset: 3px;
-      }
-
-      .account-menu {
-        position: relative;
-      }
-      /* The marker is a disclosure triangle by default in every engine, and it
-         would sit next to an avatar reading as a dropdown arrow that is not
-         ours. Both selectors are needed — WebKit still wants the pseudo. */
-      .account-summary {
-        list-style: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        max-width: 190px;
-        height: 32px;
-        padding: 0 10px;
-        border-radius: 999px;
-        border: 1px solid rgb(255 255 255 / 0.28);
-        cursor: pointer;
-        user-select: none;
-      }
-      .account-summary::-webkit-details-marker {
-        display: none;
-      }
-      .account-summary:hover {
-        background: rgb(255 255 255 / 0.14);
-      }
-      .account-avatar {
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        flex: 0 0 auto;
-        background: rgb(255 255 255 / 0.2);
-      }
-      .account-name {
-        font: 600 0.82rem/1 inherit;
-        color: #fff;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .account-panel {
-        position: absolute;
-        top: calc(100% + 8px);
-        right: 0;
-        z-index: 60;
-        min-width: 232px;
-        padding: 6px;
-        border-radius: 12px;
-        /* Not the header's red: this is a surface floating over the page, and
-           it has to read against whatever is under it rather than against the
-           bar it hangs from. */
-        background: #16212f;
-        border: 1px solid #2b3a51;
-        box-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.62);
-        color: #e8edf4;
-      }
-      .account-who {
-        margin: 0;
-        padding: 8px 10px 10px;
-        font-size: 0.78rem;
-        line-height: 1.35;
-        color: #9aa8ba;
-        border-bottom: 1px solid #26344a;
-        overflow-wrap: anywhere;
-      }
-      .account-who strong {
-        display: block;
-        color: #e8edf4;
-      }
-      .account-panel a {
-        display: block;
-        padding: 9px 10px;
-        border-radius: 8px;
-        color: inherit;
-        font-size: 0.86rem;
-        text-decoration: none;
-      }
-      .account-panel a:first-of-type {
-        margin-top: 4px;
-      }
-      .account-panel a:hover {
-        background: #223047;
-      }
-      .account-panel a:focus-visible {
-        outline: 2px solid #6ea8ff;
-        outline-offset: -2px;
-      }
-      .account-hint {
-        margin: 2px 10px 6px;
-        font-size: 0.72rem;
-        line-height: 1.4;
-        color: #7f8da0;
-      }
-
-      /* On a phone the header is already tight and the nav has collapsed into a
-         panel, so the name goes and the avatar carries the control alone. */
-      @media (max-width: 560px) {
-        .account-name {
-          display: none;
-        }
-        .account-summary {
-          padding: 0 6px;
-        }
       }
 
       /* Hidden until the panel breakpoint takes over below. 44px because it is
@@ -1142,6 +994,153 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           margin: 0;
           overflow: visible;
           clip: auto;
+        }
+      }
+    </style>
+
+    {/*
+      The account control's CSS, split out and `is:global` on purpose.
+
+      Every node under `.header-account` is built with `document.createElement`
+      in the script above, never by Astro — and Astro's scoped styles work by
+      compiling `.foo` to `.foo[data-astro-cid-hkbrpulz]`, then stamping that
+      attribute onto the elements it renders server-side. A `createElement`
+      node never gets stamped, so every one of these selectors was silently
+      matching nothing: the whole control has been rendering in raw browser
+      defaults — an unstyled `<details>`/`<summary>` with its native disclosure
+      triangle, and an unpositioned panel just flowing in normal document flow
+      — since the day it shipped. That triangle is almost certainly the "play
+      button" reported in prod, and the unpositioned panel is the "ugly text
+      overlay": neither is a design problem the rules below were ever wrong
+      about, they simply never ran.
+    */}
+    <style is:global>
+      .header-account {
+        flex: 0 0 auto;
+        min-width: 0;
+      }
+      .header-account[hidden] {
+        display: none;
+      }
+
+      .account-signin {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid rgb(255 255 255 / 0.34);
+        color: #fff;
+        font: 600 0.82rem/1 inherit;
+        text-decoration: none;
+        white-space: nowrap;
+        transition:
+          background-color 0.16s ease,
+          border-color 0.16s ease;
+      }
+      .account-signin:hover {
+        background: rgb(255 255 255 / 0.14);
+        border-color: rgb(255 255 255 / 0.6);
+      }
+      .account-signin:focus-visible,
+      .account-summary:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 3px;
+      }
+
+      .account-menu {
+        position: relative;
+      }
+      /*
+       * The marker is a disclosure triangle by default in every engine — the
+       * "play button". `list-style: none` is the standards-track way to kill
+       * it, `::-webkit-details-marker` is the legacy WebKit pseudo, and
+       * `::marker` is added as a third belt: Chromium has a known quirk where
+       * overriding `display` away from `list-item` on a `<summary>` (which
+       * this rule does, to `inline-flex`) does not reliably suppress the
+       * generated marker through `list-style` alone. All three are cheap
+       * insurance against one engine's quirk outliving this comment.
+       */
+      .account-summary {
+        list-style: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        max-width: 190px;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid rgb(255 255 255 / 0.28);
+        cursor: pointer;
+        user-select: none;
+      }
+      .account-summary::-webkit-details-marker {
+        display: none;
+      }
+      .account-summary::marker {
+        display: none;
+      }
+      .account-summary:hover {
+        background: rgb(255 255 255 / 0.14);
+      }
+      .account-avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+        background: rgb(255 255 255 / 0.2);
+      }
+      .account-name {
+        font: 600 0.82rem/1 inherit;
+        color: #fff;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .account-panel {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 60;
+        /* Wide enough that "Use a different Discord account" — the longest
+           row — never wraps to a second line. */
+        min-width: 260px;
+        padding: 6px;
+        border-radius: 12px;
+        /* Not the header's red: this is a surface floating over the page, and
+           it has to read against whatever is under it rather than against the
+           bar it hangs from. */
+        background: #16212f;
+        border: 1px solid #2b3a51;
+        box-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.62);
+        color: #e8edf4;
+      }
+      .account-panel a {
+        display: block;
+        padding: 9px 10px;
+        border-radius: 8px;
+        color: inherit;
+        font-size: 0.86rem;
+        text-decoration: none;
+      }
+      .account-panel a:hover {
+        background: #223047;
+      }
+      .account-panel a:focus-visible {
+        outline: 2px solid #6ea8ff;
+        outline-offset: -2px;
+      }
+
+      /* On a phone the header is already tight and the nav has collapsed into a
+         panel, so the name goes and the avatar carries the control alone. */
+      @media (max-width: 560px) {
+        .account-name {
+          display: none;
+        }
+        .account-summary {
+          padding: 0 6px;
         }
       }
     </style>
