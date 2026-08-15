@@ -7,7 +7,7 @@
  * ~/lib/time.
  */
 
-import type { CalendarEvent } from '~/lib/ics';
+import type { CalendarEvent } from '~/lib/events';
 
 export type MeetupStatus = 'draft' | 'published' | 'cancelled';
 
@@ -56,7 +56,7 @@ interface MeetupRow {
   hero_alt: string | null;
 }
 
-/** How far back the public page and the ICS feed look. */
+/** How far back the public events page looks. */
 export const PAST_WINDOW_DAYS = 90;
 
 /** How far back a recurring meetup's anchor date may sit and still be listed. */
@@ -219,8 +219,8 @@ export function describeRecurrence(rule: string | null): string | null {
  * A meetup as a calendar event.
  *
  * The UID is built from the row id, not the slug: slugs are derived from the
- * title and would change if someone fixed a typo, which would make every
- * subscriber's calendar sprout a duplicate.
+ * title and would change if someone fixed a typo, which would otherwise churn
+ * the anchor a saved link points at.
  */
 export function meetupToCalendarEvent(meetup: Meetup, base: URL): CalendarEvent {
   const location = meetupLocation(meetup);

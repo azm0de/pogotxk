@@ -12,7 +12,7 @@ import {
   meetupToCalendarEvent,
 } from '~/lib/db/meetups';
 import { listPublishedPosts } from '~/lib/db/posts';
-import { gameEventsFromPayload, groupEvents, type CalendarEvent } from '~/lib/ics';
+import { gameEventsFromPayload, groupEvents, type CalendarEvent } from '~/lib/events';
 import { getFeed, raidTierRank } from '~/lib/scrapedduck';
 import Attribution from '~/components/game/Attribution.astro';
 import { proxiedImageUrl } from '~/lib/game-image';
@@ -339,7 +339,7 @@ function homeWhen(event: CalendarEvent): string {
         </>
       ) : (
         <div class="on-now-empty">
-          <p class="empty">
+          <p class="empty empty-art-bg">
             Nothing running at this minute. Raid Hours, Community Days and Spotlight Hours all
             show up here automatically when they start.
           </p>
@@ -441,7 +441,7 @@ function homeWhen(event: CalendarEvent): string {
           </>
         ) : (
           <>
-            <p class="empty">
+            <p class="empty empty-art-bg">
               Nothing on the calendar right now. Meetups get announced in Discord first — the
               regular slot is Wednesday evenings at the Campsite.
             </p>
@@ -491,6 +491,11 @@ function homeWhen(event: CalendarEvent): string {
           </>
         ) : (
           <>
+            {/* No `empty-art-bg` here on purpose, same reasoning as
+                QuickActions.tsx's go-intro: this sentence describes what the
+                card does, not that nothing is happening right now. The pin
+                motif under a description of the feature reads as "there is
+                nothing here", which is the wrong message. */}
             <p class="empty">
               Current raid bosses, egg pools and field research, updated automatically.
             </p>
@@ -1306,6 +1311,13 @@ function homeWhen(event: CalendarEvent): string {
     font-size: 0.9rem;
     color: var(--text-muted);
   }
+  /* Same treatment as `.live-empty`/`.go-empty` in global.css: enough room for
+     the pin motif to read as itself rather than clip to a two-line paragraph. */
+  .empty.empty-art-bg {
+    min-height: 108px;
+    display: grid;
+    align-content: center;
+  }
 
   /* --- tonight's raid bosses ------------------------------------------------
      A row of sprites rather than a sentence about sprites. Sized so four fit a
@@ -1720,9 +1732,15 @@ function homeWhen(event: CalendarEvent): string {
        reasoning as Lucario's flip in the hero: turn the subject back in toward
        the content it is standing beside. */
     --art-flip: -1;
-    /* Barely any bleed now. The old −150px hid nearly half of him off-page; in
-       clear space there is no reason to throw the image away. */
-    --art-left: calc(-1 * clamp(8px, 2.5vw, 44px));
+    /* Flush left, not bled. The old −150px hid nearly half of him off-page; a
+       later pass trimmed that to a "barely any bleed" clamp, but at every width
+       below the 900px breakpoint that clamp still ran negative and clipped
+       8–20% of him against `overflow-x: clip` — worse on a phone than the
+       820–899px range it was tuned to look fine at, since `2.5vw` never gets
+       small enough to vanish below that. `auto` (with `--art-right` also unset
+       down here) resolves to the same flush-left containment Magikarp already
+       gets on desktop: fully in frame at every mobile and tablet size. */
+    --art-left: auto;
     --art-bottom: clamp(6px, 1.5vw, 18px);
     /*
      * Sized against the strip's height, not chosen. Height is width / 0.708, and

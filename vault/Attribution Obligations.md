@@ -60,6 +60,17 @@ made them scale and theme properly.
 > That control is deliberately not replaced by a custom one in the filter panel — the panel
 > collapses, and the attribution must not collapse with it.
 
+## Fonts
+
+Headings (`h1`–`h4`, via `--font-display`) use **Baloo 2**, SIL OFL 1.1, self-hosted at
+`/fonts/baloo-2-700.woff2` — no font CDN, per the project's own constraint. The OFL does not
+require on-page credit for ordinary use, only that the license text travel with the font, which
+it does at `/fonts/baloo-2-OFL.txt`. Body text stays system-ui.
+
+(Shipped first as Fredoka, switched to Baloo 2 the same week — Fredoka's extra roundness read
+too close to a kids'-app tone; Baloo 2 keeps the rounded warmth without losing the "serious
+collector tool" register.)
+
 ## See also
 
 [[Migration from the Old Site]] · [[Never Touch the Game]]

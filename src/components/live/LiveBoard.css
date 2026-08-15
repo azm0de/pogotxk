@@ -358,6 +358,31 @@
   margin-top: 8px;
 }
 
+.flare-edit {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.flare-edit label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.flare-edit input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+
 @media (max-width: 640px) {
   .form-grid {
     grid-template-columns: 1fr;

@@ -123,23 +123,18 @@ different permissions.
 > thing keeping Justin an admin — see the ordering warning in [[Configuration]] before
 > changing any of this.
 
-## The calendar feeds are live but unreachable
+## The calendar subscribe feature is gone
 
-The subscribe panel came off `/events` on 2026-08-10 by request. The consequence is worth
-stating plainly, because it is invisible:
-
-- `/calendar/meetups.ics`, `/calendar/all.ics` and `/calendar/game.ics` **still serve**.
-  Anyone already subscribed keeps getting updates — a calendar client polls the URL it
-  stored and never revisits the page — so nothing broke for existing subscribers
-- What is gone is any way to **find** them. There is no `<link rel="alternate">`
-  autodiscovery either, so the feeds are effectively unlisted
-- `SubscribeCard.astro` and its CSS are still in the tree, now unimported. An unimported
-  Astro component ships nothing, so it costs nothing to keep, and it is the whole widget
-  back in one line if it is ever wanted
-
-- [ ] Decide: leave them unlisted, add head autodiscovery, or delete the routes and the
-      component together. Leaving it undecided is the only bad option — half a feature that
-      still costs a build
+- [x] ~~Decide: leave the feeds unlisted, add autodiscovery, or delete them~~ — deleted,
+      2026-08-15. `/calendar/[feed].ics.ts`, `SubscribeCard.astro` and its CSS are gone.
+      `lib/ics.ts`'s serialisation half (`buildIcs`, `icsResponse`, escaping, folding, UTC
+      stamps) went with it; the event-model half it also carried — `CalendarEvent`,
+      `groupEvents`, the ScrapedDuck adapter — is what `/events` and the home page actually
+      render with, so that moved to `lib/events.ts` rather than being deleted.
+      `scripts/test-ics.ts` became `scripts/test-events.ts`, trimmed to the model checks.
+      Anyone who had subscribed to a feed URL now gets 404s on the next poll instead of
+      silent updates — accepted, since nobody was ever told the URLs existed to subscribe
+      in the first place
 
 ## The one real Lighthouse finding left
 
@@ -185,8 +180,11 @@ is transport-independent — it does not go away at the edge:
 - [ ] **Settings page (`/admin/settings`).** Same story, but with no API either. Social links,
       hero copy, theme colours, Code of Conduct PDF. It is the only `adminOnly` nav entry the
       layout was built for
-- [ ] **Community POI submissions.** `poi_reports` and the moderation queue exist in the schema;
-      no UI yet
+- [ ] **Community POI problem reports.** `poi_reports` and the moderation queue exist in the
+      schema; no UI yet. Report-only by decision (2026-08-15) — a visitor can flag that an
+      existing POI moved, closed or has wrong info, never propose a new one. `poi_id` is
+      `NOT NULL` and the `'new'` kind is gone; new POIs stay admin-only, added straight in the
+      map editor. See [[Data Model]]
 - [ ] **KMZ import in admin.** Their source of truth is Google Earth. `lib/kml.ts` was planned
       and never built — upload a KMZ, diff against the database, approve changes
 
@@ -263,9 +261,15 @@ is transport-independent — it does not go away at the edge:
 - [ ] **Ask Nick for a GO Fest frame without the refuse bin.** The banner crop currently loses
       two members at the right edge because the bin could not be retouched out without inventing
       their legs — [[Design System]] has the full reasoning
-- [ ] **The hero and the section headings are still system-ui at every level.** Typography is
-      the largest remaining templated default on the site; a display face would change more than
-      any new section. Needs self-hosting — no third-party font CDN
+- [x] ~~The hero and the section headings are still system-ui at every level~~ — `h1`–`h4` now
+      use a display face via `--font-display`, self-hosted, 2026-08-15. Shipped first as
+      Fredoka, switched same-day to **Baloo 2** — Fredoka's extra roundness read too close to
+      a kids' app. Body text is unchanged system-ui. See [[Attribution Obligations]]
+- [x] ~~`/map`'s basemap never joined the site's dark theme~~ — CARTO's tile URL now switches
+      between `voyager` and `dark_all` on `prefers-color-scheme`, live via a `matchMedia`
+      listener, not just at load. Bundled in: Leaflet's own zoom control, previously stock
+      white/black, now themed off `--bg-panel`/`--text`/`--border` like the attribution
+      control already was. 2026-08-15
 - [ ] **Per-page OG images.** A Discord link preview shows a placeholder rather than the park
 
 ## Audit still owed

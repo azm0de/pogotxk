@@ -45,7 +45,7 @@ evidence of anything.
 ```bash
 B=https://pogotxk.gnomelabz.workers.dev
 for p in "" go map live events raids eggs research blog gallery about \
-         conduct/ terms/ privacy/ rss.xml calendar/all.ics api/map.json api/flares; do
+         conduct/ terms/ privacy/ rss.xml api/map.json api/flares; do
   printf '%-20s %s\n' "/$p" "$(curl -s -o /dev/null -m 15 -w '%{http_code}' "$B/$p")"
 done
 ```

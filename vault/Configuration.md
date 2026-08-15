@@ -81,8 +81,8 @@ while. They are **set** — see the table above; this list is only what is genui
 >
 > It defaults to `https://pogotxk.gnomelabz.workers.dev` — the host that actually serves the
 > site. Do not point it at `pokemontxk.com` until that domain resolves to the Worker: it feeds
-> canonical URLs, RSS and the ICS `SOURCE` field, and aiming it at a 404 is what silently broke
-> every calendar subscribe link. See [[Bugs Worth Remembering]].
+> canonical URLs and RSS, and aiming it at a 404 is what silently broke every subscribe link
+> back when the site still had a subscribable calendar feed. See [[Bugs Worth Remembering]].
 
 Everything above is optional. Unconfigured, the feature degrades quietly rather than erroring.
 

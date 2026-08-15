@@ -4,6 +4,9 @@ import {
   FLARE_KIND_LABEL,
   FLARE_KINDS,
   FLARE_TTL_MINUTES,
+  flareCarriesBoss,
+  flareCarriesTier,
+  mayAlterFlare,
   type Flare,
   type FlareKind,
   type FlareRsvpState,
@@ -170,6 +173,12 @@ export default function LiveBoard({
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [pois, setPois] = useState<PoiOption[] | null>(null);
+
+  /** The flare being corrected, and the values in the correction form. */
+  const [editing, setEditing] = useState<Flare | null>(null);
+  const [editBoss, setEditBoss] = useState('');
+  const [editTier, setEditTier] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   /**
    * How far this device's clock is behind the server's. Seeded from the
@@ -515,6 +524,55 @@ export default function LiveBoard({
     }
   };
 
+  const openEdit = (flare: Flare) => {
+    setEditing(flare);
+    setEditBoss(flare.boss ?? '');
+    setEditTier(flare.tier ?? '');
+  };
+
+  /*
+   * Correcting a flare that is already out.
+   *
+   * Sends the fields as explicit values rather than omitting empty ones: the
+   * endpoint treats an absent key as "leave alone" and a null as "clear", and
+   * clearing a boss typed by mistake is half the reason this exists.
+   */
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSavingEdit(true);
+    try {
+      const payload: { action: 'edit'; boss?: string | null; tier?: string | null } = {
+        action: 'edit',
+        boss: editBoss.trim() || null,
+      };
+      // Tier lives on raids only; sending it on any other kind is a 422.
+      if (flareCarriesTier(editing.kind)) payload.tier = editTier.trim() || null;
+
+      const res = await fetch(`/api/flares/${editing.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status === 410) {
+        setFlares((prev) => prev.filter((f) => f.id !== editing.id));
+        notify('err', 'That flare just expired.');
+        setEditing(null);
+        return;
+      }
+      if (!res.ok) throw new Error(await readError(res));
+
+      const body = (await res.json()) as { flare: Flare };
+      upsert(body.flare);
+      setEditing(null);
+      notify('ok', 'Flare updated. Discord says the same.');
+    } catch (err) {
+      notify('err', err instanceof Error ? err.message : 'Could not update it');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusyId('new');
@@ -776,7 +834,7 @@ export default function LiveBoard({
         <ul className="flare-list">
           {visible.map((flare) => {
             const myState = mine[flare.id];
-            const mineToClose = currentUserId !== null && flare.author?.id === currentUserId;
+            const canAlter = mayAlterFlare(flare.author, currentUserId, canModerate);
             return (
               <li key={flare.id} className={`flare flare--${flare.kind}`}>
                 <div className="flare-head">
@@ -856,7 +914,22 @@ export default function LiveBoard({
                         {RSVP_LABEL[state]}
                       </button>
                     ))}
-                    {(mineToClose || canModerate) && (
+                    {/* Ids are compared explicitly in mayAlterFlare rather
+                        than via `a?.id === b?.id`, which is true when BOTH
+                        are absent — that would hand everyone an Edit/Close
+                        button on every authorless flare. */}
+                    {canAlter && flareCarriesBoss(flare.kind) && (
+                      <button
+                        type="button"
+                        className="chip"
+                        disabled={busyId === flare.id}
+                        onClick={() => openEdit(flare)}
+                        title="Change the boss or tier"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {canAlter && (
                       <button
                         type="button"
                         className="chip chip--close"
@@ -867,6 +940,50 @@ export default function LiveBoard({
                       </button>
                     )}
                   </div>
+                )}
+
+                {editing?.id === flare.id && (
+                  <form
+                    className="flare-edit"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void saveEdit();
+                    }}
+                  >
+                    <label>
+                      <span>Boss</span>
+                      <input
+                        value={editBoss}
+                        onChange={(e) => setEditBoss(e.target.value)}
+                        placeholder="Leave empty to remove it"
+                        maxLength={80}
+                      />
+                    </label>
+                    {flareCarriesTier(editing.kind) && (
+                      <label>
+                        <span>Tier</span>
+                        <input
+                          value={editTier}
+                          onChange={(e) => setEditTier(e.target.value)}
+                          placeholder="e.g. 5"
+                          maxLength={24}
+                        />
+                      </label>
+                    )}
+                    <div className="form-actions">
+                      <button type="submit" className="btn" disabled={savingEdit}>
+                        {savingEdit ? 'Saving…' : 'Save changes'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        onClick={() => setEditing(null)}
+                        disabled={savingEdit}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
                 )}
               </li>
             );

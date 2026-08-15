@@ -12,6 +12,28 @@
  * > towards the brand reds; they were measured, not picked.
  */
 
+/*
+ * Headings only. Self-hosted rather than a font CDN, per the project's own
+ * constraint — one weight (700, the only one h1-h4 ever use), so one file.
+ * SIL OFL 1.1, license text alongside it at /fonts/baloo-2-OFL.txt.
+ *
+ * Baloo 2, not Fredoka — rounded but confident, reads fast at a glance in
+ * sunlight without tipping into a kids'-app tone the way Fredoka's extra
+ * roundness did.
+ *
+ * `font-display: swap` over `optional`: a heading rendering in the system
+ * font for a moment and then swapping is a smaller cost here than risking it
+ * never swapping at all on a slow connection, since headings are what this
+ * font exists to change.
+ */
+@font-face {
+  font-family: 'Baloo 2';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/baloo-2-700.woff2') format('woff2');
+}
+
 :root {
   color-scheme: light dark;
 
@@ -108,6 +130,7 @@
   --radius-lg: 22px;
 
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display: 'Baloo 2', var(--font);
 
   --header-h: 60px;
 }
@@ -192,6 +215,7 @@ h1,
 h2,
 h3,
 h4 {
+  font-family: var(--font-display);
   line-height: 1.2;
   margin: 0 0 0.5em;
   font-weight: 700;

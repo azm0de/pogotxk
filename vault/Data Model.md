@@ -46,6 +46,12 @@ we are obliged to keep. See [[Attribution Obligations]].
 **POIs archive rather than delete.** `status = archived` removes them from the public map but
 keeps them recoverable. Hard delete exists but is admin-only.
 
+**`poi_reports` is report-only, not submission.** A visitor may flag that an existing POI moved,
+closed, or has wrong info — `poi_id` is `NOT NULL` and every row points at a POI that already
+exists. There is no path for a visitor to propose a brand-new POI; that stays admin-only, added
+directly in the map editor. An earlier `'new'` kind (`poi_id = NULL`, "brand new POI") was
+dropped in migration `0002` before any UI or API ever wrote to the table. See [[Backlog]].
+
 **Sessions store a hash, never the token.** `sessions.id` is the SHA-256 of the cookie value, so
 a leaked database dump cannot be replayed as a login. See [[Auth and Roles]].
 
