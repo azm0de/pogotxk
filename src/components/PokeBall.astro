@@ -1,21 +1,35 @@
 ---
 /**
- * The Poké Ball, drawn for a red background.
+ * The Poké Ball.
  *
- * Two things in the header use it now — the menu toggle below 820px and the
- * /go chip in the nav row — so it lives in one place rather than as two copies
- * that drift apart the first time one of them is adjusted.
+ * Three things use it now — the menu toggle below 820px and the /go chip in
+ * the nav row, both on the red header, and the footer mark on `--bg-sunken` —
+ * so it lives in one place rather than as copies that drift apart the first
+ * time one of them is adjusted.
  *
- * Decorative by default. Both current callers sit inside a control that already
- * carries its own accessible name, and naming the mark as well would have a
- * screen reader announce the thing twice.
+ * Decorative by default. Every current caller sits inside a control that
+ * already carries its own accessible name, and naming the mark as well would
+ * have a screen reader announce the thing twice.
  */
 interface Props {
   size?: number;
   class?: string;
+  /**
+   * `red` (default) is drawn for the header: a WHITE outer ring, because on
+   * a red background a red-topped ball with a dark outline loses its own
+   * silhouette — the top half sinks into the background and what's left
+   * reads as a dark ring with a white dot in it.
+   *
+   * `neutral` is the favicon's treatment (`public/favicon.svg`) — a dark
+   * ring instead, for a mark that has to hold on `--bg-sunken` in both
+   * themes rather than one known red. A white ring there would erase itself
+   * in light mode the same way a dark one erases itself on the header.
+   */
+  variant?: 'red' | 'neutral';
 }
 
-const { size = 30, class: className } = Astro.props;
+const { size = 30, class: className, variant = 'red' } = Astro.props;
+const ring = variant === 'red' ? '#fff' : '#0f0f11';
 ---
 
 <svg
@@ -35,11 +49,6 @@ const { size = 30, class: className } = Astro.props;
       drawn. At 4/3/3 the black swallowed most of a 25px ball and it
       read as a dark disc. */}
   <path d="M3 20h34" stroke="#0f0f11" stroke-width="3.2" />
-  {/* The outer ring is WHITE, not black. On a red header a red-topped
-      ball with a dark outline loses its own silhouette — the top half
-      sinks into the background and what is left reads as a dark ring
-      with a white dot in it. White draws the edge the background
-      cannot. */}
-  <circle cx="20" cy="20" r="17" fill="none" stroke="#fff" stroke-width="2.6" />
+  <circle cx="20" cy="20" r="17" fill="none" stroke={ring} stroke-width="2.6" />
   <circle cx="20" cy="20" r="5.8" fill="#fff" stroke="#0f0f11" stroke-width="2.4" />
 </svg>
