@@ -338,7 +338,24 @@
   gap: 8px;
   padding: 4px 14px 0;
 }
-.popup-action {
+/*
+ * `.leaflet-container` prefixed on every rule below — same fix as
+ * `.leaflet-container a.leaflet-popup-close-button` above, and for the same
+ * reason. Leaflet's own stylesheet sets `.leaflet-container a { color:
+ * #0078A8 }` at specificity (0,1,1); a bare `.popup-action { color: ... }`
+ * is only (0,1,0) and LOSES that fight on the two actions that are `<a>`
+ * tags (Flare, Directions), regardless of what colour is authored here.
+ *
+ * This was not hypothetical: `getComputedStyle` on the actual rendered
+ * "Flare this" link returned `#0078A8` — Leaflet's teal-blue — not the `#fff`
+ * this file has always specified, and sampling the rendered PNG confirmed
+ * those are the pixels a visitor actually sees. On a `--red-700` background
+ * that is roughly 1.2:1, nowhere near AA. That misreading anchor colour,
+ * landing on both `<a>` actions in the popup at once, is very likely the
+ * real substance of "the other 2 were harsh on the eyes" — a correctly
+ * chosen colour that silently never painted, not a bad colour choice.
+ */
+.leaflet-container .popup-action {
   flex: 1;
   text-align: center;
   padding: 8px 10px;
@@ -351,7 +368,7 @@
   text-decoration: none;
   cursor: pointer;
 }
-.popup-action--ghost {
+.leaflet-container .popup-action--ghost {
   background: var(--bg-sunken);
   color: var(--text);
   border: 1px solid var(--border);
@@ -359,15 +376,21 @@
 
 /*
  * The reason a signed-in member opened this pin: full width, on its own row,
- * above Directions and Copy link. Carries the live colour rather than the
- * accent so it reads as "something is happening here" — the same vocabulary
- * the pulsing pins and the popup's live banner already use.
+ * above Directions and Copy link (both demoted to the ghost treatment, so
+ * this is the popup's only filled, saturated surface — see `.popup-action`
+ * above for why that matters).
+ *
+ * `--red-700`, not `--live`: `--live` is red-600 in light mode, measured at
+ * only 5.00:1 for white text — the weakest of the popup's three actions, on
+ * bold 13px text where that ratio reads as tiring even though it passes AA.
+ * `--red-700` is the same value `--live-text` and `--accent-solid` already
+ * use, still unambiguously the site's red/live family, and global.css has it
+ * pre-measured at 5.99:1 white-on-it in BOTH themes — dark mode's `--live`
+ * already resolves to this exact token, so this only changes light mode.
  */
-.popup-action--flare {
+.leaflet-container .popup-action--flare {
   flex: 1 0 100%;
-  background: var(--live);
-  /* White, not --accent-contrast: --live is defined in global.css with its
-     contrast measured against white specifically (5.00:1 light, 5.99:1 dark). */
+  background: var(--red-700);
   color: #fff;
   min-height: 40px;
   display: flex;

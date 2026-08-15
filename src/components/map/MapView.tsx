@@ -189,7 +189,10 @@ function buildPoiPopup(
     add(actions, raise);
   }
 
-  const directions = el('a', 'popup-action');
+  // Ghost, not filled: Flare is the one action this popup wants to be loud —
+  // a second saturated fill next to it was two competing reds of nearly the
+  // same hue, which is what actually read as harsh, not either colour alone.
+  const directions = el('a', 'popup-action popup-action--ghost');
   directions.href = `https://www.google.com/maps/dir/?api=1&destination=${poi.lat},${poi.lng}`;
   directions.target = '_blank';
   directions.rel = 'noopener noreferrer';
