@@ -339,7 +339,7 @@ function homeWhen(event: CalendarEvent): string {
         </>
       ) : (
         <div class="on-now-empty">
-          <p class="empty">
+          <p class="empty empty-art-bg">
             Nothing running at this minute. Raid Hours, Community Days and Spotlight Hours all
             show up here automatically when they start.
           </p>
@@ -441,7 +441,7 @@ function homeWhen(event: CalendarEvent): string {
           </>
         ) : (
           <>
-            <p class="empty">
+            <p class="empty empty-art-bg">
               Nothing on the calendar right now. Meetups get announced in Discord first — the
               regular slot is Wednesday evenings at the Campsite.
             </p>
@@ -491,6 +491,11 @@ function homeWhen(event: CalendarEvent): string {
           </>
         ) : (
           <>
+            {/* No `empty-art-bg` here on purpose, same reasoning as
+                QuickActions.tsx's go-intro: this sentence describes what the
+                card does, not that nothing is happening right now. The pin
+                motif under a description of the feature reads as "there is
+                nothing here", which is the wrong message. */}
             <p class="empty">
               Current raid bosses, egg pools and field research, updated automatically.
             </p>
@@ -1305,6 +1310,13 @@ function homeWhen(event: CalendarEvent): string {
     margin: 0;
     font-size: 0.9rem;
     color: var(--text-muted);
+  }
+  /* Same treatment as `.live-empty`/`.go-empty` in global.css: enough room for
+     the pin motif to read as itself rather than clip to a two-line paragraph. */
+  .empty.empty-art-bg {
+    min-height: 108px;
+    display: grid;
+    align-content: center;
   }
 
   /* --- tonight's raid bosses ------------------------------------------------
