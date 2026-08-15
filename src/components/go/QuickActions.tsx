@@ -115,14 +115,35 @@ export default function QuickActions({ user, initialPoi }: QuickActionsProps) {
   const [pushBusy, setPushBusy] = useState(false);
 
   /**
-   * The deep-linked POI, held until an action is opened and then spent.
+   * The trainer's explicit choice of location — from the map's deep link, or
+   * from picking an actual place in the "Where" dropdown by hand — as opposed
+   * to the nearest-GPS guess `openAction` falls back to otherwise. Always set
+   * through `chooseLocation` below, which keeps this and `poiId` in step, so
+   * a newly opened action sheet carries the same location forward instead of
+   * reverting to GPS.
    *
-   * A ref rather than state because it must survive the POI list arriving
-   * without re-running anything, and because "already used" is not something
-   * the UI renders — once the trainer picks a different location by hand, the
-   * link has done its job and must not reassert itself on the next action.
+   * Deliberately `null` (rather than sticky) the moment the trainer picks
+   * "— not at a specific spot —": that is a choice to stop overriding the
+   * guess, not a choice of "nowhere" to keep enforcing on the next sheet.
+   *
+   * A ref rather than state because `openAction` needs the current value
+   * synchronously when a button is clicked, not on the next render.
    */
-  const pendingPoiRef = useRef<string | null>(initialPoi ?? null);
+  const explicitPoiRef = useRef<number | null>(null);
+  /** Guards the resolver effect below to a single attempt — see there. */
+  const deepLinkResolvedRef = useRef(false);
+
+  /**
+   * Sets the open sheet's location AND records it as the trainer's explicit
+   * choice, so `openAction` carries it into whichever sheet is opened next
+   * instead of falling back to a GPS guess. Used for both the map's deep link
+   * and a manual pick from the "Where" dropdown — the two are the same kind
+   * of fact once made, just from different sources.
+   */
+  const chooseLocation = (id: number | null) => {
+    explicitPoiRef.current = id;
+    setPoiId(id);
+  };
 
   /** The flare being corrected, and the values in the correction sheet. */
   const [editing, setEditing] = useState<Flare | null>(null);
@@ -163,6 +184,27 @@ export default function QuickActions({ user, initialPoi }: QuickActionsProps) {
     const id = window.setInterval(loadFlares, 20000);
     return () => window.clearInterval(id);
   }, [loadFlares]);
+
+  /**
+   * Resolves the map's `?poi=<slug>` deep link the moment it becomes
+   * resolvable, independent of whether — or which — action sheet is open.
+   *
+   * Previously this only happened inside `openAction`, so arriving from the
+   * map and looking at the (still POI-less) action grid was indistinguishable
+   * from arriving with no link at all; the location only appeared once a
+   * sheet was opened, after the trainer had already expected to see it.
+   *
+   * Guarded to run once: `pois` starts empty and is replaced wholesale when
+   * the fetch resolves, so without the guard this would refire on that one
+   * transition anyway, but the ref makes "already tried" durable against
+   * anything else that might someday re-trigger the effect.
+   */
+  useEffect(() => {
+    if (deepLinkResolvedRef.current || !initialPoi || pois.length === 0) return;
+    deepLinkResolvedRef.current = true;
+    const wanted = pois.find((p) => p.slug === initialPoi);
+    if (wanted) chooseLocation(wanted.id);
+  }, [pois, initialPoi]);
 
   // --- push notifications ---------------------------------------------------
   useEffect(() => {
@@ -300,19 +342,22 @@ export default function QuickActions({ user, initialPoi }: QuickActionsProps) {
     const valid = pois.filter((p) => !allowed || allowed.includes(p.type));
 
     /*
-     * A POI the trainer named by tapping a pin on the map beats the nearest one
-     * we guessed at. Only spent once the list has actually loaded — otherwise a
-     * fast first tap would burn the link against an empty array and silently
-     * fall back to GPS, which is the one case where the deep link matters most
-     * (someone who opened the map, found the gym, and has location denied).
+     * An explicit choice — the map's deep link, or a location the trainer
+     * already picked by hand for a previous action — beats the nearest-GPS
+     * guess, and it is NOT spent by using it: reopening a sheet, or opening a
+     * different kind of flare at the same gym, keeps the same location rather
+     * than reverting to GPS.
+     *
+     * Only taken when it is actually valid for THIS action's POI types, and
+     * — this is the fix for the silent-burn bug — a mismatch here does not
+     * clear the ref. A gym linked from the map that fails this check because
+     * the trainer opened "Trade" first stays available for "Raid" right
+     * after; the old code cleared the pending link on first use regardless of
+     * whether that use succeeded, so a single wrong tap burned it forever.
      */
-    if (pendingPoiRef.current && pois.length > 0) {
-      const wanted = valid.find((p) => p.slug === pendingPoiRef.current);
-      pendingPoiRef.current = null;
-      if (wanted) {
-        setPoiId(wanted.id);
-        return;
-      }
+    if (explicitPoiRef.current !== null && valid.some((p) => p.id === explicitPoiRef.current)) {
+      setPoiId(explicitPoiRef.current);
+      return;
     }
 
     // Otherwise preselect the nearest valid location — usually the right
@@ -680,7 +725,10 @@ export default function QuickActions({ user, initialPoi }: QuickActionsProps) {
 
             <label className="go-field">
               <span>Where</span>
-              <select value={poiId ?? ''} onChange={(e) => setPoiId(e.target.value ? Number(e.target.value) : null)}>
+              <select
+                value={poiId ?? ''}
+                onChange={(e) => chooseLocation(e.target.value ? Number(e.target.value) : null)}
+              >
                 <option value="">— not at a specific spot —</option>
                 {candidates.map(({ poi, d }) => (
                   <option key={poi.id} value={poi.id}>
