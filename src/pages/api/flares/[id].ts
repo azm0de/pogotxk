@@ -3,8 +3,9 @@
  *
  *   PATCH /api/flares/:id   { action: 'rsvp', state: 'coming' | 'here' | 'done' | 'out' }
  *   PATCH /api/flares/:id   { action: 'close' }
+ *   PATCH /api/flares/:id   { action: 'edit', boss?, tier? }
  *
- * Both write to D1 first and then tell the Durable Object, so the board a
+ * All three write to D1 first and then tell the Durable Object, so the board a
  * client sees is always a projection of what is actually stored.
  */
 
