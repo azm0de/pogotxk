@@ -262,8 +262,14 @@ is transport-independent — it does not go away at the edge:
       two members at the right edge because the bin could not be retouched out without inventing
       their legs — [[Design System]] has the full reasoning
 - [x] ~~The hero and the section headings are still system-ui at every level~~ — `h1`–`h4` now
-      use **Fredoka** via `--font-display`, self-hosted, 2026-08-15. Body text is unchanged
-      system-ui. See [[Attribution Obligations]]
+      use a display face via `--font-display`, self-hosted, 2026-08-15. Shipped first as
+      Fredoka, switched same-day to **Baloo 2** — Fredoka's extra roundness read too close to
+      a kids' app. Body text is unchanged system-ui. See [[Attribution Obligations]]
+- [x] ~~`/map`'s basemap never joined the site's dark theme~~ — CARTO's tile URL now switches
+      between `voyager` and `dark_all` on `prefers-color-scheme`, live via a `matchMedia`
+      listener, not just at load. Bundled in: Leaflet's own zoom control, previously stock
+      white/black, now themed off `--bg-panel`/`--text`/`--border` like the attribution
+      control already was. 2026-08-15
 - [ ] **Per-page OG images.** A Discord link preview shows a placeholder rather than the park
 
 ## Audit still owed

@@ -420,11 +420,23 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     });
     mapRef.current = map;
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    // CARTO ships a Voyager (light) and a matching dark_all basemap on the same
+    // free CDN — swapping the URL is enough, no filter/invert hacks needed.
+    // Read the OS scheme live rather than once: the site's own CSS already
+    // reacts to a mid-session change (auto dark mode at sunset, say), and a map
+    // that misses that would be the one thing on the page left behind.
+    const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const tileUrl = (dark: boolean) =>
+      `https://{s}.basemaps.cartocdn.com/rastertiles/${dark ? 'dark_all' : 'voyager'}/{z}/{x}/{y}{r}.png`;
+
+    const tiles = L.tileLayer(tileUrl(darkQuery.matches), {
       maxZoom: 20,
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
     }).addTo(map);
+
+    const onSchemeChange = (e: MediaQueryListEvent) => tiles.setUrl(tileUrl(e.matches));
+    darkQuery.addEventListener('change', onSchemeChange);
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -505,6 +517,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     }
 
     return () => {
+      darkQuery.removeEventListener('change', onSchemeChange);
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
