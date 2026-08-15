@@ -112,6 +112,7 @@ function buildPoiPopup(
   poi: MapPoi,
   userPos: [number, number] | null,
   flare: LiveFlare | null,
+  canFlare: boolean,
 ): HTMLElement {
   const root = el('div', 'popup');
 
@@ -166,6 +167,27 @@ function buildPoiPopup(
   }
 
   const actions = el('div', 'popup-actions');
+
+  /*
+   * Raising a flare from the map.
+   *
+   * The map is where people actually stand when something starts happening —
+   * they have already found the gym and tapped its pin, which answers the only
+   * question /go's form was going to ask them. So this hands over to /go with
+   * the location pre-chosen rather than reimplementing the whole flare sheet
+   * inside a Leaflet popup, where a boss picker and a note field would be
+   * unusable on a phone and would fork logic that has to stay in step with the
+   * POST /api/flares contract.
+   *
+   * First in the row, because it is the reason a signed-in member opened the
+   * pin; Directions and Copy link are what you do when nothing is happening.
+   */
+  if (canFlare) {
+    const raise = el('a', 'popup-action popup-action--flare');
+    raise.href = `/go?poi=${encodeURIComponent(poi.slug)}`;
+    raise.textContent = flare ? '● Manage flare' : '🔥 Flare this';
+    add(actions, raise);
+  }
 
   const directions = el('a', 'popup-action');
   directions.href = `https://www.google.com/maps/dir/?api=1&destination=${poi.lat},${poi.lng}`;
@@ -260,6 +282,19 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
    */
   const liveFlaresRef = useRef(liveFlares);
   liveFlaresRef.current = liveFlares;
+
+  /**
+   * Whether the viewer may raise a flare, for the popup's "Flare this" action.
+   *
+   * Read from /api/me.json rather than passed down from the page, because this
+   * component also renders inside the prerendered home page in `compact` mode,
+   * where the server's idea of who is signed in is frozen at build time —
+   * i.e. nobody, forever. A ref alongside the state so the popup builder can
+   * read it without re-binding every marker; see the note on liveFlaresRef.
+   */
+  const [canFlare, setCanFlare] = useState(false);
+  const canFlareRef = useRef(false);
+  canFlareRef.current = canFlare;
   const [query, setQuery] = useState('');
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [status, setStatus] = useState('');
@@ -559,10 +594,16 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       });
       // Reads the ref, so the popup is current without re-binding on every
       // flare refresh.
-      marker.bindPopup(() => buildPoiPopup(poi, userPos, liveFlaresRef.current.get(poi.id) ?? null), {
-        maxWidth: 320,
-        minWidth: 240,
-      });
+      marker.bindPopup(
+        () =>
+          buildPoiPopup(
+            poi,
+            userPos,
+            liveFlaresRef.current.get(poi.id) ?? null,
+            canFlareRef.current,
+          ),
+        { maxWidth: 320, minWidth: 240 },
+      );
       markersRef.current.set(poi.slug, marker);
       layers.push(marker);
     }
@@ -638,6 +679,38 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       if (marker.isPopupOpen()) marker.getPopup()?.update();
     }
   }, [liveFlares, data, visiblePois]);
+
+  // --- who is looking, for the "Flare this" action ---------------------------
+  // Guests and signed-out visitors never see it: the POST would be refused by
+  // requireRole('member'), and an action that cannot succeed is worse than no
+  // action. `compact` is the home-page preview, which is a picture of the park
+  // rather than a place to act.
+  useEffect(() => {
+    if (compact) return;
+    let cancelled = false;
+    fetch('/api/me.json', { headers: { accept: 'application/json' } })
+      .then((r) => (r.ok ? (r.json() as Promise<{ user: { role?: string } | null }>) : null))
+      .then((d) => {
+        if (cancelled) return;
+        const role = d?.user?.role;
+        setCanFlare(role === 'member' || role === 'ambassador' || role === 'admin');
+      })
+      .catch(() => {
+        /* Signed-out is the safe assumption, and it is already the default. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compact]);
+
+  // A popup opened before /api/me.json resolved was built without the action.
+  // Same fix as the flare banner above: re-run its content function in place
+  // rather than making the trainer close and reopen the pin.
+  useEffect(() => {
+    for (const marker of markersRef.current.values()) {
+      if (marker.isPopupOpen()) marker.getPopup()?.update();
+    }
+  }, [canFlare]);
 
   // --- numbered walking order along the raid route --------------------------
   // The route is a bare polyline: it shows you the shape of the walk but not

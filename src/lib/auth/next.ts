@@ -40,3 +40,32 @@ export function safeNext(raw: string | null | undefined): string {
 
   return cleaned;
 }
+
+/**
+ * Where /auth/logout sends the browser.
+ *
+ * Signing out of this site does NOT sign you out of Discord, and that is the
+ * whole reason `wantsSwitch` exists. Discord keeps its own session in the
+ * browser, and /auth/login asks for `prompt=none` so returning members are not
+ * made to click through an approval screen every visit. Put those two together
+ * and a plain sign-out followed by sign-in silently re-authorises the SAME
+ * Discord account — there is no point in the round trip where anyone is asked
+ * who they are. Someone with two accounts can never reach the second one.
+ *
+ * So "use a different account" is a distinct action: drop our session, then
+ * start sign-in with `consent=1`, which forces Discord's approval screen — the
+ * one screen in the flow that offers to switch accounts.
+ *
+ * The destination still goes through `safeNext`, because it arrives as a query
+ * parameter on a GET and ends up in a Location header either way.
+ */
+export function signOutTarget(rawNext: string | null | undefined, wantsSwitch: boolean): string {
+  const dest = safeNext(rawNext);
+  if (!wantsSwitch) return dest;
+
+  const params = new URLSearchParams({ consent: '1' });
+  // '/' is /auth/login's own default; sending it explicitly just makes for a
+  // uglier URL with no change in behaviour.
+  if (dest !== '/') params.set('next', dest);
+  return `/auth/login?${params}`;
+}

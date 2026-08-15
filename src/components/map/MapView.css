@@ -332,6 +332,9 @@
 
 .popup-actions {
   display: flex;
+  /* Wraps so "Flare this" can take a full row of its own below — three equal
+     buttons in a 240px popup leaves each too narrow to read or to hit. */
+  flex-wrap: wrap;
   gap: 8px;
   padding: 4px 14px 0;
 }
@@ -352,6 +355,24 @@
   background: var(--bg-sunken);
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+/*
+ * The reason a signed-in member opened this pin: full width, on its own row,
+ * above Directions and Copy link. Carries the live colour rather than the
+ * accent so it reads as "something is happening here" — the same vocabulary
+ * the pulsing pins and the popup's live banner already use.
+ */
+.popup-action--flare {
+  flex: 1 0 100%;
+  background: var(--live);
+  /* White, not --accent-contrast: --live is defined in global.css with its
+     contrast measured against white specifically (5.00:1 light, 5.99:1 dark). */
+  color: #fff;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* --------------------------------------------------------------- chrome -- */

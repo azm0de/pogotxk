@@ -7,6 +7,12 @@ export const prerender = false;
 // Passed in from the server so the screen knows immediately whether it can post,
 // rather than flashing a sign-in prompt at someone who is already signed in.
 const user = Astro.locals.user ?? null;
+
+// `/go?poi=<slug>` is how the map hands over: the trainer tapped a pin and
+// chose "Flare this", so the location question is already answered. Same
+// parameter name and same slug vocabulary as /map?poi=, so a link is
+// interchangeable between the two screens.
+const initialPoi = Astro.url.searchParams.get('poi') ?? undefined;
 ---
 
 <Base
@@ -22,7 +28,7 @@ const user = Astro.locals.user ?? null;
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   </Fragment>
 
-  <QuickActions client:load user={user} />
+  <QuickActions client:load user={user} initialPoi={initialPoi} />
 </Base>
 
 <script>

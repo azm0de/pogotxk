@@ -79,7 +79,19 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
-export default function QuickActions({ user }: { user: SessionUser | null }) {
+interface QuickActionsProps {
+  user: SessionUser | null;
+  /**
+   * Slug of a POI to arrive pre-selected, from `/go?poi=<slug>`.
+   *
+   * This is how the map's "Flare this" button hands over: the trainer has
+   * already told us where they are by tapping the pin, and asking again with a
+   * dropdown would be the second half of a question they just answered.
+   */
+  initialPoi?: string;
+}
+
+export default function QuickActions({ user, initialPoi }: QuickActionsProps) {
   const [pois, setPois] = useState<MapPoi[]>([]);
   const [flares, setFlares] = useState<Flare[]>([]);
   const [mine, setMine] = useState<Record<string, string>>({});
@@ -101,6 +113,22 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
     'unknown',
   );
   const [pushBusy, setPushBusy] = useState(false);
+
+  /**
+   * The deep-linked POI, held until an action is opened and then spent.
+   *
+   * A ref rather than state because it must survive the POI list arriving
+   * without re-running anything, and because "already used" is not something
+   * the UI renders — once the trainer picks a different location by hand, the
+   * link has done its job and must not reassert itself on the next action.
+   */
+  const pendingPoiRef = useRef<string | null>(initialPoi ?? null);
+
+  /** The flare being corrected, and the values in the correction sheet. */
+  const [editing, setEditing] = useState<Flare | null>(null);
+  const [editBoss, setEditBoss] = useState('');
+  const [editTier, setEditTier] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const say = useCallback((kind: 'ok' | 'err', text: string) => {
     setToast({ kind, text });
@@ -235,30 +263,63 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
-  /** POIs valid for the open action, nearest first when we know where we are. */
+  /**
+   * POIs valid for the open action, nearest first when we know where we are.
+   *
+   * Capped at 40 because a phone `<select>` of 104 parks entries is unusable —
+   * but the cap must never swallow the POI that is currently selected. A
+   * deep link from the map can name a gym on the far side of the park, and a
+   * `<select>` whose value matches no option renders BLANK: the trainer would
+   * see an empty Where field and no hint that we knew the answer.
+   */
   const candidates = useMemo(() => {
-    if (!action) return [];
+    if (!action) return [] as { poi: MapPoi; d: number | null }[];
     const allowed = action.poiTypes;
     const list = pois.filter((p) => !allowed || allowed.includes(p.type));
-    if (!here) return list.slice(0, 40);
-    return list
-      .map((p) => ({ poi: p, d: distanceMeters(here, [p.lat, p.lng]) }))
-      .sort((a, b) => a.d - b.d)
-      .slice(0, 40);
-  }, [action, pois, here]);
+    const ranked = here
+      ? list
+          .map((p) => ({ poi: p, d: distanceMeters(here, [p.lat, p.lng]) as number | null }))
+          .sort((a, b) => (a.d ?? 0) - (b.d ?? 0))
+      : list.map((p) => ({ poi: p, d: null }));
+
+    const shown = ranked.slice(0, 40);
+    if (poiId !== null && !shown.some((c) => c.poi.id === poiId)) {
+      const selected = ranked.find((c) => c.poi.id === poiId);
+      if (selected) shown.unshift(selected);
+    }
+    return shown;
+  }, [action, pois, here, poiId]);
 
   const openAction = (def: ActionDef) => {
     setAction(def);
     setBoss('');
     setNeeded(1);
     setNote('');
-    // Preselect the nearest valid location — usually the right answer, and it
-    // turns a three-tap flow into one.
+
+    const allowed = def.poiTypes;
+    const valid = pois.filter((p) => !allowed || allowed.includes(p.type));
+
+    /*
+     * A POI the trainer named by tapping a pin on the map beats the nearest one
+     * we guessed at. Only spent once the list has actually loaded — otherwise a
+     * fast first tap would burn the link against an empty array and silently
+     * fall back to GPS, which is the one case where the deep link matters most
+     * (someone who opened the map, found the gym, and has location denied).
+     */
+    if (pendingPoiRef.current && pois.length > 0) {
+      const wanted = valid.find((p) => p.slug === pendingPoiRef.current);
+      pendingPoiRef.current = null;
+      if (wanted) {
+        setPoiId(wanted.id);
+        return;
+      }
+    }
+
+    // Otherwise preselect the nearest valid location — usually the right
+    // answer, and it turns a three-tap flow into one.
     const first = (() => {
-      const allowed = def.poiTypes;
-      const list = pois.filter((p) => !allowed || allowed.includes(p.type));
-      if (!here || list.length === 0) return null;
-      return list.reduce((best, p) =>
+      if (!here || valid.length === 0) return null;
+      return valid.reduce((best, p) =>
         distanceMeters(here, [p.lat, p.lng]) < distanceMeters(here, [best.lat, best.lng]) ? p : best,
       );
     })();
@@ -275,6 +336,11 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
           kind: action.kind,
           poiId,
           boss: action.needsBoss && boss ? boss : null,
+          // Filled from the raid list rather than asked for: the tier is a
+          // property of the boss, so a second field would only be a chance to
+          // contradict the first. The column existed and nothing ever wrote to
+          // it, which is why the Discord embed could not show a tier.
+          tier: action.kind === 'raid' && boss ? tierForBoss(boss) || null : null,
           needed: action.needsCount ? needed : null,
           note: note || null,
         }),
@@ -302,8 +368,98 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
     }
   };
 
+  /*
+   * Standing a flare down.
+   *
+   * Deliberately a close and not a delete. The flare has already been
+   * broadcast — an embed in Discord, a push notification on people's phones —
+   * and none of that can be recalled. Closing edits the embed to say it ended
+   * and leaves the history intact; deleting the row would strand the embed in
+   * the channel still advertising a raid, with nothing left to point an edit
+   * at. See markFlareClosedInDiscord and the sweep in flare-closures.ts.
+   */
+  const closeFlare = async (flare: Flare) => {
+    try {
+      await api(`/api/flares/${flare.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'close' }),
+      });
+      await loadFlares();
+      say('ok', 'Flare closed. Discord updated.');
+    } catch (err) {
+      say('err', err instanceof Error ? err.message : 'Could not close it');
+    }
+  };
+
+  /**
+   * The tier the raid list gives for a boss, or '' when we do not know it.
+   *
+   * The boss field is free text matched against the list at post time, so
+   * someone can type a boss we have never heard of — that has to keep working,
+   * and it just means we cannot fill the tier for them.
+   */
+  const tierForBoss = useCallback(
+    (name: string) =>
+      bosses.find((b) => b.name.toLowerCase() === name.trim().toLowerCase())?.tier ?? '',
+    [bosses],
+  );
+
+  /** Only these two carry a boss at all — the API enforces the same rule. */
+  const isEditable = (flare: Flare) => flare.kind === 'raid' || flare.kind === 'remote_invites';
+
+  const openEdit = (flare: Flare) => {
+    setEditing(flare);
+    setEditBoss(flare.boss ?? '');
+    setEditTier(flare.tier ?? '');
+  };
+
+  /*
+   * Correcting a flare that is already out.
+   *
+   * Sends the fields as explicit values rather than omitting empty ones: the
+   * endpoint treats an absent key as "leave alone" and a null as "clear", and
+   * clearing a boss typed by mistake is half the reason this exists.
+   */
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSavingEdit(true);
+    try {
+      const payload: { action: 'edit'; boss?: string | null; tier?: string | null } = {
+        action: 'edit',
+        boss: editBoss.trim() || null,
+      };
+      // Tier lives on raids only; sending it on an invites flare is a 422.
+      if (editing.kind === 'raid') payload.tier = editTier.trim() || null;
+
+      await api(`/api/flares/${editing.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      setEditing(null);
+      await loadFlares();
+      say('ok', 'Flare updated. Discord says the same.');
+    } catch (err) {
+      say('err', err instanceof Error ? err.message : 'Could not update it');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const signedIn = Boolean(user);
   const canPost = user && user.role !== 'guest';
+  /*
+   * Ambassadors and admins can stand down anyone's flare, matching the rule the
+   * API actually enforces in PATCH /api/flares/:id — a flare posted in error
+   * outlives the poster's attention span. Kept in sync with /live.
+   */
+  const canModerate = user?.role === 'ambassador' || user?.role === 'admin';
+
+  /*
+   * Whoever raised it, plus ambassadors — the rule PATCH /api/flares/:id
+   * actually enforces, mirrored here so the buttons match what will succeed.
+   *
+   * Ids are compared explicitly because `a?.id === b?.id` is true when BOTH are
+   * absent, which would put these controls on every authorless flare.
+   */
+  const mayAlter = (flare: Flare) =>
+    canModerate || (user != null && flare.author?.id === user.id);
 
   return (
     <div className="go">
@@ -415,14 +571,40 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
                     {flare.note && <span className="go-flare-note">{flare.note}</span>}
                   </div>
                   {canPost && (
-                    <button
-                      type="button"
-                      className={`go-join${state ? ' is-in' : ''}`}
-                      onClick={() => void rsvp(flare, state ? 'out' : 'coming')}
-                      aria-pressed={Boolean(state)}
-                    >
-                      {state ? 'In' : 'Join'}
-                    </button>
+                    <div className="go-flare-actions">
+                      <button
+                        type="button"
+                        className={`go-join${state ? ' is-in' : ''}`}
+                        onClick={() => void rsvp(flare, state ? 'out' : 'coming')}
+                        aria-pressed={Boolean(state)}
+                      >
+                        {state ? 'In' : 'Join'}
+                      </button>
+                      {/* `user` is non-null inside canPost, but compare ids
+                          explicitly: `a?.id === b?.id` is true when BOTH are
+                          absent, which would hand everyone an End button on
+                          every authorless flare. */}
+                      {mayAlter(flare) && isEditable(flare) && (
+                        <button
+                          type="button"
+                          className="go-standdown"
+                          onClick={() => openEdit(flare)}
+                          title="Change the boss or tier"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {mayAlter(flare) && (
+                        <button
+                          type="button"
+                          className="go-standdown"
+                          onClick={() => void closeFlare(flare)}
+                          title="End this flare and strike it through in Discord"
+                        >
+                          End
+                        </button>
+                      )}
+                    </div>
                   )}
                 </li>
               );
@@ -500,16 +682,12 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
               <span>Where</span>
               <select value={poiId ?? ''} onChange={(e) => setPoiId(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">— not at a specific spot —</option>
-                {candidates.map((c) => {
-                  const poi = 'poi' in c ? c.poi : (c as unknown as MapPoi);
-                  const d = 'd' in c ? ` — ${fmtDistance(c.d)}` : '';
-                  return (
-                    <option key={poi.id} value={poi.id}>
-                      {poi.name}
-                      {d}
-                    </option>
-                  );
-                })}
+                {candidates.map(({ poi, d }) => (
+                  <option key={poi.id} value={poi.id}>
+                    {poi.name}
+                    {d === null ? '' : ` — ${fmtDistance(d)}`}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -523,13 +701,6 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
                   placeholder={bosses[0]?.name ?? 'e.g. Mewtwo'}
                   maxLength={80}
                 />
-                <datalist id="go-bosses">
-                  {bosses.map((b) => (
-                    <option key={`${b.tier}-${b.name}`} value={b.name}>
-                      {b.tier}
-                    </option>
-                  ))}
-                </datalist>
               </label>
             )}
 
@@ -560,6 +731,76 @@ export default function QuickActions({ user }: { user: SessionUser | null }) {
 
             <button type="button" className="go-fire" onClick={() => void fire()} disabled={sending}>
               {sending ? 'Sending…' : `Send ${action.label.toLowerCase()} flare`}
+            </button>
+          </section>
+        </div>
+      )}
+
+      {/*
+        Hoisted out of the action sheet so BOTH sheets can point at it. A
+        datalist only exists while it is rendered, and the edit sheet is never
+        open at the same time as the one this used to live inside — the boss
+        suggestions would simply have been missing there. It renders nothing.
+      */}
+      <datalist id="go-bosses">
+        {bosses.map((b) => (
+          <option key={`${b.tier}-${b.name}`} value={b.name}>
+            {b.tier}
+          </option>
+        ))}
+      </datalist>
+
+      {editing && (
+        <div className="go-sheet-backdrop" onClick={() => setEditing(null)}>
+          <section
+            className="go-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Correct this flare"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header>
+              <span aria-hidden="true">✏️</span>
+              <div>
+                <h2>Fix the details</h2>
+                <p>Everyone on the board and in Discord sees the correction.</p>
+              </div>
+              <button type="button" className="go-close" onClick={() => setEditing(null)} aria-label="Close">
+                ×
+              </button>
+            </header>
+
+            <label className="go-field">
+              <span>Boss</span>
+              <input
+                list="go-bosses"
+                value={editBoss}
+                onChange={(e) => {
+                  setEditBoss(e.target.value);
+                  // Picking a known boss fills the tier in, because the two
+                  // always agree and asking twice is a tax paid at a gym.
+                  const t = tierForBoss(e.target.value);
+                  if (t) setEditTier(t);
+                }}
+                placeholder="Leave empty to remove it"
+                maxLength={80}
+              />
+            </label>
+
+            {editing.kind === 'raid' && (
+              <label className="go-field">
+                <span>Tier</span>
+                <input
+                  value={editTier}
+                  onChange={(e) => setEditTier(e.target.value)}
+                  placeholder="e.g. Tier 5"
+                  maxLength={24}
+                />
+              </label>
+            )}
+
+            <button type="button" className="go-fire" onClick={() => void saveEdit()} disabled={savingEdit}>
+              {savingEdit ? 'Saving…' : 'Save changes'}
             </button>
           </section>
         </div>

@@ -240,6 +240,10 @@ export interface FlareOwnership {
   created_by: number | null;
   expires_at: string;
   closed_at: string | null;
+  /** Which fields an edit is allowed to touch depends on the kind. */
+  kind: FlareKind;
+  /** Null when Discord is not configured, or the post did not come back. */
+  discord_message_id: string | null;
 }
 
 /** The raw row, for authorisation checks that need `created_by`. */
@@ -248,9 +252,77 @@ export async function getFlareOwnership(
   id: number,
 ): Promise<FlareOwnership | null> {
   return db
-    .prepare('SELECT id, created_by, expires_at, closed_at FROM flares WHERE id = ?1')
+    .prepare(
+      'SELECT id, created_by, expires_at, closed_at, kind, discord_message_id FROM flares WHERE id = ?1',
+    )
     .bind(id)
     .first<FlareOwnership>();
+}
+
+/** A flare whose Discord embed still needs striking through. */
+export interface PendingDiscordClose {
+  id: number;
+  discord_message_id: string;
+  /** Null means it lapsed on its own rather than being stood down. */
+  closed_at: string | null;
+}
+
+/**
+ * Atomically take ownership of the flares whose embeds still owe Discord an
+ * edit, and return them.
+ *
+ * The claim and the select are ONE statement on purpose. This runs off the read
+ * path, so several requests can be in here at the same moment; a
+ * select-then-update would let two of them read the same row and edit the same
+ * Discord message twice. Writing `discord_closed_at` as part of the selecting
+ * statement means the second caller simply sees no rows.
+ *
+ * The consequence is that a row is marked settled *before* we know whether
+ * Discord accepted the edit — so a retryable failure has to hand it back with
+ * `releaseFlareDiscordClose`. That is the right way round: claiming first risks
+ * a delayed edit, claiming last risks a duplicate one, and a duplicate edit is
+ * the one users actually see.
+ *
+ * `limit` bounds a single pass so a backlog cannot turn one page load into
+ * hundreds of outbound requests.
+ */
+export async function claimFlaresForDiscordClose(
+  db: D1Database,
+  now: string,
+  limit: number,
+  onlyId?: number,
+): Promise<PendingDiscordClose[]> {
+  const res = await db
+    .prepare(
+      `UPDATE flares
+          SET discord_closed_at = ?1
+        WHERE id IN (
+          SELECT id FROM flares
+           WHERE discord_message_id IS NOT NULL
+             AND discord_closed_at IS NULL
+             AND (closed_at IS NOT NULL OR expires_at <= ?1)
+             AND (?2 IS NULL OR id = ?2)
+           ORDER BY expires_at
+           LIMIT ?3)
+      RETURNING id, discord_message_id, closed_at`,
+    )
+    .bind(now, onlyId ?? null, limit)
+    .all<PendingDiscordClose>();
+  return res.results ?? [];
+}
+
+/**
+ * Hand a claimed flare back so a later sweep retries it.
+ *
+ * Only for failures that could plausibly succeed later — a rate limit or a
+ * Discord outage. A message that is genuinely gone stays settled, or every
+ * sweep from now until the heat death of the universe re-attempts it.
+ */
+export async function releaseFlareDiscordClose(db: D1Database, id: number): Promise<void> {
+  await db
+    .prepare('UPDATE flares SET discord_closed_at = NULL WHERE id = ?1')
+    .bind(id)
+    .run();
 }
 
 /**

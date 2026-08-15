@@ -11,7 +11,7 @@ import {
   resolveRole,
   type DiscordConfig,
 } from '../src/lib/auth/discord';
-import { safeNext } from '../src/lib/auth/next';
+import { safeNext, signOutTarget } from '../src/lib/auth/next';
 import { hasRole, type Role, type SessionUser } from '../src/lib/auth/types';
 
 let failures = 0;
@@ -171,6 +171,53 @@ for (const e of ['interaction_required', 'login_required', 'consent_required']) 
 check('never retries on access_denied', NEEDS_INTERACTION.has('access_denied'), false);
 check('never retries on invalid_scope', NEEDS_INTERACTION.has('invalid_scope'), false);
 check('never retries on server_error', NEEDS_INTERACTION.has('server_error'), false);
+
+/*
+ * Sign-out, and the reason "switch account" is a separate action.
+ *
+ * Our session and Discord's are independent. /auth/login asks for prompt=none
+ * so returning members are not made to click an approval screen every visit —
+ * which means a plain sign-out then sign-in silently re-authorises the SAME
+ * Discord account, with no point in the round trip where anyone is asked who
+ * they are. Only consent=1 reaches the screen that can switch accounts.
+ */
+console.log('\n== signOutTarget ==');
+check('plain sign-out goes home', signOutTarget(null, false), '/');
+check('plain sign-out honours next', signOutTarget('/live', false), '/live');
+check('switch forces the consent screen', signOutTarget(null, true), '/auth/login?consent=1');
+check(
+  'switch carries the destination through',
+  signOutTarget('/go', true),
+  '/auth/login?consent=1&next=%2Fgo',
+);
+// '/' is /auth/login's own default; sending it explicitly is just noise.
+check('switch omits a redundant next=/', signOutTarget('/', true), '/auth/login?consent=1');
+
+// `next` arrives as a query parameter on a GET and ends up in a Location
+// header, so it is the same open-redirect surface safeNext exists for — and it
+// must stay guarded on BOTH branches, not just the plain one.
+console.log('\n  the destination stays same-origin on both branches:');
+check('plain: //host blocked', signOutTarget('//evil.example', false), '/');
+check('plain: backslash blocked', signOutTarget('/' + BS + 'evil.example', false), '/');
+check('plain: absolute URL blocked', signOutTarget('https://evil.example', false), '/');
+check('switch: //host blocked', signOutTarget('//evil.example', true), '/auth/login?consent=1');
+check(
+  'switch: tab-smuggled //host blocked',
+  signOutTarget('/' + TAB + '//evil.example', true),
+  '/auth/login?consent=1',
+);
+check(
+  'switch: absolute URL blocked',
+  signOutTarget('https://evil.example', true),
+  '/auth/login?consent=1',
+);
+// A hostile value must not survive as an encoded payload either: the whole
+// point is that it never reaches the Location header in any form.
+check(
+  'switch: hostile value is dropped, not merely escaped',
+  signOutTarget('//evil.example', true).includes('evil.example'),
+  false,
+);
 
 console.log(failures ? `\nFAILED (${failures})\n` : '\nAll checks passed.\n');
 process.exit(failures ? 1 : 0);

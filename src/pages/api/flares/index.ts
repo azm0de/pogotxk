@@ -27,6 +27,7 @@ import {
 } from '~/lib/db/flares';
 import { notifyLiveBoard } from '~/do/LiveBoard';
 import { postFlareToDiscord, type FlareNotification } from '~/lib/notify/discord';
+import { sweepFlareDiscordClosures } from '~/lib/notify/flare-closures';
 import { sendPush } from '~/lib/notify/push';
 import { FLARE_KIND_LABEL } from '~/lib/db/flares';
 
@@ -68,6 +69,18 @@ export const GET = handler(async (ctx: APIContext) => {
   // themselves are identical for everyone and get broadcast verbatim.
   const user = ctx.locals.user;
   const mine = user ? await getViewerRsvps(env.DB, user.id) : {};
+
+  // A flare that lapses drops off this list on its own, but its Discord embed
+  // does not — an embed is already delivered and only an edit can retire it.
+  // There is no cron trigger on this Worker, so the board read is what drives
+  // it. Off the response path, bounded, and idempotent: see flare-closures.ts.
+  const background = ctx.locals.cfContext;
+  const sweep = sweepFlareDiscordClosures(env, env.DB, now).catch(() => undefined);
+  // Same shape as the fan-out in POST: hand it to waitUntil where there is a
+  // Worker context, and await it otherwise rather than leaving it floating —
+  // a detached promise is not guaranteed to finish once the response is sent.
+  if (background) background.waitUntil(sweep);
+  else await sweep;
 
   return json({ now, flares, mine }, 200, {
     // A board that is ten seconds stale is a broken board, and the payload is
