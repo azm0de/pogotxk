@@ -35,11 +35,43 @@ export interface FlareNotification {
   id: number;
   kind: FlareKind;
   boss: string | null;
+  /** Raid tier, where the trainer told us one. */
+  tier: string | null;
   needed: number | null;
   note: string | null;
   expiresAt: string;
   poi: { name: string; slug: string; lat: number; lng: number } | null;
   author: { name: string } | null;
+}
+
+/**
+ * The embed body for a live flare.
+ *
+ * Extracted so that posting one and editing one after a correction cannot drift
+ * apart. They did not used to be able to drift, because an embed could never be
+ * edited except into a tombstone — now that a trainer can fix the boss on a
+ * flare they already fired, "what the embed says" has two callers and exactly
+ * one definition.
+ */
+export function flareEmbed(flare: FlareNotification, siteOrigin: string): Record<string, unknown> {
+  const fields: { name: string; value: string; inline?: boolean }[] = [];
+  if (flare.boss) fields.push({ name: 'Boss', value: flare.boss, inline: true });
+  if (flare.tier) fields.push({ name: 'Tier', value: flare.tier, inline: true });
+  if (flare.needed) fields.push({ name: 'Needs', value: `${flare.needed} more`, inline: true });
+  if (flare.poi) fields.push({ name: 'Where', value: flare.poi.name, inline: true });
+
+  const minutes = Math.max(0, Math.round((Date.parse(flare.expiresAt) - Date.now()) / 60000));
+  fields.push({ name: 'Expires', value: `in ${minutes} min`, inline: true });
+
+  return {
+    title: KIND_TITLE[flare.kind],
+    color: KIND_COLOR[flare.kind],
+    description: flare.note ?? undefined,
+    fields,
+    url: flare.poi ? `${siteOrigin}/map?poi=${flare.poi.slug}` : `${siteOrigin}/live`,
+    footer: { text: flare.author ? `Flared by ${flare.author.name}` : 'PoGo TXK' },
+    timestamp: new Date().toISOString(),
+  };
 }
 
 /**
@@ -76,23 +108,7 @@ export async function postFlareToDiscord(
   const url = webhookUrl(env);
   if (!url) return null;
 
-  const fields: { name: string; value: string; inline?: boolean }[] = [];
-  if (flare.boss) fields.push({ name: 'Boss', value: flare.boss, inline: true });
-  if (flare.needed) fields.push({ name: 'Needs', value: `${flare.needed} more`, inline: true });
-  if (flare.poi) fields.push({ name: 'Where', value: flare.poi.name, inline: true });
-
-  const minutes = Math.max(0, Math.round((Date.parse(flare.expiresAt) - Date.now()) / 60000));
-  fields.push({ name: 'Expires', value: `in ${minutes} min`, inline: true });
-
-  const embed: Record<string, unknown> = {
-    title: KIND_TITLE[flare.kind],
-    color: KIND_COLOR[flare.kind],
-    description: flare.note ?? undefined,
-    fields,
-    url: flare.poi ? `${siteOrigin}/map?poi=${flare.poi.slug}` : `${siteOrigin}/live`,
-    footer: { text: flare.author ? `Flared by ${flare.author.name}` : 'PoGo TXK' },
-    timestamp: new Date().toISOString(),
-  };
+  const embed = flareEmbed(flare, siteOrigin);
 
   try {
     // ?wait=true makes Discord return the created message rather than 204, so
@@ -174,6 +190,45 @@ export async function markFlareClosedInDiscord(
     return closeOutcomeForStatus(res.status);
   } catch {
     // Timeout or transport failure — the message is probably still there.
+    return 'retry';
+  }
+}
+
+/**
+ * Rewrite a live flare's embed after the trainer corrected it.
+ *
+ * The same PATCH that retires an embed, pointed at the current details rather
+ * than a tombstone. It matters that this exists: an embed is delivered once and
+ * then sits in the channel indefinitely, so a flare fired for the wrong boss
+ * goes on telling the community to come and fight the wrong boss long after the
+ * site itself has been corrected. Reuses closeOutcomeForStatus because the
+ * decision is identical — 404/401/403 means stop, everything else means the
+ * next correction can try again.
+ *
+ * Best-effort like everything else here: the flare is already right in D1 and on
+ * the live board before this runs.
+ */
+export async function updateFlareEmbedInDiscord(
+  env: Env,
+  messageId: string,
+  flare: FlareNotification,
+  siteOrigin: string,
+): Promise<FlareCloseOutcome> {
+  const url = webhookUrl(env);
+  if (!url) return 'disabled';
+
+  try {
+    const res = await fetch(`${url}/messages/${messageId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        embeds: [flareEmbed(flare, siteOrigin)],
+        allowed_mentions: { parse: [] },
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return closeOutcomeForStatus(res.status);
+  } catch {
     return 'retry';
   }
 }

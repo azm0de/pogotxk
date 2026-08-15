@@ -240,6 +240,10 @@ export interface FlareOwnership {
   created_by: number | null;
   expires_at: string;
   closed_at: string | null;
+  /** Which fields an edit is allowed to touch depends on the kind. */
+  kind: FlareKind;
+  /** Null when Discord is not configured, or the post did not come back. */
+  discord_message_id: string | null;
 }
 
 /** The raw row, for authorisation checks that need `created_by`. */
@@ -248,7 +252,9 @@ export async function getFlareOwnership(
   id: number,
 ): Promise<FlareOwnership | null> {
   return db
-    .prepare('SELECT id, created_by, expires_at, closed_at FROM flares WHERE id = ?1')
+    .prepare(
+      'SELECT id, created_by, expires_at, closed_at, kind, discord_message_id FROM flares WHERE id = ?1',
+    )
     .bind(id)
     .first<FlareOwnership>();
 }

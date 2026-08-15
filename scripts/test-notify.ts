@@ -8,7 +8,12 @@
  * — including trainer names and locations — to somebody else's server.
  */
 
-import { closeOutcomeForStatus, webhookUrl } from '../src/lib/notify/discord';
+import {
+  closeOutcomeForStatus,
+  flareEmbed,
+  webhookUrl,
+  type FlareNotification,
+} from '../src/lib/notify/discord';
 import { vapidKeys, pushPublicKey } from '../src/lib/notify/push';
 
 let failures = 0;
@@ -82,6 +87,53 @@ check('https subject ok', vapidKeys(env({ ...good, VAPID_SUBJECT: 'https://a.com
 check('bare email refused', vapidKeys(env({ ...good, VAPID_SUBJECT: 'a@b.com' })), null);
 check('http refused', vapidKeys(env({ ...good, VAPID_SUBJECT: 'http://a.com' })), null);
 check('missing subject refused', vapidKeys(env({ ...good, VAPID_SUBJECT: undefined })), null);
+
+/*
+ * The embed body.
+ *
+ * This is shared by posting a flare and by editing one after the trainer fixes
+ * the boss. That sharing is the point: an embed is delivered once and then sits
+ * in the channel indefinitely, so if the two builders drifted, a corrected
+ * flare would keep advertising the old boss to everybody who scrolled past.
+ */
+console.log('\n== flare embed ==');
+const ORIGIN = 'https://pogotxk.gnomelabz.workers.dev';
+const raid: FlareNotification = {
+  id: 1,
+  kind: 'raid',
+  boss: 'Mewtwo',
+  tier: 'Tier 5',
+  needed: null,
+  note: 'Starting in 5',
+  expiresAt: new Date(Date.now() + 45 * 60_000).toISOString(),
+  poi: { name: 'Campsite - Genuine', slug: 'campsite-genuine', lat: 33.4, lng: -94.0 },
+  author: { name: 'azm.0' },
+};
+const fieldsOf = (f: FlareNotification) =>
+  (flareEmbed(f, ORIGIN).fields as { name: string; value: string }[]).map((x) => x.name);
+const valueOf = (f: FlareNotification, name: string) =>
+  (flareEmbed(f, ORIGIN).fields as { name: string; value: string }[]).find((x) => x.name === name)
+    ?.value;
+
+check('boss shown', valueOf(raid, 'Boss'), 'Mewtwo');
+check('tier shown', valueOf(raid, 'Tier'), 'Tier 5');
+check('location shown', valueOf(raid, 'Where'), 'Campsite - Genuine');
+check('note becomes the description', flareEmbed(raid, ORIGIN).description, 'Starting in 5');
+check('links to the pin', flareEmbed(raid, ORIGIN).url, `${ORIGIN}/map?poi=campsite-genuine`);
+
+// Absent fields must vanish rather than render empty: a "Tier" row reading
+// nothing looks like a bug in the app to everyone who sees the embed.
+console.log('\n  fields we do not have are omitted, not blanked:');
+check('no tier -> no Tier row', fieldsOf({ ...raid, tier: null }).includes('Tier'), false);
+check('no boss -> no Boss row', fieldsOf({ ...raid, boss: null }).includes('Boss'), false);
+check('no poi -> no Where row', fieldsOf({ ...raid, poi: null }).includes('Where'), false);
+check('no poi -> links to the board', flareEmbed({ ...raid, poi: null }, ORIGIN).url, `${ORIGIN}/live`);
+check('expiry is always there', fieldsOf({ ...raid, boss: null, tier: null, poi: null }), ['Expires']);
+
+// `needed` is the invites counter; it must not ride along on a raid.
+const invites: FlareNotification = { ...raid, kind: 'remote_invites', tier: null, needed: 3 };
+check('invites show a count', valueOf(invites, 'Needs'), '3 more');
+check('a raid with no count shows none', fieldsOf(raid).includes('Needs'), false);
 
 console.log(failures ? `\nFAILED (${failures})\n` : '\nAll checks passed.\n');
 process.exit(failures ? 1 : 0);

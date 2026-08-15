@@ -246,6 +246,41 @@
   color: var(--accent-contrast);
 }
 
+.go-flare-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+/*
+ * "End" stands a flare down, so it is deliberately the quietest control on the
+ * card: muted until touched, and never the accent colour that Join uses. These
+ * two buttons sit side by side under one thumb at a gym, and the destructive
+ * one must not be the one that catches the eye.
+ */
+.go-standdown {
+  flex: none;
+  min-width: 52px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+/* --live/--live-text, not a new --danger token: this is the same pair the admin
+ * screens already use for destructive buttons (.btn--danger), and it is the
+ * colour the site already means "live flare" by. Both are theme-aware. */
+.go-standdown:hover,
+.go-standdown:focus-visible {
+  border-color: var(--live);
+  color: var(--live-text);
+}
+
 /* ---------------------------------------------------------------- actions -- */
 
 .go-actions {
