@@ -261,9 +261,9 @@ is transport-independent — it does not go away at the edge:
 - [ ] **Ask Nick for a GO Fest frame without the refuse bin.** The banner crop currently loses
       two members at the right edge because the bin could not be retouched out without inventing
       their legs — [[Design System]] has the full reasoning
-- [ ] **The hero and the section headings are still system-ui at every level.** Typography is
-      the largest remaining templated default on the site; a display face would change more than
-      any new section. Needs self-hosting — no third-party font CDN
+- [x] ~~The hero and the section headings are still system-ui at every level~~ — `h1`–`h4` now
+      use **Fredoka** via `--font-display`, self-hosted, 2026-08-15. Body text is unchanged
+      system-ui. See [[Attribution Obligations]]
 - [ ] **Per-page OG images.** A Discord link preview shows a placeholder rather than the park
 
 ## Audit still owed
