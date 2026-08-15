@@ -403,8 +403,21 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     {
       !fullBleed && (
         <footer class="site-footer">
+          {/*
+            The header carries the wordmark as an image; the footer had
+            nothing of its own — just the same body-weight text as the legal
+            paragraph beneath it, on every page on the site. This is the
+            favicon's mark (`variant="neutral"`, a dark ring rather than the
+            header's white one — `--bg-sunken` is not the header's known red
+            in either theme) paired with the same display face the headings
+            use, so it reads as the site's mark rather than another line of
+            copy.
+          */}
+          <p class="footer-brand">
+            <PokeBall size={20} variant="neutral" /> PoGo TXK
+          </p>
           <p>
-            <strong>PoGo TXK</strong> — Pokémon GO Texarkana. Not officially affiliated with
+            Pokémon GO Texarkana. Not officially affiliated with
             Pokémon GO. Pokémon and its trademarks are ©1995–2026 Nintendo, Creatures, and
             GAMEFREAK. All images and names owned and trademarked by Nintendo, Niantic, The
             Pokémon Company, and GAMEFREAK are property of their respective owners.
@@ -872,6 +885,17 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       .site-footer p {
         max-width: 70ch;
         margin: 0 auto 10px;
+      }
+      .footer-brand {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        margin-bottom: 14px;
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--text);
       }
       .footer-links {
         text-align: center;

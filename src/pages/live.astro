@@ -27,14 +27,63 @@ const [flares, mine] = await Promise.all([
   title="Live Board"
   description="Raids, gym takedowns, trades and remote invites happening right now around Texarkana. Raise a flare and the community sees it instantly."
 >
-  <LiveBoard
-    client:load
-    initialFlares={flares}
-    initialNow={now}
-    initialMine={mine}
-    canPost={hasRole(user, 'member')}
-    signedIn={!!user}
-    currentUserId={user?.id ?? null}
-    canModerate={hasRole(user, 'ambassador')}
-  />
+  <div class="live-band art-band">
+    <LiveBoard
+      client:load
+      initialFlares={flares}
+      initialNow={now}
+      initialMine={mine}
+      canPost={hasRole(user, 'member')}
+      signedIn={!!user}
+      currentUserId={user?.id ?? null}
+      canModerate={hasRole(user, 'ambassador')}
+    />
+  </div>
 </Base>
+
+<style>
+  /* --- page artwork -----------------------------------------------------
+   * Moltres. Formerly the last survivor of a three-birds-one-per-team set
+   * on /about, orphaned once that page dropped the "trainers from all three
+   * teams" framing the birds illustrated — it stayed there on layout merit
+   * alone, an accident the backlog flagged as needing a real home.
+   *
+   * A raid boss belongs beside the raid board rather than beside anything
+   * about teams: Moltres is Tier 5 in its own rotation, so this page is the
+   * one place on the site where the art is *what the page is about* and not
+   * borrowed decoration.
+   *
+   * `.live` (LiveBoard.css) is a 900px column centred in the page, same
+   * shape as `.legal` was — a large empty margin on a wide screen. Anchored
+   * to the *top*, not the bottom the way /about's was: this board is a
+   * WebSocket feed, and its height changes as flares come and go. Anchoring
+   * to the container's bottom would make the art jump every time the flare
+   * count changed. The head — title, lede, status pill — is the one part of
+   * this page that never moves, so the art is positioned against that.
+   */
+  .live-band {
+    --art-src: url('/art/moltres.webp');
+    --art-left: calc(-1 * clamp(30px, 4vw, 90px));
+    --art-top: 90px;
+    --art-w: clamp(170px, 24vw, 360px);
+  }
+
+  /*
+   * Below this, the 900px measure stops being the limit and the column
+   * fills the screen, so the margin the art was living in disappears —
+   * same trigger as /about's mobile override. But dropping to a faint
+   * opacity, which is what /about and the hero do there, only works when
+   * what is behind the art is body text: this page is opaque flare cards
+   * edge to edge, so a faded Moltres does not sit "behind" one, it just
+   * collides with its border, half-hidden and half not. The `onnow-band`
+   * mobile rule hit the exact same thing — "0.15 of nothing" — and the fix
+   * there was giving the art its own strip. There is no equivalent strip
+   * to give it here, so it is simplest and most honest to not render it
+   * at all rather than ship a visible glitch against every card.
+   */
+  @media (max-width: 1000px) {
+    .live-band::after {
+      content: none;
+    }
+  }
+</style>
