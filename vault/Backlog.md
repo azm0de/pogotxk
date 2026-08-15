@@ -248,11 +248,16 @@ is transport-independent — it does not go away at the edge:
 - [x] ~~No Pokémon artwork anywhere outside the game-data pages~~ — shiny Lucario, Mew and
       Magikarp bleed off a page edge in the hero, "Happening now" and the Campsite explainer,
       via a reusable `.art-band` utility. See [[Design System]]
-- [ ] **Moltres is orphaned on `/about`.** It is the last survivor of the earlier three-teams
-      bird set, which the home page no longer uses. Either give `/about` one of the current three
-      or restore the birds — but it should not stay as an accident
-- [ ] **Only the home page and `/about` carry artwork.** `/gallery`, `/live` and `/events` are
-      the remaining candidates with room
+- [x] ~~Moltres is orphaned on `/about`~~ — moved to `/live`, 2026-08-15. It is a raid boss, so
+      the live board is the one page where the art is what the page is about rather than borrowed
+      decoration; the old one-bird-per-team framing was gone from `/about` anyway. Anchored to the
+      top of the head block, not the bottom the way `/about`'s was — the board's height is a
+      WebSocket feed, and bottom-anchoring would make the art jump every time the flare count
+      changed. Hidden below 1000px rather than faded: no strip to drop it behind on a page that is
+      opaque flare cards edge to edge, the same collision `onnow-band`'s mobile rule already hit
+      once (see [[Design System]])
+- [ ] **Only the home page and `/live` carry artwork.** `/events` is the remaining candidate with
+      room; `/gallery` is gone, merged into `/blog` 2026-08-15
 - [x] ~~The palette was inherited navy and cream~~ — repainted red/white/black as a Poké Ball.
       The obvious Pokémon reds all fail AA on white and every red now sits at hue 353–354°;
       see [[Design System]] before touching any of it
