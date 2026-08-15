@@ -16,6 +16,7 @@ import { hasRole } from '~/lib/auth/types';
 import { recordAudit } from '~/lib/db/audit';
 import { getFlare, getFlareOwnership, isoNow } from '~/lib/db/flares';
 import { notifyLiveBoard } from '~/do/LiveBoard';
+import { closeFlareInDiscord } from '~/lib/notify/flare-closures';
 
 export const prerender = false;
 
@@ -114,17 +115,31 @@ export const PATCH = handler(async (ctx: APIContext) => {
     }
   }
 
-  await fanOut(ctx, { type: 'closed', id });
+  // The embed in Discord is still advertising this flare. Striking it through
+  // runs off the response path for the same reason the fan-out does — a slow or
+  // rate-limited Discord must not keep the trainer's "close" button spinning.
+  // The row is claimed transactionally, so this is safe to run alongside the
+  // sweep on the read path.
+  await fanOut(ctx, { type: 'closed', id }, closeFlareInDiscord(env, env.DB, id, isoNow()));
   return json({ id, closed: true });
 });
 
-/** Broadcast off the response path — see the note in ./index.ts. */
+/**
+ * Broadcast off the response path — see the note in ./index.ts.
+ *
+ * `extra` carries any delivery work that should ride along on the same
+ * `waitUntil`, such as striking through the Discord embed. It is settled
+ * together with the broadcast so one slow leg cannot delay the other, and
+ * failures are swallowed: none of this is allowed to fail the request that
+ * already succeeded in D1.
+ */
 async function fanOut(
   ctx: APIContext,
   event: Parameters<typeof notifyLiveBoard>[0],
+  extra?: Promise<unknown>,
 ): Promise<void> {
   const background = ctx.locals.cfContext;
-  const promise = notifyLiveBoard(event);
-  if (background) background.waitUntil(promise);
-  else await promise;
+  const work = Promise.allSettled(extra ? [notifyLiveBoard(event), extra] : [notifyLiveBoard(event)]);
+  if (background) background.waitUntil(work);
+  else await work;
 }

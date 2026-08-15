@@ -8,7 +8,7 @@
  * — including trainer names and locations — to somebody else's server.
  */
 
-import { webhookUrl } from '../src/lib/notify/discord';
+import { closeOutcomeForStatus, webhookUrl } from '../src/lib/notify/discord';
 import { vapidKeys, pushPublicKey } from '../src/lib/notify/push';
 
 let failures = 0;
@@ -37,6 +37,31 @@ check('userinfo trick', accepted('https://discord.com@evil.example/webhooks'), f
 check('not a url at all', accepted('definitely-not-a-url'), false);
 check('unset', webhookUrl(env({})), null);
 check('empty string', webhookUrl(env({ DISCORD_WEBHOOK_URL: '' })), null);
+
+/**
+ * Closing an embed is a best-effort edit against someone else's API, so the
+ * only thing that keeps it correct is knowing which failures are worth
+ * repeating. Get this wrong in one direction and closed flares stay advertised
+ * forever; get it wrong in the other and one deleted message is re-attempted on
+ * every board read for the life of the deployment.
+ */
+console.log('\n== Discord close-edit outcome classification ==');
+check('200 -> edited', closeOutcomeForStatus(200), 'edited');
+check('204 -> edited', closeOutcomeForStatus(204), 'edited');
+
+console.log('\n  unrecoverable — stop retrying:');
+check('404 message deleted', closeOutcomeForStatus(404), 'gone');
+check('401 webhook rotated', closeOutcomeForStatus(401), 'gone');
+check('403 forbidden', closeOutcomeForStatus(403), 'gone');
+
+console.log('\n  transient — must be retried:');
+// The one most likely to be misclassified: a burst of flares expiring together
+// is exactly when Discord rate-limits, and treating that as permanent would
+// silently drop the whole burst.
+check('429 rate limited', closeOutcomeForStatus(429), 'retry');
+check('500 server error', closeOutcomeForStatus(500), 'retry');
+check('502 bad gateway', closeOutcomeForStatus(502), 'retry');
+check('503 unavailable', closeOutcomeForStatus(503), 'retry');
 
 console.log('\n== VAPID configuration ==');
 const good = {

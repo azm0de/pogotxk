@@ -116,17 +116,49 @@ export async function postFlareToDiscord(
   }
 }
 
+/**
+ * What happened when we tried to close an embed, and — the part that matters —
+ * whether it is worth trying again.
+ *
+ * The caller marks a flare settled on `edited` and on `gone`, and only retries
+ * on `retry`. Collapsing those three into a bare success/failure is what makes
+ * this kind of sweep either lose edits or hammer Discord forever:
+ *
+ *   edited  the embed now reads as closed. Done.
+ *   gone    the message or the webhook no longer exists (404/401/403). No
+ *           number of retries will fix that, so stop — otherwise one manually
+ *           deleted message is re-attempted on every sweep, forever.
+ *   retry   rate limit, 5xx, timeout, network error. Nothing is wrong with the
+ *           request; try again on the next sweep.
+ *   disabled  no webhook configured, so there is nothing to close and no flare
+ *           should be marked settled — the embed was never posted.
+ */
+export type FlareCloseOutcome = 'edited' | 'gone' | 'retry' | 'disabled';
+
+/**
+ * Exported for testing: classifying an HTTP status is the whole decision, and
+ * it should not require a network to verify.
+ *
+ * 429 is deliberately `retry` rather than `gone` — Discord rate-limits webhooks
+ * per channel, and a burst of expiring flares is exactly when this runs.
+ */
+export function closeOutcomeForStatus(status: number): FlareCloseOutcome {
+  if (status >= 200 && status < 300) return 'edited';
+  if (status === 401 || status === 403 || status === 404) return 'gone';
+  return 'retry';
+}
+
 /** Strike through a flare's embed once it is closed or expired. */
 export async function markFlareClosedInDiscord(
   env: Env,
   messageId: string,
   reason: 'closed' | 'expired',
-): Promise<void> {
+): Promise<FlareCloseOutcome> {
   const url = webhookUrl(env);
-  if (!url) return;
+  if (!url) return 'disabled';
 
   try {
-    await fetch(`${url}/messages/${messageId}`, {
+    const res = await fetch(`${url}/messages/${messageId}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -139,8 +171,10 @@ export async function markFlareClosedInDiscord(
       }),
       signal: AbortSignal.timeout(5000),
     });
+    return closeOutcomeForStatus(res.status);
   } catch {
-    /* Best effort — a stale embed is better than a failed request. */
+    // Timeout or transport failure — the message is probably still there.
+    return 'retry';
   }
 }
 
