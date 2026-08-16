@@ -75,6 +75,11 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="apple-mobile-web-app-title" content="PoGo TXK" />
+    <!-- Every page can be added to an iOS home screen, not just /go — without
+         these, iOS falls back to a screenshot of whatever page was open. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
     {/* Per-page head additions — feed autodiscovery, article metadata, noindex.
         Without this slot, any <Fragment slot="head"> a page declares is

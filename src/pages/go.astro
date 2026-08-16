@@ -28,11 +28,10 @@ const initialAction = Astro.url.searchParams.get('action') ?? undefined;
   fullBleed
 >
   <Fragment slot="head">
-    <!-- This is the screen people install to their home screen. -->
+    <!-- This is the screen people install to their home screen. The iOS
+         home-screen tags themselves now live in Base.astro, so every page
+         gets them, not just this one. -->
     <meta name="robots" content="noindex" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   </Fragment>
 
   <QuickActions client:load user={user} initialPoi={initialPoi} initialAction={initialAction} />
