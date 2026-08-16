@@ -14,6 +14,7 @@ import {
 import { listPublishedPosts } from '~/lib/db/posts';
 import { gameEventsFromPayload, groupEvents, type CalendarEvent } from '~/lib/events';
 import { getFeed, raidTierRank } from '~/lib/scrapedduck';
+import { getDiscordEvents, nextDiscordMeetup } from '~/lib/discord-events';
 import Attribution from '~/components/game/Attribution.astro';
 import { proxiedImageUrl } from '~/lib/game-image';
 import { DEFAULT_TZ, formatInZone } from '~/lib/time';
@@ -55,6 +56,63 @@ const [counts, meetups, posts, photos] = await Promise.all([
 
 const nowIso = new Date().toISOString();
 const nextMeetup = meetups.find((m) => (m.endsAt ?? m.startsAt) >= nowIso) ?? null;
+
+/*
+ * "Next meetup" used to sit empty whenever a meetup was announced in Discord and
+ * nobody re-typed it into the admin screens — which is most of the time, because
+ * announcing it in Discord is the actual workflow. So the guild's scheduled
+ * events are a second source for this card.
+ *
+ * Lazy refresh on read with a KV cache and a stale fallback, same as `getFeed`;
+ * wrangler.jsonc documents why this Worker has no cron to do it on a timer.
+ * `waitUntil` keeps the cache write off the response path.
+ *
+ * Never throws — a Discord outage degrades to whatever was last seen, and then
+ * to the hand-entered meetup, and then to the existing empty state.
+ */
+const cfContext = Astro.locals.cfContext as ExecutionContext | undefined;
+const discordEvents = await getDiscordEvents({
+  waitUntil: cfContext ? (promise) => cfContext.waitUntil(promise) : undefined,
+}).catch(() => null);
+const nextDiscord = discordEvents ? nextDiscordMeetup(discordEvents.events, nowIso) : null;
+
+/*
+ * Whichever comes first, not "prefer the database".
+ *
+ * An admin-entered meetup three weeks out must not hide a Discord event
+ * tomorrow — the card says "next", and being wrong about that is the one thing
+ * it cannot do. When both exist for the same outing the hand-entered row wins
+ * the tie, since it is the one carrying a POI, an RSVP list and a Campfire link.
+ */
+const nextUp: {
+  title: string;
+  startsAt: string;
+  tz: string;
+  where: string | null;
+  note: string | null;
+  fromDiscord: boolean;
+} | null = (() => {
+  const fromDb = nextMeetup && {
+    title: nextMeetup.title,
+    startsAt: nextMeetup.startsAt,
+    tz: nextMeetup.tz,
+    where: meetupLocation(nextMeetup),
+    note: nextMeetup.descriptionMd ? markdownToText(nextMeetup.descriptionMd) : null,
+    fromDiscord: false,
+  };
+  const fromDiscord = nextDiscord && {
+    title: nextDiscord.title,
+    startsAt: nextDiscord.startsAt,
+    // Discord hands back a UTC instant with no zone; the community reads local.
+    tz: DEFAULT_TZ,
+    where: nextDiscord.locationText,
+    note: nextDiscord.descriptionMd ? markdownToText(nextDiscord.descriptionMd) : null,
+    fromDiscord: true,
+  };
+  if (!fromDb) return fromDiscord;
+  if (!fromDiscord) return fromDb;
+  return fromDiscord.startsAt < fromDb.startsAt ? fromDiscord : fromDb;
+})();
 
 const latestPosts = Array.isArray(posts) ? posts : posts.posts;
 // Short form for a card row — /blog's own `dateFormat` spells the month out
@@ -447,14 +505,12 @@ function homeWhen(event: CalendarEvent): string {
     <section class="card card--meetup">
       <h2>Next meetup</h2>
       {
-        nextMeetup ? (
+        nextUp ? (
           <>
-            <p class="meetup-title">{nextMeetup.title}</p>
-            <p class="meetup-when">{formatInZone(nextMeetup.startsAt, nextMeetup.tz)}</p>
-            <p class="meetup-where">{meetupLocation(nextMeetup) ?? 'Location to be confirmed'}</p>
-            {nextMeetup.descriptionMd && (
-              <p class="meetup-note">{markdownToText(nextMeetup.descriptionMd)}</p>
-            )}
+            <p class="meetup-title">{nextUp.title}</p>
+            <p class="meetup-when">{formatInZone(nextUp.startsAt, nextUp.tz)}</p>
+            <p class="meetup-where">{nextUp.where ?? 'Location to be confirmed'}</p>
+            {nextUp.note && <p class="meetup-note">{nextUp.note}</p>}
             <a class="card-link" href="/events">All events →</a>
           </>
         ) : (
