@@ -78,6 +78,9 @@ function formatDistance(m: number): string {
   return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
 }
 
+/** Generous rather than tight — this is a phone on park wifi. */
+const FETCH_TIMEOUT_MS = 12000;
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -308,13 +311,27 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/map.json')
+    // Without the timeout, a fetch that never settles (a captive portal or a
+    // proxy that accepts the connection and never answers, not a clean
+    // failure) left `data` null forever — the render below has no branch for
+    // that, so "Loading map…" just sat there with no error and no retry,
+    // indefinitely.
+    fetch('/api/map.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
       .then((r) => {
         if (!r.ok) throw new Error(`Map data unavailable (${r.status})`);
         return r.json() as Promise<MapData>;
       })
       .then((d) => !cancelled && setData(d))
-      .catch((e: Error) => !cancelled && setError(e.message));
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        const message =
+          e instanceof DOMException && e.name === 'TimeoutError'
+            ? 'Map data is taking too long to load. Check your connection and try again.'
+            : e instanceof Error
+              ? e.message
+              : 'Could not load the map.';
+        setError(message);
+      });
     return () => {
       cancelled = true;
     };
@@ -337,7 +354,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     };
 
     const refresh = () =>
-      fetch('/api/flares')
+      fetch('/api/flares', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
         .then((r) => (r.ok ? (r.json() as Promise<{ flares: LiveFlare[] }>) : null))
         .then((d) => d && applyFlares(d.flares ?? []))
         .catch(() => undefined);
@@ -697,7 +714,10 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
   useEffect(() => {
     if (compact) return;
     let cancelled = false;
-    fetch('/api/me.json', { headers: { accept: 'application/json' } })
+    fetch('/api/me.json', {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })
       .then((r) => (r.ok ? (r.json() as Promise<{ user: { role?: string } | null }>) : null))
       .then((d) => {
         if (cancelled) return;

@@ -69,11 +69,30 @@ function minutesLeft(iso: string): number {
   return Math.max(0, Math.round((Date.parse(iso) - Date.now()) / 60000));
 }
 
+/**
+ * Generous rather than tight — this is a phone on park wifi, not server to
+ * server. Matches the geolocation timeout below, chosen for the same reason.
+ * Without this, a fetch that never settles (a captive portal that accepts the
+ * connection and never answers, not a clean failure) left `boardStatus` stuck
+ * on 'loading' forever, which the render treats as "no error" and falls
+ * through to the same copy as a genuinely empty board.
+ */
+const FETCH_TIMEOUT_MS = 12000;
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+      signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new Error('Taking too long to reach the server — check your connection.');
+    }
+    throw err;
+  }
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new Error(body.error ?? res.statusText);
   return body;
@@ -198,12 +217,16 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
   }, []);
 
   useEffect(() => {
-    fetch('/api/map.json')
+    // Both timed the same as `api()` above: a hung fetch here left the "Where"
+    // dropdown and boss suggestions permanently empty with no way to tell that
+    // from there genuinely being nothing to show. Timing it out at least turns
+    // an indefinite hang into the same fast, already-handled empty state.
+    fetch('/api/map.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
       .then((r) => r.json() as Promise<{ pois?: MapPoi[] }>)
       .then((d) => setPois(d.pois ?? []))
       .catch(() => setPois([]));
 
-    fetch('/api/game/raids.json')
+    fetch('/api/game/raids.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
       .then((r) => r.json() as Promise<{ data?: { name: string; tier: string }[] }>)
       .then((d) => setBosses((d.data ?? []).map((b) => ({ name: b.name, tier: b.tier }))))
       .catch(() => setBosses([]));
@@ -266,7 +289,7 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
 
     let cancelled = false;
     (async () => {
-      const cfg = await fetch('/api/push/subscribe')
+      const cfg = await fetch('/api/push/subscribe', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
         .then((r) => r.json() as Promise<{ publicKey: string | null; enabled: boolean }>)
         .catch(() => null);
       if (cancelled) return;
