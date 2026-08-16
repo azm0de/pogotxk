@@ -374,8 +374,11 @@ function homeWhen(event: CalendarEvent): string {
         {/* Four of nine, and until now there was no way to reach the other
             five from here — the section was the only one on the page with no
             route onward. */}
-        <div class="section-head">
-          <h2>The community</h2>
+        <div class="section-head community-head">
+          <div>
+            <h2>The community</h2>
+            <p>PoGo TXK meets year-round at Spring Lake Park — new players and veterans, any team.</p>
+          </div>
           <a href="/blog#photos">All photos →</a>
         </div>
 
@@ -394,6 +397,13 @@ function homeWhen(event: CalendarEvent): string {
           narrow screens get the tighter crop centred on the two Ambassador
           banners. `sizes` is no longer `100vw`: it sits inside the 1100px
           section now, not across the viewport.
+
+          The figcaption is new — the same bottom-scrim treatment
+          `.about-hero figcaption` already uses, not a new pattern. Justin's
+          steer was to let this photo carry the section rather than sit in
+          the tile queue as just another one; naming what it is is part of
+          that; the tiles below stay identified by their own licence credit,
+          this one by what it is a photo of.
         */}
         <figure class="community-shot">
           <picture>
@@ -413,6 +423,7 @@ function homeWhen(event: CalendarEvent): string {
               decoding="async"
             />
           </picture>
+          <figcaption>GO Fest 2026 at Spring Lake Park</figcaption>
         </figure>
         <ul class="photos">
           {photos.map((photo) => (
@@ -741,6 +752,8 @@ function homeWhen(event: CalendarEvent): string {
    */
   .community-shot {
     margin: 0 0 10px;
+    /* Anchors the figcaption below. */
+    position: relative;
     border-radius: var(--radius);
     /* Clips the drift below, which scales the image past its own box. */
     overflow: hidden;
@@ -748,6 +761,19 @@ function homeWhen(event: CalendarEvent): string {
   }
   .community-shot picture {
     display: block;
+  }
+  /* Same treatment `.about-hero figcaption` already uses — not a new
+     pattern. This photo carries no licence credit (it is site art, not one
+     of the DB-tracked community photos below), so the caption is naming the
+     event rather than crediting anyone. */
+  .community-shot figcaption {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 22px 12px 7px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(transparent, rgb(0 0 0 / 0.78));
   }
   .community-shot img {
     display: block;
@@ -1446,6 +1472,35 @@ function homeWhen(event: CalendarEvent): string {
     white-space: nowrap;
   }
 
+  /*
+   * The community section's own header, wrapping the "All photos" link's
+   * sibling in a div so a lede can sit under the heading — Justin's steer
+   * was to give this header real presence rather than the same small plain
+   * heading every other `.section-head` uses. `align-items: baseline` from
+   * the base rule would align the link against the wrapper's own text
+   * baseline (its last line, the lede), landing it too low against the
+   * heading above it — `flex-start` instead.
+   *
+   * Below `.section-head h2` in source order deliberately: a two-class
+   * selector is no more specific than a one-class-plus-type selector when
+   * both resolve to (0,1,1), so this has to win on cascade order or the
+   * larger size and display face would lose silently. Same tie the
+   * `.onnow-band` media-query comment above already documents.
+   */
+  .community-head {
+    align-items: flex-start;
+  }
+  .community-head h2 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+  }
+  .community-head p {
+    margin: 5px 0 0;
+    max-width: 46ch;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+  }
+
   .posts {
     list-style: none;
     margin: 0;
@@ -1517,13 +1572,22 @@ function homeWhen(event: CalendarEvent): string {
     margin: 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    /* 200px used to floor this at a single column below ~430px — a stack of
+       four full-width photos read as a list of files rather than a gallery.
+       130px keeps two columns down to a 300px-ish content box (320px phones
+       included), the width `.section`'s own padding leaves at the narrowest
+       viewport this site supports. */
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px;
   }
   .photos li {
     position: relative;
     border-radius: var(--radius);
     overflow: hidden;
+    /* Lifts the tiles as photo cards, matching the shadow language
+       `.post-card`/`.card` already use elsewhere on this page — flat tiles
+       were part of what made this section read as a plain file list. */
+    box-shadow: var(--shadow-sm);
   }
   .photos img {
     display: block;
@@ -1764,19 +1828,41 @@ function homeWhen(event: CalendarEvent): string {
    * there. `padding-bottom` opens genuinely empty band below the attribution and
    * he is anchored into it, which makes him visible at every width instead of
    * only on a wide desktop.
+   *
+   * Sized up from the original 80–118px, which stood him as a small sprite in
+   * a wide band and read as stranded — Justin's word — rather than as art.
+   * That was never a height problem: at the old sizes the strip already ran
+   * within ~13px of what his own footprint needed, so the "empty" everyone
+   * saw was width, not slack. No amount of trimming `padding-bottom` touches
+   * width. Growing him instead means he actually occupies a real fraction of
+   * the strip. The radial glow below is what handles the rest of it — a soft
+   * edge into the remaining space instead of a hard stop into blank page
+   * background, the same layered-radial-gradient technique
+   * `.social--instagram` already uses for its brand glow.
    */
   .onnow-band {
     /*
-     * Narrow screens keep the strip: the attribution fills the width, so there
-     * is nothing to stand beside and the art goes underneath it instead.
-     *
-     * The 132px floor was set for Incineroar, who was the tall one. He is gone
-     * and Mew is now the only thing standing here — but the new Mew is taller
-     * than he is wide, so the strip still earns its depth and the number stays.
-     * The 280px cap is unreachable: 20vw only passes 280 at 1400px wide, and
+     * The strip is sized to Mew now, not to a past Incineroar-shaped floor.
+     * See the arithmetic on `--art-w` below — these two properties are derived
+     * together and have to stay consistent if either changes.
+     * The 270px cap is unreachable: 25vw only passes 270 at 1080px wide, and
      * from 900 up the block below replaces this padding entirely.
      */
-    padding-bottom: clamp(132px, 20vw, 280px);
+    padding-bottom: clamp(196px, 25vw, 270px);
+
+    /*
+     * Even bigger, Mew does not fill the strip's width, and is not meant to —
+     * this is what keeps the leftover space from reading as a hard stop into
+     * blank page background. Anchored to his own corner, matching
+     * `--art-left: auto` below. Cleared in the `min-width: 900px` block,
+     * where he stands beside the attribution box instead of alone in an
+     * empty strip and there is nothing bare left to soften.
+     */
+    background: radial-gradient(
+      ellipse 340px 260px at 0% 100%,
+      color-mix(in srgb, var(--accent) 16%, transparent),
+      transparent 72%
+    );
 
     /*
      * Mew, drifting. 25 frames on a 2s loop.
@@ -1814,11 +1900,13 @@ function homeWhen(event: CalendarEvent): string {
     /*
      * Sized against the strip's height, not chosen. Height is width / 0.708, and
      * it has to clear `--art-bottom` inside `padding-bottom`: at 375 that is
-     * 80px wide -> 113 tall + 6 = 119 against a 132px strip, and at 899 it is
-     * 108 -> 152 + 13.5 = 166 against 180. The old 16vw/225px cap would have
-     * been 318px tall here and run straight up through the attribution.
+     * 130px wide -> 183.6 tall + 6 = 189.6 against a 196px strip, and at 899
+     * it is 143.8 -> 203.2 + 13.5 = 216.7 against 224.8. Both keep a few
+     * pixels of genuine slack rather than running exact — 6.4px at 375, 8.1px
+     * at 899 — so a sub-pixel rounding difference between browsers cannot
+     * clip his feet.
      */
-    --art-w: clamp(80px, 12vw, 118px);
+    --art-w: clamp(130px, 16vw, 170px);
   }
 
   /*
@@ -1851,6 +1939,11 @@ function homeWhen(event: CalendarEvent): string {
       /* No strip any more — the art is beside the box, not below it. This is
          just breathing room under the band. */
       padding-bottom: clamp(24px, 3vw, 44px);
+
+      /* The glow exists to soften a strip Mew stands alone in. He does not
+         stand alone up here — he flanks the attribution box with real
+         content on both sides — so there is nothing bare left to soften. */
+      background: none;
 
       /* Same value as the padding, which lands the art's feet exactly on the
          attribution's bottom edge rather than near it. */
