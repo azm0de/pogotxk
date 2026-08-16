@@ -10,8 +10,13 @@
  */
 
 import {
+  cdnImage,
+  cdnSrcset,
+  firstUrl,
   mapEvents,
   nextDiscordMeetup,
+  rsvpLabel,
+  splitDescription,
   type RawScheduledEvent,
 } from '../src/lib/discord-events-map';
 
@@ -94,7 +99,7 @@ check('location comes through', mapped.locationText, 'Spring Lake Park');
 check(
   'cover art becomes a CDN url',
   mapped.imageUrl,
-  'https://cdn.discordapp.com/guild-events/100/abc123.png?size=1024',
+  'https://cdn.discordapp.com/guild-events/100/abc123.webp?size=1024',
 );
 check('no cover art yields null', mapEvents([raw()], GUILD)[0].imageUrl, null);
 check('jump link is built from the guild', mapped.url, `https://discord.com/events/${GUILD}/100`);
@@ -140,6 +145,89 @@ ok(
   Array.isArray(mapEvents([], GUILD)) && mapEvents([], GUILD).length === 0,
   'an empty list must not be treated as an upstream failure — unlike the raid feed, a guild genuinely can have no events',
 );
+
+console.log('\n== cover art ==');
+check(
+  'WebP, not PNG — same image, a tenth of the bytes',
+  cdnImage('111', 'abc'),
+  'https://cdn.discordapp.com/guild-events/111/abc.webp?size=1024',
+);
+check('no hash means no image, not a broken URL', cdnImage('111', null), null);
+check(
+  'srcset offers both renditions',
+  cdnSrcset(cdnImage('111', 'abc')),
+  'https://cdn.discordapp.com/guild-events/111/abc.webp?size=512 512w, ' +
+    'https://cdn.discordapp.com/guild-events/111/abc.webp?size=1024 1024w',
+);
+ok(
+  'a /media URL yields no srcset rather than a fabricated one',
+  cdnSrcset('/media/legacy/hero.jpg') === null,
+  'hand-entered meetups store one fixed rendition in R2; inventing size params would 404',
+);
+check('no image, no srcset', cdnSrcset(null), null);
+
+console.log('\n== lifting the RSVP link out of the description ==');
+// The real Nickit Community Day description, which is what prompted this.
+const REAL = [
+  'TXK Pokémon GO Community will be hosting the Nickit Community Day!',
+  '',
+  '🌟 **Hosted by a Community Ambassador**',
+  '',
+  '**Click here to see details and RSVP:**',
+  'https://cmpf.re/tX6hrw',
+].join('\n');
+
+check('the URL is found', splitDescription(REAL).url, 'https://cmpf.re/tX6hrw');
+ok(
+  'the bare URL no longer appears in the body text',
+  !splitDescription(REAL).text?.includes('cmpf.re'),
+  'left in place it renders as unclickable text, which is the bug being fixed',
+);
+ok(
+  'the line that only introduced the link goes with it',
+  !splitDescription(REAL).text?.includes('Click here'),
+  '"Click here to see details and RSVP:" with nothing after it reads as broken',
+);
+ok(
+  'the actual description survives',
+  splitDescription(REAL).text?.startsWith('TXK Pokémon GO Community') === true &&
+    splitDescription(REAL).text?.includes('Community Ambassador') === true,
+  'stripping the link must not take the content with it',
+);
+check(
+  'a URL inside a sentence is left where the author put it',
+  splitDescription('Meet at https://example.com/park then walk over.').text,
+  'Meet at https://example.com/park then walk over.',
+);
+check(
+  'trailing punctuation is not part of the address',
+  firstUrl('See https://example.com/x.'),
+  'https://example.com/x',
+);
+check('no description, no url', splitDescription(null), { text: null, url: null });
+check(
+  'a description that is nothing but a link leaves no empty paragraph',
+  splitDescription('https://cmpf.re/abc'),
+  { text: null, url: 'https://cmpf.re/abc' },
+);
+check(
+  'a long line ending in a colon is prose, not a lead-in, and is kept',
+  splitDescription(
+    `${'Bring water, a battery pack, and a friend who has never played before, because'.padEnd(
+      95,
+      '.',
+    )}:\nhttps://cmpf.re/abc`,
+  ).text?.endsWith(':'),
+  true,
+);
+
+console.log('\n== naming the destination ==');
+check('Campfire short links', rsvpLabel('https://cmpf.re/tX6hrw'), 'RSVP on Campfire');
+check('Campfire proper', rsvpLabel('https://campfire.nianticlabs.com/x'), 'RSVP on Campfire');
+check('Discord', rsvpLabel('https://discord.com/events/1/2'), 'Open in Discord');
+check('anything else gets a neutral label', rsvpLabel('https://example.com'), 'Details and RSVP');
+check('garbage in does not throw', rsvpLabel('not a url'), 'Details and RSVP');
+check('no link, no label needed', rsvpLabel(null), 'Details and RSVP');
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll checks passed.');
 process.exit(failures ? 1 : 0);

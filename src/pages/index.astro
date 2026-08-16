@@ -15,6 +15,7 @@ import { listPublishedPosts } from '~/lib/db/posts';
 import { gameEventsFromPayload, groupEvents, type CalendarEvent } from '~/lib/events';
 import { getFeed, raidTierRank } from '~/lib/scrapedduck';
 import { getDiscordEvents, nextDiscordMeetup } from '~/lib/discord-events';
+import { cdnSrcset, rsvpLabel, splitDescription } from '~/lib/discord-events-map';
 import Attribution from '~/components/game/Attribution.astro';
 import { proxiedImageUrl } from '~/lib/game-image';
 import { DEFAULT_TZ, formatInZone } from '~/lib/time';
@@ -90,6 +91,11 @@ const nextUp: {
   tz: string;
   where: string | null;
   note: string | null;
+  image: string | null;
+  imageSrcset: string | null;
+  imageAlt: string;
+  rsvpUrl: string | null;
+  rsvpLabel: string;
   fromDiscord: boolean;
 } | null = (() => {
   const fromDb = nextMeetup && {
@@ -98,15 +104,31 @@ const nextUp: {
     tz: nextMeetup.tz,
     where: meetupLocation(nextMeetup),
     note: nextMeetup.descriptionMd ? markdownToText(nextMeetup.descriptionMd) : null,
+    image: nextMeetup.heroKey ? `/media/${nextMeetup.heroKey}` : null,
+    imageSrcset: null, // R2 keys are one fixed rendition; nothing to offer.
+    imageAlt: nextMeetup.heroAlt ?? `Cover image for ${nextMeetup.title}`,
+    // The hand-entered row keeps RSVP in its own column, so there is no
+    // guessing to do here — only the Discord path has to dig it out of prose.
+    rsvpUrl: nextMeetup.campfireUrl,
+    rsvpLabel: rsvpLabel(nextMeetup.campfireUrl),
     fromDiscord: false,
   };
+  const discordBody = nextDiscord ? splitDescription(nextDiscord.descriptionMd) : null;
   const fromDiscord = nextDiscord && {
     title: nextDiscord.title,
     startsAt: nextDiscord.startsAt,
     // Discord hands back a UTC instant with no zone; the community reads local.
     tz: DEFAULT_TZ,
     where: nextDiscord.locationText,
-    note: nextDiscord.descriptionMd ? markdownToText(nextDiscord.descriptionMd) : null,
+    // splitDescription has already stripped the Markdown that mattered here and
+    // lifted the link out; markdownToText still runs so any remaining emphasis
+    // or heading syntax renders as words rather than punctuation.
+    note: discordBody?.text ? markdownToText(discordBody.text) : null,
+    image: nextDiscord.imageUrl,
+    imageSrcset: cdnSrcset(nextDiscord.imageUrl),
+    imageAlt: `Cover art for ${nextDiscord.title}`,
+    rsvpUrl: discordBody?.url ?? null,
+    rsvpLabel: rsvpLabel(discordBody?.url ?? null),
     fromDiscord: true,
   };
   if (!fromDb) return fromDiscord;
@@ -507,10 +529,31 @@ function homeWhen(event: CalendarEvent): string {
       {
         nextUp ? (
           <>
+            {nextUp.image && (
+              <img
+                class="meetup-cover"
+                src={nextUp.image}
+                srcset={nextUp.imageSrcset ?? undefined}
+                sizes="(min-width: 900px) 30vw, (min-width: 640px) 45vw, 92vw"
+                alt={nextUp.imageAlt}
+                loading="lazy"
+                decoding="async"
+              />
+            )}
             <p class="meetup-title">{nextUp.title}</p>
             <p class="meetup-when">{formatInZone(nextUp.startsAt, nextUp.tz)}</p>
             <p class="meetup-where">{nextUp.where ?? 'Location to be confirmed'}</p>
             {nextUp.note && <p class="meetup-note">{nextUp.note}</p>}
+            {nextUp.rsvpUrl && (
+              <a
+                class="meetup-rsvp"
+                href={nextUp.rsvpUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {nextUp.rsvpLabel} →
+              </a>
+            )}
             <a class="card-link" href="/events">All events →</a>
           </>
         ) : (
@@ -1400,6 +1443,28 @@ function homeWhen(event: CalendarEvent): string {
   .card--meetup {
     border-color: var(--poi-campsite);
   }
+  /* The cover sits above the title because it is the thing that identifies the
+     meetup at a glance — the organiser already chose an image that says
+     "Community Day" faster than the words do.
+
+     `aspect-ratio` rather than width/height attributes: Discord covers are 16:9
+     but a hand-entered meetup carries whatever the ambassador uploaded, and one
+     ratio hardcoded in markup would letterbox or distort the other. The box is
+     reserved by CSS either way, so nothing shifts as it loads. */
+  .meetup-cover {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    /* On a phone 16:9 is about 220px and reads as a banner. In a wide column it
+       is nearer 490px, which turned this card into a poster twice the height of
+       the two beside it and left a hole in the grid. The cap keeps the banner a
+       banner; `cover` crops the sides rather than squashing the art. */
+    max-height: 190px;
+    object-fit: cover;
+    margin: 0 0 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-sunken, var(--bg-panel));
+  }
   .meetup-title {
     margin: 0 0 2px;
     font-size: 1.15rem;
@@ -1415,6 +1480,46 @@ function homeWhen(event: CalendarEvent): string {
     margin: 4px 0 0;
     font-size: 0.88rem;
     color: var(--text-muted);
+  }
+  /* Discord descriptions run long and are written for a chat window, not a
+     card. Clamped so one chatty organiser cannot push this card taller than the
+     two beside it and break the grid's rhythm; the full text is a tap away. */
+  .meetup-note {
+    white-space: pre-line;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+  }
+  /* The one action on this card that leaves the site, so it gets weight the
+     "All events" link does not — that one is navigation, this one is the
+     reason somebody came. */
+  /* --accent / --accent-contrast rather than the card's own --poi-campsite:
+     that amber is a 2.1:1 background for white text, which is a contrast
+     failure, and the accent pair is the one this design system has already
+     checked in both themes (see the ratios noted in global.css). Campsite
+     stays where it works — the card's border. */
+  .meetup-rsvp {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 7px 13px;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .meetup-rsvp:hover,
+  .meetup-rsvp:focus-visible {
+    filter: brightness(1.08);
+    text-decoration: none;
+  }
+  /* Two links stacked need the second to stop competing with the button. */
+  .card--meetup .card-link {
+    display: block;
+    margin-top: 4px;
   }
   .empty {
     margin: 0;

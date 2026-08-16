@@ -69,3 +69,13 @@ VAPID_SUBJECT=mailto:you@example.com
 # Stopgap until Discord OAuth lands, at which point those routes move behind
 # the `admin` role. Generate with: openssl rand -hex 32
 IMPORT_TOKEN=
+
+# Discord scheduled-event sync for the "Next meetup" card.
+# The guild id is a plain var in wrangler.jsonc, so production has it — but the
+# dev platform proxy only surfaces .dev.vars, so local dev needs its own copy or
+# getDiscordEvents reports "DISCORD_GUILD_ID is not set" and the card falls back
+# to the empty state. Not a secret; it is in wrangler.jsonc in the open.
+DISCORD_GUILD_ID=1249232349972004897
+# Read-only bot ("Pogo TXK Events", View Channels only). Production keeps this in
+# `wrangler secret put DISCORD_BOT_TOKEN`, never in a file.
+DISCORD_BOT_TOKEN=
