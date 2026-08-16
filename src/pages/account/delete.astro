@@ -1,0 +1,171 @@
+---
+import Base from '~/layouts/Base.astro';
+import '~/styles/legal.css';
+import { DISCORD_INVITE } from '~/lib/socials';
+
+export const prerender = false;
+
+// Deliberately server-rendered from Astro.locals.user rather than the
+// client-side fetch Base.astro's header menu uses: this page's whole point is
+// to work for someone who arrived from a link with no session, and a page
+// that flashes "signed in" chrome before correcting itself is the wrong first
+// impression for a page about to delete an account.
+const user = Astro.locals.user ?? null;
+
+// Google Play's Data deletion policy requires this exact route to work
+// without the app installed — this IS that route, submitted in Play Console —
+// so signing in has to be possible from a plain browser with nothing
+// installed. It already is: Discord OAuth here has never required the app.
+const next = '/account/delete';
+---
+
+<Base
+  title="Delete your account"
+  description="Permanently delete your PoGo TXK account and personal data."
+>
+  <article class="legal">
+    <p class="legal-eyebrow">PoGo TXK</p>
+    <h1>Delete your account</h1>
+
+    <div class="legal-summary">
+      <p>
+        <strong>This permanently removes your Discord identity, avatar, trainer profile and
+        active sessions from PoGo TXK.</strong> It does not require the app to be installed —
+        this page works in any browser, signed in or not.
+      </p>
+    </div>
+
+    <p>
+      Flares, RSVPs and change-log entries you are part of stay as community history — see{' '}
+      <a href="/privacy#retention">how long we keep it</a> — but stop being linked to your
+      Discord identity. Your account cannot be recovered afterwards: signing back in with the
+      same Discord account creates a brand new one, starting from guest.
+    </p>
+
+    {
+      user ? (
+        <section class="acct-delete" data-account-delete>
+          <p class="acct-delete-who">
+            {user.avatarUrl && <img src={user.avatarUrl} alt="" width="32" height="32" />}
+            Signed in as <strong>{user.displayName}</strong>.{' '}
+            <a href={`/auth/logout?switch=1&next=${encodeURIComponent(next)}`}>Not you?</a>
+          </p>
+
+          <label class="acct-delete-confirm">
+            <input type="checkbox" data-confirm-check />
+            I understand this is permanent and cannot be undone.
+          </label>
+
+          <button type="button" class="acct-delete-btn" data-confirm-btn disabled>
+            Delete my account
+          </button>
+
+          <p class="acct-delete-status" data-status role="status" hidden />
+        </section>
+      ) : (
+        <p class="acct-delete-signin">
+          <a href={`/auth/login?next=${encodeURIComponent(next)}`}>Sign in with Discord</a> to
+          delete your account. Signing in only proves who you are — it does not undo anything by
+          itself.
+        </p>
+      )
+    }
+
+    <p class="legal-note">
+      Would rather have a person handle it, or hit a problem here? Ask any ambassador on our{' '}
+      <a href={DISCORD_INVITE} rel="noopener noreferrer" target="_blank">Discord server</a>, or
+      see the full <a href="/privacy">Privacy Policy</a>.
+    </p>
+  </article>
+
+  <script is:inline>
+    (() => {
+      const root = document.querySelector('[data-account-delete]');
+      if (!root) return;
+
+      const check = root.querySelector('[data-confirm-check]');
+      const btn = root.querySelector('[data-confirm-btn]');
+      const status = root.querySelector('[data-status]');
+
+      check.addEventListener('change', () => {
+        btn.disabled = !check.checked;
+      });
+
+      const say = (text) => {
+        status.textContent = text;
+        status.hidden = false;
+      };
+
+      btn.addEventListener('click', async () => {
+        if (!window.confirm('Delete your PoGo TXK account? This cannot be undone.')) return;
+
+        btn.disabled = true;
+        check.disabled = true;
+        say('Deleting…');
+
+        try {
+          const res = await fetch('/api/account', { method: 'DELETE' });
+          if (!res.ok) throw new Error('Request failed');
+
+          check.closest('label').remove();
+          btn.remove();
+          say('Your account has been deleted. You can close this page, or ');
+          status.append(Object.assign(document.createElement('a'), { href: '/', textContent: 'go home' }), '.');
+        } catch {
+          say('Something went wrong — your account was not deleted. Try again, or ask an ambassador on Discord.');
+          btn.disabled = false;
+          check.disabled = false;
+        }
+      });
+    })();
+  </script>
+
+  <style>
+    .acct-delete {
+      margin: 24px 0;
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-sunken);
+    }
+    .acct-delete-who {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 16px;
+    }
+    .acct-delete-who img {
+      border-radius: 50%;
+    }
+    .acct-delete-confirm {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 0 0 16px;
+      cursor: pointer;
+    }
+    .acct-delete-btn {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 20px;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--accent-solid);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .acct-delete-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .acct-delete-status {
+      margin: 14px 0 0;
+      font-weight: 600;
+    }
+    .acct-delete-signin {
+      margin: 24px 0;
+    }
+  </style>
+</Base>
