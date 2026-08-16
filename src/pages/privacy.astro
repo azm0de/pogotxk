@@ -22,7 +22,7 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
       <p>
         You can browse the whole site without an account. If you sign in, we store your Discord
         username, avatar and account ID so we know who you are — and nothing else unless you
-        type it in yourself.
+        type it in yourself or turn on notifications.
       </p>
       <p>
         We do not sell your data, we do not run advertising, and we do not track you across
@@ -87,6 +87,13 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
         <strong>A session record.</strong> Your sign-in cookie holds a random token. We store
         only a one-way hash of it, never the token itself, alongside its expiry and a
         short hash of your browser's user-agent string used to spot session hijacking.
+      </li>
+      <li>
+        <strong>A push notification subscription, if you turn notifications on.</strong> Your
+        browser or device's push endpoint and its two encryption keys, which topics you're
+        subscribed to (raids, meetups, posts), and your browser's user-agent string. Nothing
+        is created unless you opt in, and turning notifications back off deletes it
+        immediately.
       </li>
       <li>
         <strong>A change log.</strong> If you are an ambassador or admin, edits you make to
@@ -183,6 +190,10 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
     <ul>
       <li><strong>Your account:</strong> until you <a href="/account/delete">delete it</a> yourself, or ask an ambassador to.</li>
       <li><strong>Sessions:</strong> two weeks from last use, then removed automatically.</li>
+      <li>
+        <strong>Push notification subscriptions:</strong> until you turn notifications off or
+        delete your account, whichever comes first.
+      </li>
       <li><strong>Raid and meetup activity:</strong> raid flares expire within hours; attendance records persist as community history.</li>
       <li>
         <strong>Change log:</strong> kept indefinitely, because its purpose is an accurate record
@@ -199,8 +210,9 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
     <p>
       <a href="/account/delete">Delete your account</a> yourself, any time, without asking anyone
       — it works whether or not you still have the app installed. It anonymises your Discord
-      identity and trainer profile immediately; it does not erase flares, RSVPs or meetup
-      attendance, which stay as community history the same way the change log does (see{' '}
+      identity and trainer profile immediately and removes any push notification
+      subscription; it does not erase flares, RSVPs or meetup attendance, which stay as
+      community history the same way the change log does (see{' '}
       <a href="#retention">how long we keep it</a>).
     </p>
     <p>For anything else, ask any ambassador on our <a href={DISCORD} rel="noopener noreferrer" target="_blank">Discord server</a> to:</p>
