@@ -60,10 +60,28 @@ const [flares, mine] = await Promise.all([
    * to the container's bottom would make the art jump every time the flare
    * count changed. The head — title, lede, status pill — is the one part of
    * this page that never moves, so the art is positioned against that.
+   *
+   * Horizontally it is anchored to the *column*, not the band.
+   *
+   * This was `--art-left: calc(-1 * clamp(30px, 4vw, 90px))`, an offset from
+   * the band — and the band is full-width while `.live` is a 900px column
+   * centred inside it. So the gap between the art and the text was never a
+   * fixed thing: it was whatever margin happened to be left over, and it
+   * shrank as the window narrowed. Below roughly 1360px the art's box crossed
+   * into the column, and because `.live-empty` is a dashed outline with no
+   * background, Moltres did not slide behind the panel — the beak landed on
+   * top of "Nothing burning right now". Reported from a real window at ~1100px.
+   *
+   * Pinning the right edge to the column's left edge instead makes the gap
+   * explicit and width-independent: 450px is half the 900px measure, so
+   * `50% + 450px` is exactly the column's left edge, and 14px holds it off the
+   * dashed border. The art still bleeds off the left of the screen the way it
+   * was drawn to — `overflow-x: clip` on `.art-band` crops it without adding
+   * scroll width — but it can no longer reach the text at any window size.
    */
   .live-band {
     --art-src: url('/art/moltres.webp');
-    --art-left: calc(-1 * clamp(30px, 4vw, 90px));
+    --art-right: calc(50% + 450px + 14px);
     --art-top: 90px;
     --art-w: clamp(170px, 24vw, 360px);
   }
@@ -80,8 +98,16 @@ const [flares, mine] = await Promise.all([
    * there was giving the art its own strip. There is no equivalent strip
    * to give it here, so it is simplest and most honest to not render it
    * at all rather than ship a visible glitch against every card.
+   *
+   * The threshold moved 1000px -> 1180px along with the anchoring above. Now
+   * that the art stops at the column edge, how much of it you see is exactly
+   * the leftover margin, `(100vw - 900px) / 2 - 14px`. At the old 1001px cutoff
+   * that is ~36px — the tip of a beak, which is the same "visible glitch" this
+   * comment already refuses to ship, just at the other end. 1180px is the width
+   * where ~126px survives, about half the bird at that size: enough to read as
+   * Moltres rather than as a stray mark.
    */
-  @media (max-width: 1000px) {
+  @media (max-width: 1180px) {
     .live-band::after {
       content: none;
     }
