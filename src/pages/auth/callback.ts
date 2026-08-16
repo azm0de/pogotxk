@@ -87,11 +87,16 @@ export async function GET(ctx: APIContext): Promise<Response> {
   // Discord reports user-facing failures (e.g. "access_denied") this way.
   const oauthError = url.searchParams.get('error');
   if (oauthError) {
-    // First sign-in under `prompt=none`. Send them round once more asking for
-    // consent properly — and only once, which `stored.consent` guarantees.
+    // `prompt=none` could not complete silently. Send them round once more
+    // with no prompt at all, letting Discord show only what it actually needs
+    // — and only once, which `stored.consent` guarantees. Deliberately NOT
+    // `consent=1`: the usual reason we land here is `login_required`, which
+    // means "no Discord session in this browser", and forcing the approval
+    // screen on a member who authorised months ago is the bug that made
+    // iPhone sign-in look broken.
     if (NEEDS_INTERACTION.has(oauthError) && stored && !stored.consent) {
       const retry = new URL('/auth/login', url.origin);
-      retry.searchParams.set('consent', '1');
+      retry.searchParams.set('retry', '1');
       // Re-validated by `safeNext` on the way back in, so a tampered cookie
       // cannot smuggle a destination through this hop.
       if (stored.next && stored.next !== '/') retry.searchParams.set('next', stored.next);

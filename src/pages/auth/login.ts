@@ -82,7 +82,15 @@ export async function GET({ url }: APIContext): Promise<Response> {
    */
   const consent = url.searchParams.get('consent') === '1';
 
-  const payload = btoa(JSON.stringify({ state, verifier, next, consent }))
+  /*
+   * Set by the callback when `prompt=none` came back needing interaction. It
+   * means "send them to Discord with no prompt at all", which is different
+   * from `consent` — see AuthPrompt. Both count as "this attempt already
+   * involved a round trip", which is what stops the callback bouncing forever.
+   */
+  const retried = url.searchParams.get('retry') === '1';
+
+  const payload = btoa(JSON.stringify({ state, verifier, next, consent: consent || retried }))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
@@ -95,7 +103,7 @@ export async function GET({ url }: APIContext): Promise<Response> {
         url,
         state,
         await pkceChallenge(verifier),
-        consent ? 'consent' : 'none',
+        consent ? 'consent' : retried ? 'default' : 'none',
       ),
       'set-cookie': stateCookie(payload, url),
       'cache-control': 'no-store',

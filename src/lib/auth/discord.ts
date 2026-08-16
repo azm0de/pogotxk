@@ -67,10 +67,23 @@ export async function pkceChallenge(verifier: string): Promise<string> {
  * has *never* authorised is not written down anywhere: it may show the screen
  * regardless, or it may bounce back with an error. That is not a good thing to
  * be guessing about on the one flow that gates every member's access, so the
- * callback catches the "needs interaction" family of errors and retries once
- * with `consent`. Whichever way Discord actually behaves, first sign-in works.
+ * callback catches the "needs interaction" family of errors and retries once.
+ *
+ * That retry sends NO `prompt` at all (`default`), not `consent`. `consent`
+ * forces Discord's approval screen even for someone who authorised the app
+ * long ago — and the commonest way to reach the retry is `login_required`,
+ * which means "no Discord session in THIS browser", not "never authorised".
+ * On a phone whose owner uses the Discord app rather than Safari, that is
+ * every single sign-in. Omitting `prompt` lets Discord show the minimum it
+ * actually needs: a login screen if there is no session, the approval screen
+ * only if the app has genuinely never been authorised, and nothing extra.
+ * First sign-in still works, which was the point of retrying at all.
+ *
+ * `consent` survives for the one case that genuinely wants it: "use a
+ * different account", where the approval screen is the only screen Discord
+ * offers that can switch accounts. See `signOutTarget`.
  */
-export type AuthPrompt = 'none' | 'consent';
+export type AuthPrompt = 'none' | 'consent' | 'default';
 
 export function authorizeUrl(
   cfg: DiscordConfig,
@@ -87,8 +100,11 @@ export function authorizeUrl(
     state,
     code_challenge: challenge,
     code_challenge_method: 'S256',
-    prompt,
   });
+  // Omitted entirely for `default` — sending `prompt=` empty is not the same
+  // as not sending it, and Discord treats the absent parameter as "do the
+  // minimum necessary".
+  if (prompt !== 'default') params.set('prompt', prompt);
   return `${AUTHORIZE_URL}?${params}`;
 }
 

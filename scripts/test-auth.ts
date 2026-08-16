@@ -137,14 +137,27 @@ console.log('\n== authorize prompt ==');
  * `prompt=none` signs a returning member in without a click, but Discord does
  * not document what it does when the user has never authorised the app — it may
  * show the screen, it may bounce back an error. The callback recovers by
- * retrying once with `consent`, so both halves have to be reachable.
+ * retrying once, so every mode has to be reachable.
+ *
+ * The retry sends NO prompt at all, and that is the whole point: `consent`
+ * forces the approval screen even for a member who authorised long ago, and
+ * the commonest reason we retry is `login_required` — "no Discord session in
+ * THIS browser", which is every sign-in on a phone whose owner uses the
+ * Discord app rather than Safari. An absent `prompt` is not the same as an
+ * empty one, so this asserts null rather than a string.
  */
 const promptOf = (u: string) => new URL(u).searchParams.get('prompt');
-const authUrl = (p?: 'none' | 'consent') =>
+const authUrl = (p?: 'none' | 'consent' | 'default') =>
   authorizeUrl(base, new URL('https://pogotxk.gnomelabz.workers.dev/auth/login'), 's', 'c', p);
 
 check('defaults to prompt=none', promptOf(authUrl()), 'none');
-check('retry asks for consent', promptOf(authUrl('consent')), 'consent');
+check('switch-account asks for consent', promptOf(authUrl('consent')), 'consent');
+check('retry omits prompt entirely', promptOf(authUrl('default')), null);
+check(
+  'retry really has no prompt key, not an empty one',
+  new URL(authUrl('default')).searchParams.has('prompt'),
+  false,
+);
 check(
   'redirect_uri tracks the request origin',
   new URL(authUrl()).searchParams.get('redirect_uri'),
