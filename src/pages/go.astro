@@ -13,6 +13,13 @@ const user = Astro.locals.user ?? null;
 // parameter name and same slug vocabulary as /map?poi=, so a link is
 // interchangeable between the two screens.
 const initialPoi = Astro.url.searchParams.get('poi') ?? undefined;
+
+// `/go?action=<kind>` is the installed app's "Flare a gym" shortcut (see
+// site.webmanifest) and any future link that wants to open straight into an
+// action sheet. An unrecognised kind is just passed through — QuickActions
+// falls back to the normal picker rather than throwing, since this is a raw
+// query param and nothing here validates it against the ActionDef vocabulary.
+const initialAction = Astro.url.searchParams.get('action') ?? undefined;
 ---
 
 <Base
@@ -28,7 +35,7 @@ const initialPoi = Astro.url.searchParams.get('poi') ?? undefined;
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   </Fragment>
 
-  <QuickActions client:load user={user} initialPoi={initialPoi} />
+  <QuickActions client:load user={user} initialPoi={initialPoi} initialAction={initialAction} />
 </Base>
 
 <script>

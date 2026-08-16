@@ -89,9 +89,24 @@ interface QuickActionsProps {
    * dropdown would be the second half of a question they just answered.
    */
   initialPoi?: string;
+  /**
+   * Kind of action to arrive with its sheet already open, from
+   * `/go?action=<kind>` — the installed app's home-screen shortcut.
+   *
+   * Unrecognised values are ignored rather than surfaced: this is the one
+   * entry point with no map screen in front of it to have already validated
+   * the value, so a stale or fat-fingered shortcut must fall back to the
+   * ordinary picker instead of doing nothing or throwing.
+   */
+  initialAction?: string;
 }
 
-export default function QuickActions({ user, initialPoi }: QuickActionsProps) {
+export default function QuickActions({ user, initialPoi, initialAction }: QuickActionsProps) {
+  // Hoisted above the deep-link resolver effect, which needs it to decide
+  // whether `?action=` may open a sheet — everything else that reads it
+  // stays where it was.
+  const canPost = user && user.role !== 'guest';
+
   const [pois, setPois] = useState<MapPoi[]>([]);
   const [flares, setFlares] = useState<Flare[]>([]);
   const [mine, setMine] = useState<Record<string, string>>({});
@@ -186,25 +201,48 @@ export default function QuickActions({ user, initialPoi }: QuickActionsProps) {
   }, [loadFlares]);
 
   /**
-   * Resolves the map's `?poi=<slug>` deep link the moment it becomes
-   * resolvable, independent of whether — or which — action sheet is open.
+   * Resolves the `?poi=<slug>` and `?action=<kind>` deep links the moment
+   * they become resolvable, independent of whether — or which — action sheet
+   * is open.
    *
-   * Previously this only happened inside `openAction`, so arriving from the
-   * map and looking at the (still POI-less) action grid was indistinguishable
-   * from arriving with no link at all; the location only appeared once a
-   * sheet was opened, after the trainer had already expected to see it.
+   * Previously the poi link only happened inside `openAction`, so arriving
+   * from the map and looking at the (still POI-less) action grid was
+   * indistinguishable from arriving with no link at all; the location only
+   * appeared once a sheet was opened, after the trainer had already expected
+   * to see it.
    *
    * Guarded to run once: `pois` starts empty and is replaced wholesale when
    * the fetch resolves, so without the guard this would refire on that one
    * transition anyway, but the ref makes "already tried" durable against
    * anything else that might someday re-trigger the effect.
+   *
+   * The two links are resolved together, poi first, so `?action=raid&poi=…`
+   * from the map's own future "flare a raid at this gym" link lands with
+   * BOTH already answered: `chooseLocation` records the poi as the trainer's
+   * explicit choice before `openAction` reads that choice for the sheet it
+   * opens. An unrecognised `action` kind just finds nothing in `ACTIONS` and
+   * is dropped, leaving the ordinary picker.
+   *
+   * `action` is gated on `canPost`: the grid's buttons are disabled for
+   * anyone who cannot post, and a deep link must not open a sheet — with a
+   * live "Send" button — that the grid itself would not let them reach.
+   * `poi` has no such gate; picking a location isn't posting.
    */
   useEffect(() => {
-    if (deepLinkResolvedRef.current || !initialPoi || pois.length === 0) return;
+    if (deepLinkResolvedRef.current) return;
+    if (!initialPoi && !initialAction) return;
+    if (pois.length === 0) return;
     deepLinkResolvedRef.current = true;
-    const wanted = pois.find((p) => p.slug === initialPoi);
-    if (wanted) chooseLocation(wanted.id);
-  }, [pois, initialPoi]);
+
+    if (initialPoi) {
+      const wanted = pois.find((p) => p.slug === initialPoi);
+      if (wanted) chooseLocation(wanted.id);
+    }
+    if (initialAction && canPost) {
+      const def = ACTIONS.find((a) => a.kind === initialAction);
+      if (def) openAction(def);
+    }
+  }, [pois, initialPoi, initialAction, canPost]);
 
   // --- push notifications ---------------------------------------------------
   useEffect(() => {
@@ -488,7 +526,6 @@ export default function QuickActions({ user, initialPoi }: QuickActionsProps) {
   };
 
   const signedIn = Boolean(user);
-  const canPost = user && user.role !== 'guest';
   /*
    * Ambassadors and admins can stand down anyone's flare, matching the rule the
    * API actually enforces in PATCH /api/flares/:id — a flare posted in error
