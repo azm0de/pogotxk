@@ -456,10 +456,12 @@ class BubbleService : Service() {
                 withContext(Dispatchers.IO) {
                     Api.postFlare(kind = action.kind, poiId = poi?.id)
                 }
-                toast(
-                    if (poi != null) "${action.label} sent — ${poi.name}"
-                    else "${action.label} sent"
-                )
+                val sent = if (poi != null) "${action.label} sent — ${poi.name}" else "${action.label} sent"
+                // The bubble never asks which boss — typing one here would turn a
+                // one-tap alert into a form. The board already lets whoever raised
+                // it add the boss afterwards (PATCH /api/flares/:id, action=edit),
+                // so point at that instead of not saying anything.
+                toast(if (action.kind == "raid") "$sent. Add the boss in the app." else sent)
             } catch (e: Exception) {
                 toast(e.message ?: "Could not send")
             } finally {
