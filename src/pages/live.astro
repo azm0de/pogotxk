@@ -78,12 +78,26 @@ const [flares, mine] = await Promise.all([
    * dashed border. The art still bleeds off the left of the screen the way it
    * was drawn to — `overflow-x: clip` on `.art-band` crops it without adding
    * scroll width — but it can no longer reach the text at any window size.
+   *
+   * Width follows the margin rather than the viewport. `24vw` was sized for a
+   * band that ran the full width; against the column it is simply too big on a
+   * ~1100px window, where the margin is 100px — the bird would be a 264px box
+   * showing 86px of itself, i.e. a beak. Sizing the box to the margin instead
+   * means what you see is the whole animal, small, and it grows into the space
+   * as the window widens. The 110px floor keeps it from going microscopic in
+   * the last few pixels before the cutoff, at the cost of a little clipping
+   * there; the 360px ceiling is the art's own resolution, past which scaling up
+   * only softens it.
+   *
+   * Note this width can never cause the collision again: the right edge is
+   * pinned by `--art-right`, so `--art-w` only decides how far the art extends
+   * away from the text, never how close it gets.
    */
   .live-band {
     --art-src: url('/art/moltres.webp');
     --art-right: calc(50% + 450px + 14px);
     --art-top: 90px;
-    --art-w: clamp(170px, 24vw, 360px);
+    --art-w: clamp(110px, calc((100vw - 900px) / 2 - 14px), 360px);
   }
 
   /*
@@ -99,15 +113,15 @@ const [flares, mine] = await Promise.all([
    * to give it here, so it is simplest and most honest to not render it
    * at all rather than ship a visible glitch against every card.
    *
-   * The threshold moved 1000px -> 1180px along with the anchoring above. Now
-   * that the art stops at the column edge, how much of it you see is exactly
-   * the leftover margin, `(100vw - 900px) / 2 - 14px`. At the old 1001px cutoff
-   * that is ~36px — the tip of a beak, which is the same "visible glitch" this
-   * comment already refuses to ship, just at the other end. 1180px is the width
-   * where ~126px survives, about half the bird at that size: enough to read as
-   * Moltres rather than as a stray mark.
+   * Kept at 1000px. I briefly raised this to 1180px, on the theory that the
+   * sliver left at ~1001px was too small to read — but the sliver was a symptom
+   * of the width, not the cutoff, and hiding the art is not a fix for a window
+   * that Moltres is meant to be visible in. ~1100px is a real window someone
+   * uses. Sizing the box to the margin (above) is what actually solved it, and
+   * with that in place 1000px is again the honest floor: below it the column
+   * fills the screen and there is genuinely nowhere for the art to be.
    */
-  @media (max-width: 1180px) {
+  @media (max-width: 1000px) {
     .live-band::after {
       content: none;
     }

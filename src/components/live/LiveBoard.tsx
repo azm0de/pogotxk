@@ -167,7 +167,6 @@ export default function LiveBoard({
   const [flares, setFlares] = useState<Flare[]>(initialFlares);
   const [mine, setMine] = useState<Record<number, FlareRsvpState>>(initialMine);
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
-  const [watching, setWatching] = useState<number | null>(null);
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [busyId, setBusyId] = useState<number | 'new' | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -249,10 +248,11 @@ export default function LiveBoard({
             skewRef.current = Date.parse(event.serverTime) - Date.now();
             setNowMs(Date.now() + skewRef.current);
           }
-          if (typeof event.connections === 'number') setWatching(event.connections);
           break;
+        /* `event.connections` is still sent and still ignored on purpose. The
+           viewer count drove the "Live · N watching" badge, which is gone; the
+           server contract is unchanged, so nothing here needs to negotiate. */
         case 'presence':
-          if (typeof event.connections === 'number') setWatching(event.connections);
           break;
         case 'flare':
         case 'update':
@@ -410,7 +410,6 @@ export default function LiveBoard({
         if (openedAt && Date.now() - openedAt >= STABLE_CONNECTION_MS) attempts = 0;
         openedAt = 0;
         socket = null;
-        setWatching(null);
         scheduleReconnect();
       });
 
@@ -648,16 +647,28 @@ export default function LiveBoard({
     );
   }, [visible.length]);
 
+  /*
+   * The pill is now an exception reporter, not a permanent fixture.
+   *
+   * It used to render in every state, so a healthy board carried a standing
+   * "Live · N watching" badge. That was the one piece of the header that told
+   * you about the plumbing rather than about Texarkana, and the watcher count
+   * in particular invited reading a quiet board as a dead one.
+   *
+   * `connecting` is dropped with it: it is the normal path on every load, so
+   * showing it only buys a pill that flashes once and vanishes.
+   *
+   * `reconnecting` and `polling` are kept, because those are not decoration —
+   * they are the difference between "nothing is happening" and "you are not
+   * being told what is happening". A silent fallback to 20-second polling is
+   * exactly the failure a live board must not hide.
+   */
   const statusText =
-    status === 'live'
-      ? watching !== null && watching > 1
-        ? `Live · ${watching} watching`
-        : 'Live'
-      : status === 'connecting'
-        ? 'Connecting…'
-        : status === 'reconnecting'
-          ? 'Reconnecting…'
-          : 'Live updates unavailable — refreshing every 20 seconds';
+    status === 'reconnecting'
+      ? 'Reconnecting…'
+      : status === 'polling'
+        ? 'Live updates unavailable — refreshing every 20 seconds'
+        : null;
 
   return (
     <div className="live">
@@ -671,10 +682,12 @@ export default function LiveBoard({
           </p>
         </div>
 
-        <p className={`live-status live-status--${status}`} role="status" aria-live="polite">
-          <span className="live-dot" aria-hidden="true" />
-          {statusText}
-        </p>
+        {statusText && (
+          <p className={`live-status live-status--${status}`} role="status" aria-live="polite">
+            <span className="live-dot" aria-hidden="true" />
+            {statusText}
+          </p>
+        )}
       </header>
 
       {toast && (
