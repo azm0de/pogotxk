@@ -13,7 +13,15 @@ import {
 } from '~/lib/db/meetups';
 import { listPublishedPosts } from '~/lib/db/posts';
 import { gameEventsFromPayload, groupEvents, type CalendarEvent } from '~/lib/events';
-import { getFeed, raidTierRank } from '~/lib/scrapedduck';
+import {
+  eggDistanceRank,
+  getFeed,
+  groupSorted,
+  raidTierRank,
+  researchCategoryLabel,
+  researchCategoryRank,
+  type ResearchReward,
+} from '~/lib/scrapedduck';
 import { getDiscordEvents, nextDiscordMeetup } from '~/lib/discord-events';
 import { cdnSrcset, rsvpLabel, splitDescription } from '~/lib/discord-events-map';
 import Attribution from '~/components/game/Attribution.astro';
@@ -175,6 +183,71 @@ const headlineBosses = (raidFeed?.data ?? [])
     return t.includes('5-star') || t.includes('mega') || t.includes('primal');
   })
   .sort((a, b) => raidTierRank(b.tier) - raidTierRank(a.tier))
+  .slice(0, 4);
+
+/**
+ * "In game today" used to be raids alone, and on a day with no headline
+ * boss it was three sprites of empty space beside a card that had just
+ * grown a photo. Eggs and research are the other two feeds this card
+ * already links out to ("Eggs" / "Research") without ever rendering — the
+ * card was pointing at data it had already fetched-shaped conventions for
+ * and simply wasn't showing.
+ *
+ * Both read through `getFeed` with the same `waitUntil` wiring as the
+ * meetup lookup above, so a ScrapedDuck outage degrades exactly like the
+ * raid strip already does: less content, never an error.
+ */
+const eggFeed = await getFeed('eggs', {
+  waitUntil: cfContext ? (promise) => cfContext.waitUntil(promise) : undefined,
+}).catch(() => null);
+const researchFeed = await getFeed('research', {
+  waitUntil: cfContext ? (promise) => cfContext.waitUntil(promise) : undefined,
+}).catch(() => null);
+
+/**
+ * One species per distance bucket, capped at four so this row can never run
+ * taller than the boss strip above it. `groupSorted` already orders buckets
+ * shortest-walk-first, so the cap keeps the most commonly-spun distances
+ * (2 km outward) rather than an arbitrary slice.
+ *
+ * Picks the first shiny-eligible species in the bucket, falling back to the
+ * first species otherwise. Rarity was the other candidate signal, but
+ * EggCard.astro already flags that Leek Duck's `rarity` field doesn't say
+ * which end is rare — showing it here would be inventing a claim this
+ * codebase has deliberately avoided elsewhere.
+ */
+const eggHighlights = groupSorted(eggFeed?.data ?? [], (egg) => egg.eggType, eggDistanceRank)
+  .slice(0, 4)
+  .map((group) => ({
+    distance: group.key,
+    egg: group.items.find((egg) => egg.canBeShiny) ?? group.items[0],
+  }));
+
+/**
+ * One task per category, capped at four, favouring a task whose reward can
+ * be shiny — "worth keeping tonight" is a sharper glance than "here is a
+ * task". Shiny research rewards are seasonal and often absent, so this
+ * falls back to any task that at least has a reward to show an icon for;
+ * a category where every task rewards Stardust with no encounter is
+ * dropped rather than rendered as a tile with no image.
+ */
+const researchHighlights = groupSorted(
+  researchFeed?.data ?? [],
+  (task) => task.type ?? 'other',
+  researchCategoryRank,
+)
+  .map((group) => {
+    const withReward =
+      group.items.find(
+        (task) => (task.rewards ?? []).length > 0 && task.rewards.some((r) => r.canBeShiny),
+      ) ?? group.items.find((task) => (task.rewards ?? []).length > 0);
+    if (!withReward) return null;
+    return {
+      category: group.key,
+      reward: (withReward.rewards.find((r) => r.canBeShiny) ?? withReward.rewards[0]) as ResearchReward,
+    };
+  })
+  .filter((entry): entry is { category: string; reward: ResearchReward } => entry !== null)
   .slice(0, 4);
 
 const happening = groupEvents([
@@ -571,12 +644,12 @@ function homeWhen(event: CalendarEvent): string {
     <section class="card card--raids">
       <h2>In game today</h2>
       {
-        headlineBosses.length > 0 ? (
+        headlineBosses.length > 0 && (
           <>
             {/* The bosses themselves, not a sentence about them. This is the
                 same functional use as /raids — you are here to find out what
                 is worth walking to tonight — and the same attributed source. */}
-            <ul class="boss-strip">
+            <ul class="mini-strip">
               {headlineBosses.map((boss) => (
                 <li>
                   {/* Through our proxy, not hotlinked — same reasoning as the
@@ -590,10 +663,10 @@ function homeWhen(event: CalendarEvent): string {
                     loading="lazy"
                     decoding="async"
                   />
-                  <span class="boss-name">{boss.name}</span>
-                  <span class="boss-tier">{boss.tier.replace(/ Raids?$/i, '')}</span>
+                  <span class="mini-name">{boss.name}</span>
+                  <span class="mini-tier">{boss.tier.replace(/ Raids?$/i, '')}</span>
                   {boss.canBeShiny && (
-                    <span class="boss-shiny" title="Can be shiny">
+                    <span class="mini-shiny" title="Can be shiny">
                       <span class="sr-only">Can be shiny</span>
                       <span aria-hidden="true">✦</span>
                     </span>
@@ -601,28 +674,90 @@ function homeWhen(event: CalendarEvent): string {
                 </li>
               ))}
             </ul>
-            <p class="card-links">
-              <a href="/raids">All raid bosses</a> · <a href="/eggs">Eggs</a> ·{' '}
-              <a href="/research">Research</a>
-            </p>
-          </>
-        ) : (
-          <>
-            {/* No `empty-art-bg` here on purpose, same reasoning as
-                QuickActions.tsx's go-intro: this sentence describes what the
-                card does, not that nothing is happening right now. The pin
-                motif under a description of the feature reads as "there is
-                nothing here", which is the wrong message. */}
-            <p class="empty">
-              Current raid bosses, egg pools and field research, updated automatically.
-            </p>
-            <p class="card-links">
-              <a href="/raids">Raid bosses</a> · <a href="/eggs">Eggs</a> ·{' '}
-              <a href="/research">Research</a>
-            </p>
           </>
         )
       }
+
+      {
+        eggHighlights.length > 0 && (
+          <>
+            <h3 class="card-subhead">Egg pools</h3>
+            <ul class="mini-strip">
+              {eggHighlights.map(({ distance, egg }) => (
+                <li>
+                  <img
+                    src={proxiedImageUrl(egg.image) ?? egg.image}
+                    alt=""
+                    width="56"
+                    height="56"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span class="mini-name">{egg.name}</span>
+                  <span class="mini-tier">{distance}</span>
+                  {egg.canBeShiny && (
+                    <span class="mini-shiny" title="Can be shiny">
+                      <span class="sr-only">Can be shiny</span>
+                      <span aria-hidden="true">✦</span>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )
+      }
+
+      {
+        researchHighlights.length > 0 && (
+          <>
+            <h3 class="card-subhead">Field research</h3>
+            <ul class="mini-strip">
+              {researchHighlights.map(({ category, reward }) => (
+                <li>
+                  <img
+                    src={proxiedImageUrl(reward.image) ?? reward.image}
+                    alt=""
+                    width="56"
+                    height="56"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span class="mini-name">{reward.name}</span>
+                  <span class="mini-tier">{researchCategoryLabel(category)}</span>
+                  {reward.canBeShiny && (
+                    <span class="mini-shiny" title="Can be shiny">
+                      <span class="sr-only">Can be shiny</span>
+                      <span aria-hidden="true">✦</span>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )
+      }
+
+      {
+        /* No `empty-art-bg` here on purpose, same reasoning as
+           QuickActions.tsx's go-intro: this sentence describes what the
+           card does, not that nothing is happening right now. The pin
+           motif under a description of the feature reads as "there is
+           nothing here", which is the wrong message. Only shown when all
+           three feeds came back with nothing worth a tile — a bare
+           `headlineBosses` alone is a normal day (no 5-star/Mega up right
+           now), not an outage, and eggs/research still carry the card. */
+        headlineBosses.length === 0 && eggHighlights.length === 0 && researchHighlights.length === 0 && (
+          <p class="empty">
+            Current raid bosses, egg pools and field research, updated automatically.
+          </p>
+        )
+      }
+
+      <p class="card-links">
+        <a href="/raids">All raid bosses</a> · <a href="/eggs">Eggs</a> ·{' '}
+        <a href="/research">Research</a>
+      </p>
     </section>
   </div>
 
@@ -1534,11 +1669,14 @@ function homeWhen(event: CalendarEvent): string {
     align-content: center;
   }
 
-  /* --- tonight's raid bosses ------------------------------------------------
-     A row of sprites rather than a sentence about sprites. Sized so four fit a
-     phone without wrapping into a second row that would make the card taller
-     than its two neighbours and break the grid's rhythm. */
-  .boss-strip {
+  /* --- tonight's raid bosses, egg pools, field research ---------------------
+     A row of sprites rather than a sentence about sprites. Shared by all
+     three feeds this card renders — same visual language for "here is what
+     is worth knowing about" whether the source is raids, eggs or research.
+     Sized so four fit a phone without wrapping into a second row, which
+     would make the card taller than its neighbour and break the grid's
+     rhythm. */
+  .mini-strip {
     list-style: none;
     margin: 0;
     padding: 0;
@@ -1546,7 +1684,7 @@ function homeWhen(event: CalendarEvent): string {
     grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
     gap: 8px;
   }
-  .boss-strip li {
+  .mini-strip li {
     position: relative;
     display: grid;
     justify-items: center;
@@ -1557,12 +1695,12 @@ function homeWhen(event: CalendarEvent): string {
     border: 1px solid var(--border);
     text-align: center;
   }
-  .boss-strip img {
+  .mini-strip img {
     width: 46px;
     height: 46px;
     object-fit: contain;
   }
-  .boss-name {
+  .mini-name {
     font-size: 0.68rem;
     font-weight: 700;
     line-height: 1.2;
@@ -1572,18 +1710,31 @@ function homeWhen(event: CalendarEvent): string {
     white-space: nowrap;
     max-width: 100%;
   }
-  .boss-tier {
+  .mini-tier {
     font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-muted);
   }
-  .boss-shiny {
+  .mini-shiny {
     position: absolute;
     top: 4px;
     right: 5px;
     font-size: 0.7rem;
     color: var(--poi-campsite);
+  }
+  /* Egg pools and field research are a level below the card's own "In game
+     today" — smaller and unbolded so the hierarchy reads h2 > h3 > tile,
+     not two competing headings. Raids gets no subhead of its own: it is the
+     card's headline content by default, directly under the h2, same as
+     before eggs and research existed on this card at all. */
+  .card-subhead {
+    margin: 16px 0 8px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
   }
   /* `padding-block` rather than a bare line of text: at 22px tall these fell
      under the 24px minimum target size (WCAG 2.2 SC 2.5.8). They are standalone
