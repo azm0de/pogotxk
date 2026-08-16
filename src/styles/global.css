@@ -158,10 +158,24 @@
     --shadow-md: 0 4px 16px rgb(0 0 0 / 0.45);
     --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.55);
 
-    /* Lift the POI hues so they hold up on a dark basemap. */
-    --poi-pokestop: #55a2ec;
-    --poi-gym: #f08a53;
-    --poi-powerspot: #a17ceb;
+    /*
+     * The POI hues are NOT lifted in dark mode any more, and the reason is that
+     * the surface they sit on stopped changing.
+     *
+     * They used to go lighter here "so they hold up on a dark basemap". Since
+     * `MapView.tsx` pins CARTO Voyager unconditionally, the basemap is light in
+     * both themes, so lifting them would leave a pale pin on pale tiles —
+     * #55a2ec is ~2.5:1 on Voyager where #2f7fd4 is ~4.2:1.
+     *
+     * Two of the three surfaces these feed get better, not just the pins:
+     *   - `.popup-badge--*` sets white text ON this colour, so the darker value
+     *     is the correct one either way (the lift was ~2.7:1 white-on-badge).
+     *   - `.chip-dot--*` is a 9px dot on `--bg-panel`, which IS dark here, so
+     *     this is the one place the lift helped. ~3.3:1 for a decorative dot
+     *     that always sits beside its own text label is acceptable — this site's
+     *     rule is that colour is never the only signal, and the chip carries the
+     *     name.
+     */
 
     /* The surface stays dark enough for white text; the text form has to go
        lighter instead, because here it sits on a dark panel. */
