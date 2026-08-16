@@ -352,9 +352,12 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
             }),
           );
 
-          // Two actions, nothing else. Who is signed in is already the
-          // summary's own avatar and name; a menu that opens over it should
-          // hold actions, not repeat that back as prose.
+          // Session actions, plus one link out. Who is signed in is already
+          // the summary's own avatar and name; a menu that opens over it
+          // should hold actions, not repeat that back as prose. Delete stays
+          // a link to its own confirmation page rather than a raw button
+          // here — this menu is not the place to put something irreversible
+          // one misclick away.
           const panel = el('div', { className: 'account-panel' });
           panel.append(
             el('a', { href: '/auth/logout?next=' + next, textContent: 'Sign out' }),
@@ -364,6 +367,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
               href: '/auth/logout?switch=1&next=' + next,
               textContent: 'Use a different Discord account',
             }),
+            el('a', { href: '/account/delete', textContent: 'Delete my account' }),
           );
 
           details.append(summary, panel);

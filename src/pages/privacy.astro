@@ -4,7 +4,7 @@ import '~/styles/legal.css';
 
 export const prerender = true;
 
-const UPDATED = '5 August 2026';
+const UPDATED = '16 August 2026';
 const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
 ---
 
@@ -26,7 +26,8 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
       </p>
       <p>
         We do not sell your data, we do not run advertising, and we do not track you across
-        other websites. Ask any ambassador on Discord and we will delete your account.
+        other websites. You can <a href="/account/delete">delete your account yourself</a> at
+        any time, or ask any ambassador on Discord to do it for you.
       </p>
     </div>
 
@@ -180,7 +181,7 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
 
     <h2 id="retention">6. How long we keep it</h2>
     <ul>
-      <li><strong>Your account:</strong> until you ask us to delete it.</li>
+      <li><strong>Your account:</strong> until you <a href="/account/delete">delete it</a> yourself, or ask an ambassador to.</li>
       <li><strong>Sessions:</strong> two weeks from last use, then removed automatically.</li>
       <li><strong>Raid and meetup activity:</strong> raid flares expire within hours; attendance records persist as community history.</li>
       <li>
@@ -195,11 +196,18 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
     </ul>
 
     <h2 id="rights">7. Your choices</h2>
-    <p>Ask any ambassador on our <a href={DISCORD} rel="noopener noreferrer" target="_blank">Discord server</a> to:</p>
+    <p>
+      <a href="/account/delete">Delete your account</a> yourself, any time, without asking anyone
+      — it works whether or not you still have the app installed. It anonymises your Discord
+      identity and trainer profile immediately; it does not erase flares, RSVPs or meetup
+      attendance, which stay as community history the same way the change log does (see{' '}
+      <a href="#retention">how long we keep it</a>).
+    </p>
+    <p>For anything else, ask any ambassador on our <a href={DISCORD} rel="noopener noreferrer" target="_blank">Discord server</a> to:</p>
     <ul>
       <li>See what we hold about you</li>
       <li>Correct anything wrong</li>
-      <li>Delete your account and personal data</li>
+      <li>Delete your account and personal data, if you would rather not do it yourself</li>
       <li>Remove a specific photo you are in</li>
     </ul>
     <p>
