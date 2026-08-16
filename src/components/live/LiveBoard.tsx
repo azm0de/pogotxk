@@ -250,8 +250,10 @@ export default function LiveBoard({
           }
           break;
         /* `event.connections` is still sent and still ignored on purpose. The
-           viewer count drove the "Live · N watching" badge, which is gone; the
-           server contract is unchanged, so nothing here needs to negotiate. */
+           pill survives but the headcount does not — see `statusText` below —
+           so nothing reads this. The server contract is left unchanged so the
+           two sides never have to negotiate over a field the client simply
+           declines to use. */
         case 'presence':
           break;
         case 'flare':
@@ -648,27 +650,33 @@ export default function LiveBoard({
   }, [visible.length]);
 
   /*
-   * The pill is now an exception reporter, not a permanent fixture.
+   * The pill says whether the board is CONNECTED. It never says how many people
+   * are here.
    *
-   * It used to render in every state, so a healthy board carried a standing
-   * "Live · N watching" badge. That was the one piece of the header that told
-   * you about the plumbing rather than about Texarkana, and the watcher count
-   * in particular invited reading a quiet board as a dead one.
+   * It used to read "Live · N watching", and the count was the problem, not the
+   * pill: on a quiet evening it renders "Live · 1 watching", which tells a
+   * lone user they are alone and invites them to close the tab. Worse, it made
+   * the number look like the point of the badge. Justin's call (2026-08-16) is
+   * the right one — keep the reassurance, drop the headcount. A bare "Live"
+   * with the pulsing dot answers the only question the header should answer:
+   * is this thing on?
    *
-   * `connecting` is dropped with it: it is the normal path on every load, so
-   * showing it only buys a pill that flashes once and vanishes.
+   * `connecting` stays dropped. It is the normal path on every load, so showing
+   * it buys a pill that flashes once and vanishes.
    *
-   * `reconnecting` and `polling` are kept, because those are not decoration —
-   * they are the difference between "nothing is happening" and "you are not
-   * being told what is happening". A silent fallback to 20-second polling is
-   * exactly the failure a live board must not hide.
+   * `reconnecting` and `polling` are not decoration — they are the difference
+   * between "nothing is happening" and "you are not being told what is
+   * happening". A silent fallback to 20-second polling is exactly the failure a
+   * live board must not hide.
    */
   const statusText =
-    status === 'reconnecting'
-      ? 'Reconnecting…'
-      : status === 'polling'
-        ? 'Live updates unavailable — refreshing every 20 seconds'
-        : null;
+    status === 'live'
+      ? 'Live'
+      : status === 'reconnecting'
+        ? 'Reconnecting…'
+        : status === 'polling'
+          ? 'Live updates unavailable — refreshing every 20 seconds'
+          : null;
 
   return (
     <div className="live">
