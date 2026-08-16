@@ -110,6 +110,14 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
   const [pois, setPois] = useState<MapPoi[]>([]);
   const [flares, setFlares] = useState<Flare[]>([]);
   const [mine, setMine] = useState<Record<string, string>>({});
+  /**
+   * Whether the last flare poll actually reached the server, so an empty
+   * board can say "we could not check" instead of looking identical to a
+   * genuinely quiet park. `flares` alone cannot carry this: it starts empty
+   * too, and a failed poll must not overwrite it — a stale board is more
+   * useful than a wiped one.
+   */
+  const [boardStatus, setBoardStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [bosses, setBosses] = useState<RaidBoss[]>([]);
   const [here, setHere] = useState<[number, number] | null>(null);
   const [gpsState, setGpsState] = useState<'idle' | 'locating' | 'ok' | 'denied'>('idle');
@@ -179,8 +187,13 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
       const data = await api<{ flares: Flare[]; mine: Record<string, string> }>('/api/flares');
       setFlares(data.flares ?? []);
       setMine(data.mine ?? {});
+      setBoardStatus('ok');
     } catch {
-      /* The board is a nicety here; the actions still work. */
+      // The actions still work without the board, so this stays quiet rather
+      // than a toast — but silence must not read as "nothing is happening"
+      // when the truth is "we could not check". `flares` is deliberately
+      // left alone: stale data is still more useful than a wiped board.
+      setBoardStatus('error');
     }
   }, []);
 
@@ -592,8 +605,20 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
       )}
 
       <section className="go-board" aria-label="Active flares">
+        {boardStatus === 'error' && (
+          // Same job as /live's connection pill, in the vocabulary this page
+          // already has: a small conditional note, not a toast (a poll fails
+          // every 20s here, and a toast on that cadence would be worse than
+          // the silence it replaces) and not a layout shift when things are
+          // fine (it renders nothing at all outside this branch).
+          <p className="go-note" role="status" aria-live="polite">
+            {flares.length > 0
+              ? 'Could not refresh the board — showing the last flares we had.'
+              : 'Could not load the board. Checking again shortly.'}
+          </p>
+        )}
         {flares.length === 0 ? (
-          canPost ? (
+          boardStatus === 'error' ? null : canPost ? (
             <p className="go-empty empty-art-bg">
               Nothing active right now. Fire one below when you are at a gym and want company.
             </p>
