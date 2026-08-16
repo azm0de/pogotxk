@@ -166,12 +166,13 @@ function tierNote(tier: string): string | null {
        upward. */
     padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px);
     color: #fff;
-    /* The column used to exist to push the credit to the bottom edge. With only
-       the heading and lede left, it centres them instead — anchored to the top
-       of a 520px card they would sit above a lot of empty scrim. */
+    /* Bottom, not centred. Centred text sits in the middle of the picture and
+       competes with it; along the bottom edge it reads as a caption and lets
+       the artwork be the artwork. Justin's call, and it also puts the copy
+       where the scrim below is anchored, so the two agree. */
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-end;
   }
 
   /* Taller from 760px up, so more of the artwork survives the crop.
@@ -207,37 +208,38 @@ function tierNote(tier: string): string | null {
   }
 
   /*
-   * Dark only where the words are.
+   * Dark only along the bottom, where the words now are.
    *
-   * The lede is capped at 62ch, which measures 516px of inked text — and that
-   * is a fixed width, not a proportion, so text occupies the leftmost ~546px
-   * of the card no matter how wide the card gets. At 1280 that is 49% of it,
-   * leaving the entire right half needlessly under 0.70 black. Hence stops in
-   * PIXELS rather than percentages: they hold the dark plateau over the text
-   * and let everything past it open up.
+   * The text used to be vertically centred with a left-heavy horizontal scrim,
+   * because the copy occupied the leftmost ~546px whatever the card's width.
+   * Justin asked for the text moved to the foot of the image and the tint
+   * reduced: floating in the middle competes with the artwork it is sitting on,
+   * where along the bottom edge it reads as a caption and leaves the picture
+   * to be a picture.
    *
-   * That also makes narrow cards take care of themselves. On a 345px phone
-   * card the light stops fall past the end of the gradient line entirely, so
-   * the whole thing stays at ~0.70 — which is what a card whose text spans its
-   * full width needs.
+   * With the copy at the bottom, an x-axis gradient is darkening the wrong
+   * axis, so this is a plain vertical one anchored to the bottom edge.
    *
-   * 90deg, not the events hero's 105deg, and that part is load-bearing. With
-   * any tilt the alpha depends on y as well as x, and `margin-top: auto` puts
-   * the credit — the smallest text, so the tightest contrast — at the very
-   * bottom of the card. Raising the card to 520px dropped the credit into the
-   * lighter end of a tilted gradient and took it to 4.37:1, under AA. Flat
-   * horizontal, the credit's vertical position stops mattering.
+   * Stops in PIXELS FROM THE BOTTOM rather than percentages, which is the same
+   * trick the old horizontal version used and it earns its keep twice:
    *
-   * Measured, not chosen. Worst case over the region text can occupy is
-   * 5.19:1 at 1116x520, 5.23:1 at 936x400, 5.19:1 at 703x312, 5.52:1 at
-   * 345x195 and 5.55:1 at 292x240, against a 4.5 threshold. For reference the
-   * lightest flat alpha that still clears AA anywhere text sits is 0.639, so
-   * the 0.68 plateau keeps real margin.
+   *   - On a tall desktop card (up to 600px) only the lowest ~300px is
+   *     meaningfully tinted, so the top half of the artwork comes out from
+   *     under the black entirely. That is the "shrink the overlay" half.
+   *   - On a phone the card has no min-height and collapses to roughly 200px of
+   *     content, which sits inside the plateau, so it stays as dark as it
+   *     always was. A percentage gradient would have gone light exactly where
+   *     the card is shortest and the text covers all of it.
    *
-   * Those figures were the credit line, at 0.78 white — the lightest text on
-   * the card. It has since been removed, so they are now a floor with room to
-   * spare rather than the real worst case: the lede is 0.92 and the heading is
-   * solid white. Anything added back at 0.78 or lighter is covered by them.
+   * The plateau runs to 160px because that is what the heading plus a two-line
+   * lede occupies above the bottom padding; the falloff to 300px is the
+   * dissolve, and above that the image is essentially clear.
+   *
+   * Measured, not chosen — see hero-contrast, which samples the real composited
+   * screenshot under the text's own line boxes (not the h1's full-width block,
+   * which spans bright image where no glyph ever lands). Worst case over
+   * 1920/1440/1280/1024/760/390 is recorded in the commit; the previous design
+   * floored at 6.52 and this must not go under 4.5.
    */
   .raids-hero::before {
     content: '';
@@ -245,12 +247,36 @@ function tierNote(tier: string): string | null {
     inset: 0;
     z-index: -1;
     background: linear-gradient(
-      90deg,
-      rgb(6 8 12 / 0.72) 0px,
-      rgb(6 8 12 / 0.68) 580px,
-      rgb(6 8 12 / 0.22) 880px,
-      rgb(6 8 12 / 0.12) 100%
+      to top,
+      rgb(6 8 12 / 0.66) 0px,
+      rgb(6 8 12 / 0.62) 160px,
+      rgb(6 8 12 / 0.20) 300px,
+      rgb(6 8 12 / 0.04) 100%
     );
+  }
+
+  /*
+   * Phones keep the heavier tint, and that is not an oversight.
+   *
+   * Below 760px the card has no min-height, so it collapses to its content and
+   * the copy covers essentially all of it — there is no top half of a
+   * photograph to uncover, which is the entire thing the lighter ramp buys.
+   * What the lighter ramp does cost there is real: measured against the actual
+   * artwork the lede fell from 7.15:1 to 5.49:1 on /raids. Both clear AA, but
+   * spending legibility on a phone to reveal an image the text is already
+   * sitting on top of is a bad trade, and phones are most of this audience.
+   *
+   * So the reduction lands where the complaint actually was — the large desktop
+   * cards, where more than half the picture was under black for no reason.
+   */
+  @media (max-width: 759px) {
+    .raids-hero::before {
+      background: linear-gradient(
+        to top,
+        rgb(6 8 12 / 0.74) 0px,
+        rgb(6 8 12 / 0.70) 100%
+      );
+    }
   }
 
   .raids-hero h1 {
