@@ -1,3 +1,22 @@
 <resources>
     <string name="app_name">PoGo TXK</string>
+
+    <!-- Read aloud by TalkBack when the floating ball has focus. It is the only
+         control in the overlay, so it has to say what tapping it does, not just
+         what it looks like. -->
+    <string name="bubble_content_description">PoGo TXK quick actions</string>
+
+    <!--
+      Prominent disclosure, shown BEFORE the location permission dialog.
+
+      Google Play's Location policy requires an in-app disclosure that names the
+      data, the feature it serves, and the fact that it is used while the app is
+      in the background — the system permission dialog does not satisfy this on
+      its own. Kept in strings.xml rather than inline so the Play listing and the
+      privacy policy can quote it verbatim.
+    -->
+    <string name="location_rationale_title">Why this app needs your location</string>
+    <string name="location_rationale_body">PoGo TXK uses your location to work out which gym or stop you are standing at, so a flare says where you are without you typing it.\n\nThe floating bubble collects this in the background — that is the point of it, so you can flare while Pokémon GO is on screen. Location is sent to the PoGo TXK server only when you confirm a flare, and it is never shared with anyone else or used for advertising.\n\nYou can skip this. Flares still work; they just will not name a gym.</string>
+    <string name="location_rationale_continue">Continue</string>
+    <string name="location_rationale_skip">Not now</string>
 </resources>

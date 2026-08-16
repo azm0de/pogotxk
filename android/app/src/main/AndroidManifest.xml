@@ -17,6 +17,13 @@
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!--
+      Required alongside the `location` foreground service type below. Without
+      the type, Android blocks location reads from this service the moment our
+      activity is not visible — which is ALWAYS, because the bubble exists to be
+      used while Pokémon GO is on screen.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Coarse is enough to pick the nearest gym in a single park. -->
@@ -44,10 +51,28 @@
             </intent-filter>
         </activity>
 
+        <!--
+          TWO service types, and the `location` one is load-bearing rather than
+          decorative.
+
+          `specialUse` alone was a functional bug, not just a Play-review
+          problem. Since Android 10 an app may only read location while it has a
+          visible activity OR a foreground service typed `location`. This
+          service's whole purpose is to run while our activity is NOT visible —
+          Pokémon GO is on screen — so with `specialUse` alone every location
+          read from the bubble returns null off a real device, and flares post
+          with no gym attached. The emulator hid this because the app had just
+          been in the foreground.
+
+          Declaring `location` also keeps us out of the harder Play review:
+          foreground-service location is a separate, much more routine
+          declaration than ACCESS_BACKGROUND_LOCATION, which we deliberately do
+          NOT request.
+        -->
         <service
             android:name=".BubbleService"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="location|specialUse">
             <!--
               Android 14 requires a justification for `specialUse`. This is it:
               a persistent floating control that has to outlive our own UI,

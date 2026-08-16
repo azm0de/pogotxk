@@ -17,6 +17,7 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
 /**
@@ -105,9 +106,7 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        requestLocation.launch(
-            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
-        )
+        maybeAskForLocation()
 
         refreshButton()
     }
@@ -133,6 +132,42 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    /**
+     * Google Play's Location policy requires a "prominent disclosure" — an
+     * in-app screen, before the system dialog, that names the data, the feature
+     * it serves, and the fact that it is collected in the background. The OS
+     * permission sheet does not satisfy this on its own, and shipping without it
+     * is one of the more common location-policy rejections.
+     *
+     * Shown once. If the user declines we never ask again from here; Android's
+     * own dialog remains the way back in, and flares degrade to not naming a gym
+     * rather than failing.
+     */
+    private fun maybeAskForLocation() {
+        if (Nearby.hasLocationPermission(this)) return
+
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_LOCATION_DISCLOSED, false)) return
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.location_rationale_title)
+            .setMessage(R.string.location_rationale_body)
+            .setCancelable(false)
+            .setPositiveButton(R.string.location_rationale_continue) { _, _ ->
+                prefs.edit().putBoolean(KEY_LOCATION_DISCLOSED, true).apply()
+                requestLocation.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                    )
+                )
+            }
+            .setNegativeButton(R.string.location_rationale_skip) { _, _ ->
+                prefs.edit().putBoolean(KEY_LOCATION_DISCLOSED, true).apply()
+            }
+            .show()
     }
 
     private fun canDrawOverlays(): Boolean = Settings.canDrawOverlays(this)
@@ -180,5 +215,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private companion object {
+        const val PREFS = "app"
+        const val KEY_LOCATION_DISCLOSED = "location_disclosed"
     }
 }

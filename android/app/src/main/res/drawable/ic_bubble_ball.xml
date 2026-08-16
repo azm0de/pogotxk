@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The bubble's face.
+
+  Drawn rather than shipped as a PNG so it stays crisp at any density and so the
+  colours are ours: the top half is the site's own brand red (#c8071c, the same
+  accent-solid token the website uses), not the red of any particular franchise.
+  It reads as a poke ball because that is the shape people expect on a Pokemon GO
+  companion, while staying our mark rather than a copy of someone else's.
+
+  Geometry: 48x48 viewport, centre (24,24), outer radius 22 so a 3px stroke sits
+  inside the bounds. The band is a stroked line rather than a rectangle because
+  its endpoints at x=2 and x=46 land exactly on the circle, so a butt cap cannot
+  poke outside the silhouette the way a rect would.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Lower half / body -->
+    <path
+        android:pathData="M2,24 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0 Z"
+        android:fillColor="#F7F7F8" />
+
+    <!-- Upper half, brand red -->
+    <path
+        android:pathData="M2,24 A22,22 0 0 1 46,24 Z"
+        android:fillColor="#C8071C" />
+
+    <!-- Equator -->
+    <path
+        android:pathData="M2,24 L46,24"
+        android:strokeColor="#141416"
+        android:strokeWidth="5" />
+
+    <!-- Outer edge -->
+    <path
+        android:pathData="M2,24 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0 Z"
+        android:strokeColor="#141416"
+        android:strokeWidth="3" />
+
+    <!-- Button -->
+    <path
+        android:pathData="M16.5,24 a7.5,7.5 0 1,0 15,0 a7.5,7.5 0 1,0 -15,0 Z"
+        android:fillColor="#F7F7F8"
+        android:strokeColor="#141416"
+        android:strokeWidth="3.5" />
+</vector>

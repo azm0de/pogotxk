@@ -5,14 +5,19 @@ plugins {
 
 android {
     namespace = "com.pogotxk.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.pogotxk.app"
         // TYPE_APPLICATION_OVERLAY — the API the floating bubble is built on —
         // arrived in Oreo. Nothing older can draw over another app.
         minSdk = 26
-        targetSdk = 35
+        // 36 (Android 16), not 35, because this is going to Google Play. Play
+        // requires new apps to target an API level within one year of the latest
+        // release, and Android 16 landed in June 2025 — so the API 35 window
+        // closes at the end of August 2026. Targeting 35 today would mean a
+        // rejected submission within a fortnight.
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }
