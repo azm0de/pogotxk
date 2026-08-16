@@ -16,7 +16,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply pogotxk-db --remote",
     "db:query": "wrangler d1 execute pogotxk-db --local --command",
     "import:dry-run": "tsx scripts/dry-run-import.ts",
-    "test": "tsx scripts/test-auth.ts && tsx scripts/test-time.ts && tsx scripts/test-tags.ts && tsx scripts/test-markdown.ts && tsx scripts/test-markdown-urls.ts && tsx scripts/test-events.ts && tsx scripts/test-notify.ts && tsx scripts/test-game-image.ts && tsx scripts/test-flare-permissions.ts && tsx scripts/dry-run-import.ts",
+    "test": "tsx scripts/test-auth.ts && tsx scripts/test-time.ts && tsx scripts/test-tags.ts && tsx scripts/test-markdown.ts && tsx scripts/test-markdown-urls.ts && tsx scripts/test-events.ts && tsx scripts/test-discord-events.ts && tsx scripts/test-notify.ts && tsx scripts/test-game-image.ts && tsx scripts/test-flare-permissions.ts && tsx scripts/dry-run-import.ts",
     "dev:session": "tsx scripts/dev-session.ts",
     "gen:vapid": "tsx scripts/generate-vapid.ts",
     "gen:icons": "tsx scripts/build-icons.ts"
