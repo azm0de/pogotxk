@@ -50,6 +50,24 @@ export function redirectUri(url: URL): string {
   return new URL('/auth/callback', url.origin).toString();
 }
 
+/**
+ * The redirect the Android app uses, which is a custom scheme rather than a URL.
+ *
+ * Discord will not deep-link its standard authorize endpoint to the mobile app
+ * when the redirect is an ordinary https URL — deliberately, because it cannot
+ * return the user to the browser tab holding the rest of the flow. A custom
+ * scheme belongs to the app itself, so there is no tab to return to and the
+ * handoff becomes possible.
+ *
+ * The exact shape is Discord's, not ours: `discord-<application id>:/authorize/callback`,
+ * one slash after the colon. It has to be registered in the Developer Portal
+ * and match byte for byte in both the authorize request and the token exchange,
+ * so it is derived from the client id in one place rather than written twice.
+ */
+export function mobileRedirectUri(cfg: DiscordConfig): string {
+  return `discord-${cfg.clientId}:/authorize/callback`;
+}
+
 /** RFC 7636 S256 challenge, base64url with padding stripped. */
 export async function pkceChallenge(verifier: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
@@ -108,11 +126,19 @@ export function authorizeUrl(
   return `${AUTHORIZE_URL}?${params}`;
 }
 
+/**
+ * @param redirectOverride Exact redirect_uri to present. Discord requires the
+ *   token exchange to repeat the value used at authorize time byte for byte,
+ *   and the Android app authorises against a custom scheme rather than this
+ *   deployment's `/auth/callback`. Passing it through beats a second copy of
+ *   this function that would drift.
+ */
 export async function exchangeCode(
   cfg: DiscordConfig,
   url: URL,
   code: string,
   verifier: string,
+  redirectOverride?: string,
 ): Promise<string> {
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
@@ -122,7 +148,7 @@ export async function exchangeCode(
       client_secret: cfg.clientSecret,
       grant_type: 'authorization_code',
       code,
-      redirect_uri: redirectUri(url),
+      redirect_uri: redirectOverride ?? redirectUri(url),
       code_verifier: verifier,
     }),
   });

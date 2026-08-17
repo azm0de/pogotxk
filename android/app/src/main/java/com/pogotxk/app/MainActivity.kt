@@ -21,6 +21,9 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
@@ -42,6 +45,16 @@ class MainActivity : AppCompatActivity() {
      */
     @Volatile
     private var loadedOrigin: String? = null
+
+    /**
+     * The sign-in attempt currently waiting on Discord.
+     *
+     * In memory only, deliberately. It holds a PKCE verifier, which is a
+     * short-lived secret with no business being written to disk, and an attempt
+     * that does not survive the app being killed is simply one the trainer
+     * starts again.
+     */
+    private var pending: Auth.Pending? = null
 
     private val requestNotifications =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -107,16 +120,27 @@ class MainActivity : AppCompatActivity() {
                     val host = url.host.orEmpty()
 
                     /*
-                     * The authorize screen goes to the Discord app, not in here.
+                     * Sign-in never happens in this WebView any more.
                      *
-                     * Loading it in the WebView was the reason signing in asked
-                     * for a password every time: this WebView has its own cookie
-                     * jar, Discord has never seen it, so Discord quite correctly
-                     * showed a login form — while the trainer's phone had them
-                     * signed in the whole time, one app away. Handing the URL to
-                     * Android lets the Discord app claim it and show its own
-                     * "authorize PoGo TXK?" sheet against the existing session.
+                     * Loading Discord's OAuth screen in here was why signing in
+                     * asked for a password every time: this WebView has its own
+                     * cookie jar, Discord has never seen it, so Discord quite
+                     * correctly showed a login form — while the trainer was
+                     * signed in on the same phone, one app away. `startSignIn`
+                     * runs the custom-scheme flow instead, which is the only
+                     * shape Discord will hand to its own app.
                      */
+                    if (host == Uri.parse(Api.ORIGIN).host &&
+                        url.path.orEmpty().startsWith("/auth/login")
+                    ) {
+                        startSignIn()
+                        return true
+                    }
+
+                    // Kept as the fallback for anything that still reaches an
+                    // authorize URL directly — a stale page, a link we did not
+                    // mint. Better out to a browser that may carry a Discord
+                    // session than into a jar that certainly does not.
                     if (host.endsWith("discord.com") && url.path.orEmpty().startsWith("/oauth2/authorize")) {
                         return handOffToDiscord(url)
                     }
@@ -175,7 +199,80 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        signInReturnFrom(intent)?.let { finishSignIn(it); return }
         callbackUrlFrom(intent)?.let { webView.loadUrl(it) }
+    }
+
+    // ------------------------------------------------------------- sign-in --
+
+    /**
+     * Opens Discord's approval screen in a Custom Tab.
+     *
+     * A Custom Tab rather than our WebView, and the difference is the entire
+     * point: it shares the browser's cookie jar, so a trainer already signed
+     * into Discord in Chrome is not asked again. Our WebView's jar is separate
+     * and permanently empty, which is what made every sign-in a password.
+     */
+    private fun startSignIn() {
+        val (authorizeUrl, pending) = Auth.begin()
+        this.pending = pending
+        val tab = CustomTabsIntent.Builder().setShowTitle(true).build()
+        try {
+            tab.launchUrl(this, Uri.parse(authorizeUrl))
+        } catch (_: ActivityNotFoundException) {
+            // No browser at all is vanishingly rare, but "sign-in silently does
+            // nothing" is the worst possible failure, so say something.
+            this.pending = null
+            toast("No browser available to sign in with")
+        }
+    }
+
+    /**
+     * Completes the sign-in when Discord sends the trainer back to our scheme.
+     *
+     * The state check is the CSRF guard. A custom scheme can be declared by any
+     * app on the device, so a callback arriving here is not proof it belongs to
+     * an attempt we started — only matching the state we generated is.
+     */
+    private fun finishSignIn(data: Uri) {
+        val waiting = pending
+        pending = null
+
+        data.getQueryParameter("error")?.let {
+            toast(if (it == "access_denied") "Sign-in cancelled" else "Discord refused: $it")
+            return
+        }
+        val code = data.getQueryParameter("code")
+        val state = data.getQueryParameter("state")
+        if (code == null || state == null) return
+        if (waiting == null || state != waiting.state) {
+            toast("That sign-in did not match — please try again")
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                Auth.complete(code, waiting.verifier)
+                // Reload rather than goBack: the page that sent us here was the
+                // signed-out /go, and it has to re-render against the session
+                // that now exists.
+                webView.loadUrl("${Api.ORIGIN}/go")
+                refreshButton()
+            } catch (e: Exception) {
+                toast(e.message ?: "Sign-in failed")
+            }
+        }
+    }
+
+    /** The custom-scheme sign-in return, if this intent is one. */
+    private fun signInReturnFrom(intent: Intent?): Uri? {
+        val data = intent?.data ?: return null
+        if (intent.action != Intent.ACTION_VIEW) return null
+        if (data.scheme != Auth.SCHEME) return null
+        // Checked here rather than in the manifest: the URI carries no
+        // authority, and Android's path matching is unreliable without a host.
+        if (data.path != Auth.CALLBACK_PATH) return null
+        return data
     }
 
     /** The OAuth callback URL, if this intent is one. */

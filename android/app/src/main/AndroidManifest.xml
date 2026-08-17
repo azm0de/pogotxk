@@ -76,6 +76,29 @@
                     android:host="pogotxk.gnomelabz.workers.dev"
                     android:path="/auth/callback" />
             </intent-filter>
+
+            <!--
+              Discord's mobile OAuth redirect.
+
+              Discord will not deep-link its authorize endpoint to the Discord
+              app when the redirect is an ordinary https URL — deliberately,
+              because it cannot return the user to the browser tab holding the
+              rest of the flow. A custom scheme belongs to an app instead, so
+              there is no tab to return to and the handoff becomes possible.
+
+              The scheme is Discord's format, `discord-<application id>`, and it
+              must match the redirect URI registered in the Developer Portal
+              exactly. Only the scheme is matched here: the URI carries no
+              authority (`discord-123:/authorize/callback` — one slash), and
+              Android's path matching is unreliable without a host, so the path
+              is checked in code where it can be done honestly.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="discord-1534670096256073778" />
+            </intent-filter>
         </activity>
 
         <!--

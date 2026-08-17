@@ -54,6 +54,11 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // Chrome Custom Tabs, for the Discord sign-in handoff. A Custom Tab shares
+    // the browser's cookie jar, so a trainer already signed into Discord in
+    // Chrome is not asked again — which our own WebView, with its separate and
+    // permanently empty jar, could never manage.
+    implementation("androidx.browser:browser:1.8.0")
     // Fused location gives a cached fix immediately, which matters when the
     // whole point is one tap without waiting for a GPS lock.
     implementation("com.google.android.gms:play-services-location:21.3.0")
