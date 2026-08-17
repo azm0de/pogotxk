@@ -79,6 +79,18 @@ function minutesLeft(iso: string): number {
  */
 const FETCH_TIMEOUT_MS = 12000;
 
+/**
+ * How far the trainer must actually move before we accept a new fix.
+ *
+ * `watchPosition` with high accuracy reports roughly once a second and a
+ * consumer GPS wanders several metres while the phone is sitting still, so
+ * without a gate every one of those jitters became a new `here`, a re-render,
+ * and — before the ordering was frozen — a reshuffled location list. Ten metres
+ * is below the distance that changes which POI you are standing at, so nothing
+ * that matters is lost by ignoring smaller movements.
+ */
+const GPS_MIN_MOVE_M = 10;
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -139,6 +151,13 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
   const [boardStatus, setBoardStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [bosses, setBosses] = useState<RaidBoss[]>([]);
   const [here, setHere] = useState<[number, number] | null>(null);
+  /**
+   * The position the open sheet's location list was ranked against — held
+   * still while the sheet is open. See the effect that maintains it.
+   */
+  const [sortAnchor, setSortAnchor] = useState<[number, number] | null>(null);
+  /** Last accepted fix, for rejecting GPS jitter below `GPS_MIN_MOVE_M`. */
+  const lastFixRef = useRef<[number, number] | null>(null);
   const [gpsState, setGpsState] = useState<'idle' | 'locating' | 'ok' | 'denied'>('idle');
 
   const [action, setAction] = useState<ActionDef | null>(null);
@@ -370,7 +389,20 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
     setGpsState('locating');
     const id = navigator.geolocation.watchPosition(
       (pos) => {
-        setHere([pos.coords.latitude, pos.coords.longitude]);
+        const next: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        const prev = lastFixRef.current;
+        // Standing still still produces a fix a second, each a few metres from
+        // the last, and each was previously a fresh array — a new object every
+        // time, so every consumer of `here` recomputed whether or not the
+        // trainer had moved at all. Dropping sub-threshold jitter here is the
+        // difference between a component that settles and one that never stops
+        // re-rendering for as long as the page is open in the field.
+        if (prev && distanceMeters(prev, next) < GPS_MIN_MOVE_M) {
+          setGpsState('ok');
+          return;
+        }
+        lastFixRef.current = next;
+        setHere(next);
         setGpsState('ok');
       },
       () => setGpsState('denied'),
@@ -378,6 +410,33 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
     );
     return () => navigator.geolocation.clearWatch(id);
   }, []);
+
+  /**
+   * Fixes the location list's order for as long as the sheet is open.
+   *
+   * REPORTED FROM THE FIELD: opening a flare made the "Where" menu refresh
+   * over and over. `candidates` sorted by live distance, so every GPS fix
+   * re-ranked the options *and* rewrote every label ("12 m" to "14 m" to
+   * "11 m"). Mutating a native `<select>`'s options while its picker is open
+   * makes Android and iOS redraw or dismiss it, so the menu flickered and the
+   * entry being reached for slid to a different row mid-tap.
+   *
+   * Ranking is only useful at the instant the sheet opens; after that it is
+   * the list moving under the trainer's thumb. So the position is snapshotted
+   * on open and the ordering holds until the sheet closes.
+   *
+   * The one update still allowed is the first: if GPS is still resolving when
+   * the sheet opens, the snapshot back-fills once it arrives, so a trainer who
+   * beat the fix does not get an unsorted, distance-less list for the life of
+   * the sheet. That is a single transition, not a stream.
+   */
+  useEffect(() => {
+    if (!action) {
+      setSortAnchor(null);
+      return;
+    }
+    if (sortAnchor === null && here) setSortAnchor(here);
+  }, [action, here, sortAnchor]);
 
   /**
    * POIs valid for the open action, nearest first when we know where we are.
@@ -392,9 +451,11 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
     if (!action) return [] as { poi: MapPoi; d: number | null }[];
     const allowed = action.poiTypes;
     const list = pois.filter((p) => !allowed || allowed.includes(p.type));
-    const ranked = here
+    // Ranked against the snapshot taken when the sheet opened, NOT the live
+    // fix. Using `here` here is what made the menu refresh in the field.
+    const ranked = sortAnchor
       ? list
-          .map((p) => ({ poi: p, d: distanceMeters(here, [p.lat, p.lng]) as number | null }))
+          .map((p) => ({ poi: p, d: distanceMeters(sortAnchor, [p.lat, p.lng]) as number | null }))
           .sort((a, b) => (a.d ?? 0) - (b.d ?? 0))
       : list.map((p) => ({ poi: p, d: null }));
 
@@ -404,10 +465,15 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
       if (selected) shown.unshift(selected);
     }
     return shown;
-  }, [action, pois, here, poiId]);
+  }, [action, pois, sortAnchor, poiId]);
 
   const openAction = (def: ActionDef) => {
     setAction(def);
+    // Set here rather than left to the effect below, so the list is ranked on
+    // the very first render of the sheet. Leaving it to the effect would show
+    // one frame of unsorted, distance-less options before it settled — a flash
+    // of exactly the churn this is meant to remove.
+    setSortAnchor(here);
     setBoss('');
     setNeeded(1);
     setNote('');
