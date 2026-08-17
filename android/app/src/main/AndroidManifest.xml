@@ -49,6 +49,33 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+              Brings the Discord sign-in back into the app.
+
+              The OAuth authorize screen is now handed to the Discord app rather
+              than loaded in our WebView, so the trainer approves with the
+              session they already have instead of typing a password into a
+              browser that has never seen them. But `/auth/login` set the CSRF
+              state and the PKCE verifier as an HttpOnly cookie in the WEBVIEW's
+              jar, so the callback has to come back to the WebView or it fails
+              state validation and signs nobody in.
+
+              Claiming the callback URL is what makes that possible. `autoVerify`
+              plus /.well-known/assetlinks.json on the origin means Android
+              routes it straight here instead of opening a browser — since
+              Android 12 an unverified link goes to the browser silently, so the
+              assetlinks file is load-bearing, not optional.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="pogotxk.gnomelabz.workers.dev"
+                    android:path="/auth/callback" />
+            </intent-filter>
         </activity>
 
         <!--

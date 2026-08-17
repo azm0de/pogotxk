@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.pogotxk.app.debug",
+      "sha256_cert_fingerprints": [
+        "48:19:AC:0E:E3:2A:9C:AB:EA:B9:DE:11:0C:FB:3D:48:82:F4:49:97:C2:44:21:9E:3D:E2:B2:46:08:C5:DE:76"
+      ]
+    }
+  }
+]

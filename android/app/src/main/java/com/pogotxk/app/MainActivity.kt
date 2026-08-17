@@ -2,6 +2,7 @@ package com.pogotxk.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -33,7 +34,6 @@ import org.json.JSONObject
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var bubbleButton: Button
 
     /**
      * Origin of the page currently loaded, kept so the bridge can refuse calls
@@ -60,16 +60,22 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
-        bubbleButton = Button(this).apply {
-            setOnClickListener { onBubbleButton() }
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            )
+        /*
+         * The site fills the window now.
+         *
+         * There used to be a native "Allow the floating bubble" button bolted
+         * across the top. It was unreachable in practice — the layout draws
+         * from the top of the window and nothing insets it, so on a phone with
+         * a status bar over the content the button sat underneath and could not
+         * be tapped. It was also the wrong place for it: nobody looks above the
+         * page for a control that belongs on the page. `BubbleControl` on /go
+         * replaces it entirely, and `fitsSystemWindows` keeps the site's own
+         * header out from under the status bar the same way.
+         */
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            fitsSystemWindows = true
         }
-        layout.addView(bubbleButton)
 
         webView = WebView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -89,9 +95,26 @@ class MainActivity : AppCompatActivity() {
                     request: WebResourceRequest?,
                 ): Boolean {
                     val url = request?.url ?: return false
-                    // Discord's OAuth screens have to load in here for sign-in to
-                    // complete; anything else external goes to a real browser.
                     val host = url.host.orEmpty()
+
+                    /*
+                     * The authorize screen goes to the Discord app, not in here.
+                     *
+                     * Loading it in the WebView was the reason signing in asked
+                     * for a password every time: this WebView has its own cookie
+                     * jar, Discord has never seen it, so Discord quite correctly
+                     * showed a login form — while the trainer's phone had them
+                     * signed in the whole time, one app away. Handing the URL to
+                     * Android lets the Discord app claim it and show its own
+                     * "authorize PoGo TXK?" sheet against the existing session.
+                     */
+                    if (host.endsWith("discord.com") && url.path.orEmpty().startsWith("/oauth2/authorize")) {
+                        return handOffToDiscord(url)
+                    }
+
+                    // Everything else on our own hosts, and the rest of Discord's
+                    // flow, stays in here; anything genuinely external opens in a
+                    // real browser.
                     val internal = host.endsWith("workers.dev") ||
                         host.endsWith("pokemontxk.com") ||
                         host.endsWith("discord.com")
@@ -114,7 +137,10 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(layout)
         installBackHandler()
-        webView.loadUrl("${Api.ORIGIN}/go")
+        // Cold-started by the OAuth callback rather than the launcher icon: go
+        // straight to the callback so the sign-in finishes, instead of loading
+        // /go and silently dropping the code.
+        webView.loadUrl(callbackUrlFrom(intent) ?: "${Api.ORIGIN}/go")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -127,6 +153,64 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshButton()
+    }
+
+    /**
+     * The Discord app sent the trainer back.
+     *
+     * `singleTask` means we are handed the callback here rather than getting a
+     * second copy of the activity, which is what we want: the WebView holding
+     * the state and PKCE cookies is right here, and it is the only thing that
+     * can complete the exchange.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        callbackUrlFrom(intent)?.let { webView.loadUrl(it) }
+    }
+
+    /** The OAuth callback URL, if this intent is one. */
+    private fun callbackUrlFrom(intent: Intent?): String? {
+        val data = intent?.data ?: return null
+        if (intent.action != Intent.ACTION_VIEW) return null
+        val origin = "${data.scheme}://${data.authority}"
+        if (origin != Api.ORIGIN || data.path != CALLBACK_PATH) return null
+        return data.toString()
+    }
+
+    /**
+     * Hands the authorize screen to the Discord app, falling back gracefully.
+     *
+     * Three rungs, because the goal is "never make them type a password", and
+     * each rung is a weaker version of that rather than a different feature:
+     *
+     *  1. A non-browser handler — the Discord app. It approves against the
+     *     session already on the phone, which is the whole point.
+     *  2. Any handler, meaning a real browser. Chrome usually carries a Discord
+     *     session too, so this still normally avoids a password.
+     *  3. Our own WebView, the old behaviour. Always asks for a password, but a
+     *     sign-in that is annoying beats one that is impossible.
+     */
+    private fun handOffToDiscord(url: Uri): Boolean {
+        val view = Intent(Intent.ACTION_VIEW, url).addCategory(Intent.CATEGORY_BROWSABLE)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val nonBrowser = Intent(view).addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER)
+            try {
+                startActivity(nonBrowser)
+                return true
+            } catch (_: ActivityNotFoundException) {
+                // No native handler — the Discord app is not installed, or this
+                // device does not let it claim the link. Fall through.
+            }
+        }
+
+        return try {
+            startActivity(view)
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        }
     }
 
     /**
@@ -192,16 +276,15 @@ class MainActivity : AppCompatActivity() {
      */
     private fun bubbleAllowed(): Boolean = Api.isSignedIn() || BuildConfig.DEBUG
 
+    /**
+     * The page owns the control now, so "refresh" means telling the page.
+     *
+     * Kept as a named step rather than inlined because several unrelated things
+     * change this state — a page load, returning from the overlay settings
+     * screen, the service starting or stopping — and every one of them has to
+     * end up here or the page shows the trainer something that is no longer true.
+     */
     private fun refreshButton() {
-        bubbleButton.text = when {
-            !bubbleAllowed() -> "Sign in below to enable the bubble"
-            !canDrawOverlays() -> "Allow the floating bubble"
-            BubbleService.isRunning -> "Turn the bubble off"
-            else -> "Turn the bubble on"
-        }
-        bubbleButton.isEnabled = bubbleAllowed()
-        // The page renders its own copy of this state, so anything that moves
-        // the native button has to tell the page too or the two disagree.
         notifyPage()
     }
 
@@ -325,5 +408,8 @@ class MainActivity : AppCompatActivity() {
 
         /** Dispatched on `window` when the bubble's state may have changed. */
         const val STATE_EVENT = "pogotxk-bubble"
+
+        /** The OAuth redirect path this app claims — must match the manifest. */
+        const val CALLBACK_PATH = "/auth/callback"
     }
 }

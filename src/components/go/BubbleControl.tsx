@@ -87,7 +87,7 @@ export default function BubbleControl() {
   if (!state.signedIn) {
     return (
       <p className="go-bubble-note">
-        Sign in to use the floating ball over Pokémon GO.
+        Sign in to use Raid Assist over Pokémon GO.
       </p>
     );
   }
@@ -102,7 +102,7 @@ export default function BubbleControl() {
         onClick={() => (running ? bridge.stop() : bridge.start())}
       >
         <span aria-hidden="true">{running ? '✕' : '⦿'}</span>
-        {running ? 'Turn the ball off' : 'Launch the ball'}
+        {running ? 'Turn Raid Assist off' : 'Launch Raid Assist!'}
       </button>
       <p className="go-bubble-note">
         {running
