@@ -1,6 +1,7 @@
 ---
 import Base from '~/layouts/Base.astro';
 import QuickActions from '~/components/go/QuickActions';
+import BubbleControl from '~/components/go/BubbleControl';
 
 export const prerender = false;
 
@@ -33,6 +34,12 @@ const initialAction = Astro.url.searchParams.get('action') ?? undefined;
          gets them, not just this one. -->
     <meta name="robots" content="noindex" />
   </Fragment>
+
+  <!-- Renders nothing unless the page is inside the Android app, which is the
+       only place the ball can exist. Placed above the actions because turning
+       it on is a thing you do once, before you start playing — not a step in
+       sending a flare. -->
+  <BubbleControl client:load />
 
   <QuickActions client:load user={user} initialPoi={initialPoi} initialAction={initialAction} />
 </Base>

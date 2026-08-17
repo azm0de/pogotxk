@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -19,6 +20,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import org.json.JSONObject
 
 /**
  * The app shell.
@@ -32,6 +34,14 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var bubbleButton: Button
+
+    /**
+     * Origin of the page currently loaded, kept so the bridge can refuse calls
+     * from anything that is not our own site. Written on the UI thread when a
+     * page finishes, read from the WebView's binder thread.
+     */
+    @Volatile
+    private var loadedOrigin: String? = null
 
     private val requestNotifications =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -92,11 +102,14 @@ class MainActivity : AppCompatActivity() {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     CookieManager.getInstance().flush()
+                    loadedOrigin = url?.let { runCatching { Uri.parse(it) } .getOrNull() }
+                        ?.let { "${it.scheme}://${it.authority}" }
                     refreshButton()
                 }
             }
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+        webView.addJavascriptInterface(BubbleBridge(), BRIDGE_NAME)
         layout.addView(webView)
 
         setContentView(layout)
@@ -183,12 +196,21 @@ class MainActivity : AppCompatActivity() {
         bubbleButton.text = when {
             !bubbleAllowed() -> "Sign in below to enable the bubble"
             !canDrawOverlays() -> "Allow the floating bubble"
+            BubbleService.isRunning -> "Turn the bubble off"
             else -> "Turn the bubble on"
         }
         bubbleButton.isEnabled = bubbleAllowed()
+        // The page renders its own copy of this state, so anything that moves
+        // the native button has to tell the page too or the two disagree.
+        notifyPage()
     }
 
+    /** The native button is a toggle; the bridge calls the halves directly. */
     private fun onBubbleButton() {
+        if (BubbleService.isRunning) stopBubble() else requestBubbleOn()
+    }
+
+    private fun requestBubbleOn() {
         if (!bubbleAllowed()) {
             toast("Sign in with Discord first")
             return
@@ -210,15 +232,98 @@ class MainActivity : AppCompatActivity() {
     private fun startBubble() {
         BubbleService.start(this)
         toast("Bubble on — it stays put over other apps")
+        refreshButton()
         moveTaskToBack(true)
+    }
+
+    private fun stopBubble() {
+        BubbleService.stop(this)
+        toast("Bubble off")
+        refreshButton()
     }
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
+    // ---------------------------------------------------------------- bridge --
+
+    /** Tells the page its view of the bubble may be out of date. */
+    private fun notifyPage() {
+        if (!::webView.isInitialized) return
+        runCatching {
+            webView.evaluateJavascript("window.dispatchEvent(new Event('$STATE_EVENT'))", null)
+        }
+    }
+
+    /**
+     * Whether the page making a bridge call is actually ours.
+     *
+     * This matters more than it looks. `addJavascriptInterface` injects the
+     * object into **every** page and every frame the WebView loads, and this
+     * WebView deliberately loads `discord.com` so the OAuth round trip can
+     * finish in place. Without this check, Discord's pages — or anything they
+     * embed — could read whether the trainer is signed in and raise an overlay
+     * on their behalf. There is no way to scope the interface to one origin, so
+     * the check has to happen on the way in.
+     */
+    private fun isOurPage(): Boolean = loadedOrigin == Api.ORIGIN
+
+    /**
+     * The bridge the site uses to raise the ball.
+     *
+     * A web page cannot start an Android service on its own — no API exists,
+     * in any browser — so this is the only way the control can live where
+     * people look for it, which is on `/go` next to everything else. In an
+     * ordinary browser the object is simply absent and the site renders
+     * nothing, which is the correct outcome rather than a broken button.
+     *
+     * Every method runs on a binder thread, not the UI thread, so anything
+     * touching views hops across explicitly.
+     */
+    private inner class BubbleBridge {
+
+        /**
+         * A JSON snapshot, read straight from sources that are safe off the UI
+         * thread: the cookie store, an AppOps query, and the service's own
+         * volatile flag. Deliberately not a UI-thread round trip — blocking a
+         * binder thread on the main looper deadlocks if the page ever calls
+         * this from a JS bridge callback.
+         */
+        @JavascriptInterface
+        fun state(): String {
+            if (!isOurPage()) return "{}"
+            return JSONObject()
+                .put("signedIn", Api.isSignedIn())
+                .put("canOverlay", canDrawOverlays())
+                .put("running", BubbleService.isRunning)
+                .toString()
+        }
+
+        /**
+         * Same entry point as the native button, so the permission prompt, the
+         * sign-in refusal and the drop-to-background all behave identically
+         * however the trainer got here.
+         */
+        @JavascriptInterface
+        fun start() {
+            runOnUiThread { if (isOurPage()) requestBubbleOn() }
+        }
+
+        @JavascriptInterface
+        fun stop() {
+            runOnUiThread { if (isOurPage()) stopBubble() }
+        }
+    }
+
     private companion object {
         const val PREFS = "app"
         const val KEY_LOCATION_DISCLOSED = "location_disclosed"
+
+        /** What the site feature-detects on `window`. */
+        const val BRIDGE_NAME = "PogoTxkApp"
+
+        /** Dispatched on `window` when the bubble's state may have changed. */
+        const val STATE_EVENT = "pogotxk-bubble"
     }
 }

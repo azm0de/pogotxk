@@ -1,0 +1,68 @@
+/*
+ * The in-app control for the floating ball.
+ *
+ * Only ever rendered inside the Android app, so this styles a surface that a
+ * browser visitor never sees. It still uses the same tokens as everything
+ * else on /go — the app is showing the real site, not a themed copy of it.
+ */
+
+.go-bubble {
+  margin: 0 0 0.75rem;
+  padding: 0.85rem 0.9rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.go-bubble-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  /* Matches the action grid's targets: this is pressed one-handed, often
+     while walking, and it is the control that leads to everything else. */
+  min-height: 52px;
+  padding: 0 1rem;
+  font: 600 1rem/1 inherit;
+  color: var(--accent-contrast);
+  background: var(--accent-solid);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.go-bubble-btn:active {
+  transform: translateY(1px);
+}
+
+/*
+ * Turning it off is a plain, quiet control rather than a second red button.
+ * When the ball is already up, "off" is the recovery action, and giving it the
+ * same weight as "launch" makes the panel read as two competing choices.
+ */
+.go-bubble-btn.is-on {
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+}
+
+.go-bubble-note {
+  margin: 0.55rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+/* Standing alone — the signed-out case renders the note with no panel around
+   it, so it needs the spacing the panel would otherwise have given it. */
+.go-bubble-note:only-child {
+  margin: 0 0 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .go-bubble-btn:active {
+    transform: none;
+  }
+}

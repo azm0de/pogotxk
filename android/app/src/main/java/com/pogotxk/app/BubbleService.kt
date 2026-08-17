@@ -89,6 +89,7 @@ class BubbleService : Service() {
         startForegroundCompat()
         addBubble()
         warmPoiCache()
+        isRunning = true
     }
 
     /**
@@ -130,6 +131,7 @@ class BubbleService : Service() {
     }
 
     override fun onDestroy() {
+        isRunning = false
         root?.let { runCatching { windowManager.removeView(it) } }
         root = null
         scope.cancel()
@@ -625,6 +627,20 @@ class BubbleService : Service() {
     }
 
     companion object {
+        /**
+         * Whether the overlay is up, so the page can render "Turn the bubble
+         * off" instead of guessing.
+         *
+         * A service has no queryable running state worth relying on —
+         * `getRunningServices` is deprecated and lies about your own process
+         * often enough to matter — so the service reports its own lifecycle.
+         * Volatile because it is written on the main thread and read from the
+         * WebView's binder thread.
+         */
+        @Volatile
+        var isRunning = false
+            private set
+
         const val ACTION_STOP = "com.pogotxk.app.STOP_BUBBLE"
         private const val CHANNEL_ID = "bubble"
         private const val NOTIFICATION_ID = 1
