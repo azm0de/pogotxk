@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -56,6 +57,16 @@ class BubbleService : Service() {
 
     private var expanded = false
     private var busy = false
+
+    /**
+     * Where the window sits when only the ball is showing.
+     *
+     * Opening a panel on the right-hand side moves the whole window left (see
+     * [anchorRight]), so the collapsed position has to be remembered rather
+     * than recomputed — otherwise closing the panel would leave the ball
+     * stranded wherever the expanded window happened to start.
+     */
+    private var collapsedX: Int? = null
 
     private data class Action(
         val emoji: String,
@@ -204,15 +215,64 @@ class BubbleService : Service() {
         windowManager.addView(container, layout)
         root = container
         params = layout
+
+        // The saved position may have been written in a different orientation,
+        // or on a different display entirely if the phone has been docked since.
+        // Snapping once on creation re-resolves it against the screen we
+        // actually have, so the ball can never come back off-screen.
+        snapAndPersist(layout)
+    }
+
+    /**
+     * Puts the ball back on a real edge after a rotation.
+     *
+     * Rotating swaps the screen's width and height, but an overlay window keeps
+     * the x/y it was last given — in the *old* orientation's coordinates. A ball
+     * parked on the right edge in landscape lands far off the right edge in
+     * portrait, where it cannot be tapped, dragged back, or reached at all. And
+     * because the position is persisted, turning the bubble off and on again
+     * would restore the same unreachable coordinates rather than recover it.
+     *
+     * A service only receives this callback for the configuration changes it
+     * survives, which is exactly the case that matters here.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val layout = params ?: return
+        // An open panel was measured against the previous screen width, so its
+        // anchoring is meaningless now. Close it and let the next tap rebuild it.
+        if (expanded) collapse()
+        snapAndPersist(layout)
     }
 
     // ------------------------------------------------------------- position --
 
     private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    private fun screenWidth(): Int = resources.displayMetrics.widthPixels
+    /**
+     * The real display bounds, not the app's usable area.
+     *
+     * The window carries `FLAG_LAYOUT_NO_LIMITS`, so its x/y are in full-display
+     * coordinates including the system bars. `displayMetrics` reports the area
+     * *minus* those bars on some versions, and clamping full-display coordinates
+     * against a smaller rectangle parks the ball short of the edge on some
+     * devices and lets it sit under the status bar on others.
+     */
+    private fun screenWidth(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager.currentWindowMetrics.bounds.width()
+        } else {
+            @Suppress("DEPRECATION")
+            resources.displayMetrics.widthPixels
+        }
 
-    private fun screenHeight(): Int = resources.displayMetrics.heightPixels
+    private fun screenHeight(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager.currentWindowMetrics.bounds.height()
+        } else {
+            @Suppress("DEPRECATION")
+            resources.displayMetrics.heightPixels
+        }
 
     /**
      * Snaps to whichever side edge is nearer and remembers it.
@@ -268,10 +328,23 @@ class BubbleService : Service() {
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downX
                     val dy = event.rawY - downY
-                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) dragging = true
+                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) {
+                        dragging = true
+                        // Moving the ball moves the whole window, and an open
+                        // panel has shifted that window away from the ball's
+                        // collapsed position. Dragging from there would persist
+                        // the panel's offset as the ball's home. Closing first
+                        // restores the true position, and it matches what every
+                        // other chat head does: drag it and the menu goes away.
+                        if (expanded) collapse()
+                        startX = layout.x
+                        startY = layout.y
+                        downX = event.rawX
+                        downY = event.rawY
+                    }
                     if (dragging) {
-                        layout.x = startX + dx.toInt()
-                        layout.y = startY + dy.toInt()
+                        layout.x = startX + (event.rawX - downX).toInt()
+                        layout.y = startY + (event.rawY - downY).toInt()
                         runCatching { windowManager.updateViewLayout(root, layout) }
                     }
                     true
@@ -287,21 +360,43 @@ class BubbleService : Service() {
                     true
                 }
 
+                /**
+                 * The gesture was taken away mid-drag.
+                 *
+                 * This is the branch that matters for a bubble living over
+                 * another app: the shade being pulled down, a system dialog
+                 * appearing, an OEM edge gesture claiming the pointer — any of
+                 * them ends the stream with CANCEL and no UP will follow. The
+                 * old `else -> false` swallowed it, leaving `dragging` true and
+                 * the ball abandoned wherever the finger was: not snapped to an
+                 * edge, not saved, and quite possibly sitting on top of the
+                 * thing the user was trying to tap in the game. A cancelled
+                 * gesture is not a tap, so it must never open the panel.
+                 */
+                MotionEvent.ACTION_CANCEL -> {
+                    if (dragging) snapAndPersist(layout)
+                    dragging = false
+                    true
+                }
+
                 else -> false
             }
         }
     }
 
+    /** True when the ball is parked on the left half, so a panel may grow right. */
+    private fun ballOnLeftHalf(): Boolean =
+        (collapsedX ?: params?.x ?: 0) + dp(56) / 2 < screenWidth() / 2
+
     /**
-     * A panel anchored beside the ball, on whichever side has room.
+     * A panel beside the ball, laid out so it grows inward.
      *
-     * The ball snaps to an edge, so a panel with a fixed left margin would open
-     * straight off the screen whenever the ball is parked on the right — which
-     * is now the default side. Anchoring by measured position instead means the
-     * panel always opens inward.
+     * When the ball is on the left the panel sits to its right, and the frame is
+     * the ball plus a gap plus the panel. When the ball is on the right the two
+     * swap: the panel takes the start of the frame and the ball is pushed to the
+     * end by [anchorRight], so the row reads panel-then-ball.
      */
-    private fun panelShell(): LinearLayout {
-        val onLeftHalf = (params?.x ?: 0) + dp(56) / 2 < screenWidth() / 2
+    private fun panelShell(onLeftHalf: Boolean): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -315,30 +410,66 @@ class BubbleService : Service() {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = dp(4)
-                if (onLeftHalf) {
-                    leftMargin = dp(64)
-                } else {
-                    // Grows leftwards from the ball instead of off the edge.
-                    gravity = Gravity.END
-                    rightMargin = dp(64)
-                }
+                // Either way the margin reserves the ball's 56dp plus a gap; the
+                // difference is only which end of the frame it is reserved at.
+                if (onLeftHalf) leftMargin = dp(64) else rightMargin = dp(64)
             }
         }
     }
 
-    private fun toggleExpanded() {
+    /**
+     * Moves the *window* left so a right-edge panel stays on screen.
+     *
+     * This is the part the old layout-only approach could not do. The window is
+     * `WRAP_CONTENT` anchored `TOP|START` at the ball's x, so adding a panel
+     * grows it rightwards from that x — and with the ball on the right edge,
+     * which is the default side, that growth runs straight off the display.
+     * `FLAG_LAYOUT_NO_LIMITS` means the window manager will not clamp it back,
+     * so the panel simply is not there to tap. Setting `Gravity.END` on the
+     * panel could never fix it: that positions the panel *within* the window,
+     * and it is the window itself that is off-screen.
+     *
+     * So the window's right edge is pinned level with the ball's right edge and
+     * it is allowed to extend leftwards instead, with the ball moved to the end
+     * of the frame so it does not appear to jump inward.
+     */
+    private fun anchorRight(container: FrameLayout, layout: WindowManager.LayoutParams) {
+        val unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        container.measure(unspecified, unspecified)
+        val width = container.measuredWidth
+        if (width <= dp(56)) return
+
+        (container.getChildAt(0).layoutParams as FrameLayout.LayoutParams).gravity =
+            Gravity.END or Gravity.TOP
+        container.getChildAt(0).requestLayout()
+
+        val anchor = collapsedX ?: layout.x
+        layout.x = (anchor + dp(56) - width).coerceAtLeast(dp(EDGE_MARGIN_DP))
+        runCatching { windowManager.updateViewLayout(container, layout) }
+    }
+
+    /** Shows a freshly built panel and keeps it on screen. */
+    private fun present(panel: LinearLayout, onLeftHalf: Boolean) {
         val container = root ?: return
+        val layout = params ?: return
+        collapsedX = layout.x
+        container.addView(panel)
+        expanded = true
+        if (!onLeftHalf) anchorRight(container, layout)
+    }
+
+    private fun toggleExpanded() {
         if (expanded) {
             collapse()
             return
         }
 
-        val panel = panelShell()
+        val onLeftHalf = ballOnLeftHalf()
+        val panel = panelShell(onLeftHalf)
         actions.forEach { action -> panel.addView(actionChip(action)) }
         panel.addView(closeChip())
 
-        container.addView(panel)
-        expanded = true
+        present(panel, onLeftHalf)
     }
 
     /**
@@ -356,10 +487,11 @@ class BubbleService : Service() {
      * the moment you find out the bubble picked the gym you actually meant.
      */
     private fun confirmPanel(action: Action, poi: Api.Poi?) {
-        val container = root ?: return
+        if (root == null) return
         collapse()
 
-        val panel = panelShell()
+        val onLeftHalf = ballOnLeftHalf()
+        val panel = panelShell(onLeftHalf)
 
         panel.addView(
             TextView(this).apply {
@@ -374,15 +506,33 @@ class BubbleService : Service() {
         panel.addView(chip("✓") { send(action, poi) })
         panel.addView(chip("✕") { collapse() })
 
-        container.addView(panel)
-        expanded = true
+        present(panel, onLeftHalf)
     }
 
+    /**
+     * Removes the panel and puts the window back where the ball lives.
+     *
+     * The x restore is not cosmetic: [anchorRight] moved the whole window left
+     * to fit the panel, so without undoing it the ball would stay at the
+     * panel's far corner and every later position — including the one written
+     * to disk — would drift further inward each time it was opened.
+     */
     private fun collapse() {
         val container = root ?: return
         // Child 0 is the bubble itself; anything after it is the panel.
         while (container.childCount > 1) container.removeViewAt(1)
         expanded = false
+
+        val layout = params
+        val restore = collapsedX
+        collapsedX = null
+        if (layout == null || restore == null) return
+
+        (container.getChildAt(0).layoutParams as FrameLayout.LayoutParams).gravity =
+            Gravity.START or Gravity.TOP
+        container.getChildAt(0).requestLayout()
+        layout.x = restore
+        runCatching { windowManager.updateViewLayout(container, layout) }
     }
 
     private fun chip(text: String, onTap: () -> Unit): TextView = TextView(this).apply {
