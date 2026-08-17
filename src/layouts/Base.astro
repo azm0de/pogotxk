@@ -75,6 +75,11 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="apple-mobile-web-app-title" content="PoGo TXK" />
+    <!-- Every page can be added to an iOS home screen, not just /go — without
+         these, iOS falls back to a screenshot of whatever page was open. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
     {/* Per-page head additions — feed autodiscovery, article metadata, noindex.
         Without this slot, any <Fragment slot="head"> a page declares is
@@ -1066,6 +1071,23 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         transition:
           background-color 0.16s ease,
           border-color 0.16s ease;
+        /* Anchors the hit-area expansion below — offsets nothing on its own. */
+        position: relative;
+      }
+      /*
+       * The pill's visible box stays 32px tall — this only widens what
+       * counts as a tap, not what renders. `::before` is generated content
+       * owned by this element, so a click anywhere inside its (invisible)
+       * box still resolves to the anchor; nothing is drawn because there is
+       * no background/border/content here beyond the empty string. 6px top
+       * and bottom brings the 32px pill to a 44px target without touching
+       * width — height was the only dimension under the guideline, and the
+       * header (64–72px) has room to spare on both sides of a centered pill.
+       */
+      .account-signin::before {
+        content: '';
+        position: absolute;
+        inset: -6px 0;
       }
       .account-signin:hover {
         background: rgb(255 255 255 / 0.14);

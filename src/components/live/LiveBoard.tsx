@@ -53,6 +53,20 @@ const HEARTBEAT_MS = 30_000;
 const HEARTBEAT = 'ping';
 /** Countdown granularity. Flares are shown in minutes; 5s is plenty. */
 const TICK_MS = 5000;
+/**
+ * How long a socket attempt gets before it counts as failed rather than still
+ * connecting. A handshake that hangs — a captive portal or proxy that accepts
+ * the TCP connection and never completes the upgrade — fires neither `open`
+ * nor `close`/`error` on its own, so nothing above would ever notice: `status`
+ * would sit on 'connecting' (which deliberately renders no pill) forever, and
+ * the board would go stale with nothing telling the reader that. Forcing the
+ * socket closed after this bound gives a hang the same fate as any other
+ * failed attempt — `close` fires, `scheduleReconnect` runs, and eventually the
+ * board falls through to polling like it would for a clean failure.
+ */
+const CONNECT_TIMEOUT_MS = 10_000;
+/** Generous rather than tight — this is a phone on park wifi. */
+const FETCH_TIMEOUT_MS = 12_000;
 
 type ConnectionStatus = 'connecting' | 'live' | 'reconnecting' | 'polling';
 
@@ -213,7 +227,10 @@ export default function LiveBoard({
    *  after a reconnect — anything missed while the socket was down lands here. */
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/flares', { headers: { accept: 'application/json' } });
+      const res = await fetch('/api/flares', {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (!res.ok) throw new Error(await readError(res));
       const body = (await res.json()) as Snapshot;
       skewRef.current = Date.parse(body.now) - Date.now();
@@ -297,7 +314,7 @@ export default function LiveBoard({
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/game/raids.json')
+    fetch('/api/game/raids.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
       .then((r) => (r.ok ? (r.json() as Promise<RaidFeedResponse | null>) : null))
       .then((body) => {
         if (cancelled || !body?.data) return;
@@ -325,6 +342,7 @@ export default function LiveBoard({
     let retryTimer = 0;
     let heartbeatTimer = 0;
     let pollTimer = 0;
+    let connectTimer = 0;
 
     const stopPolling = () => {
       if (!pollTimer) return;
@@ -387,7 +405,17 @@ export default function LiveBoard({
       }
       socket = ws;
 
+      // See CONNECT_TIMEOUT_MS: a handshake that never resolves either way
+      // gets forced closed so it is treated as a failed attempt instead of an
+      // indefinite one.
+      connectTimer = window.setTimeout(() => {
+        connectTimer = 0;
+        if (ws.readyState === WebSocket.CONNECTING) ws.close();
+      }, CONNECT_TIMEOUT_MS);
+
       ws.addEventListener('open', () => {
+        window.clearTimeout(connectTimer);
+        connectTimer = 0;
         if (disposed) {
           ws.close();
           return;
@@ -405,6 +433,8 @@ export default function LiveBoard({
       ws.addEventListener('message', (event) => applyEvent(event.data));
 
       ws.addEventListener('close', () => {
+        window.clearTimeout(connectTimer);
+        connectTimer = 0;
         stopHeartbeat();
         // Only a connection that actually held counts as success. A socket that
         // opens and dies immediately leaves `attempts` where it was, so the
@@ -441,6 +471,7 @@ export default function LiveBoard({
       disposed = true;
       document.removeEventListener('visibilitychange', onVisible);
       if (retryTimer) window.clearTimeout(retryTimer);
+      if (connectTimer) window.clearTimeout(connectTimer);
       stopHeartbeat();
       stopPolling();
       socket?.close();
@@ -457,7 +488,7 @@ export default function LiveBoard({
       // The map payload is the only public list of POIs and it is already
       // edge-cached, so this costs nothing on a warm cache — and nothing at all
       // for the majority of visitors, who never open the form.
-      const res = await fetch('/api/map.json');
+      const res = await fetch('/api/map.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
       if (!res.ok) throw new Error('unavailable');
       const data = (await res.json()) as { pois: PoiOption[] };
       setPois(

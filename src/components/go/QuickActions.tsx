@@ -69,11 +69,30 @@ function minutesLeft(iso: string): number {
   return Math.max(0, Math.round((Date.parse(iso) - Date.now()) / 60000));
 }
 
+/**
+ * Generous rather than tight — this is a phone on park wifi, not server to
+ * server. Matches the geolocation timeout below, chosen for the same reason.
+ * Without this, a fetch that never settles (a captive portal that accepts the
+ * connection and never answers, not a clean failure) left `boardStatus` stuck
+ * on 'loading' forever, which the render treats as "no error" and falls
+ * through to the same copy as a genuinely empty board.
+ */
+const FETCH_TIMEOUT_MS = 12000;
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+      signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new Error('Taking too long to reach the server — check your connection.');
+    }
+    throw err;
+  }
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new Error(body.error ?? res.statusText);
   return body;
@@ -110,6 +129,14 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
   const [pois, setPois] = useState<MapPoi[]>([]);
   const [flares, setFlares] = useState<Flare[]>([]);
   const [mine, setMine] = useState<Record<string, string>>({});
+  /**
+   * Whether the last flare poll actually reached the server, so an empty
+   * board can say "we could not check" instead of looking identical to a
+   * genuinely quiet park. `flares` alone cannot carry this: it starts empty
+   * too, and a failed poll must not overwrite it — a stale board is more
+   * useful than a wiped one.
+   */
+  const [boardStatus, setBoardStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [bosses, setBosses] = useState<RaidBoss[]>([]);
   const [here, setHere] = useState<[number, number] | null>(null);
   const [gpsState, setGpsState] = useState<'idle' | 'locating' | 'ok' | 'denied'>('idle');
@@ -179,18 +206,27 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
       const data = await api<{ flares: Flare[]; mine: Record<string, string> }>('/api/flares');
       setFlares(data.flares ?? []);
       setMine(data.mine ?? {});
+      setBoardStatus('ok');
     } catch {
-      /* The board is a nicety here; the actions still work. */
+      // The actions still work without the board, so this stays quiet rather
+      // than a toast — but silence must not read as "nothing is happening"
+      // when the truth is "we could not check". `flares` is deliberately
+      // left alone: stale data is still more useful than a wiped board.
+      setBoardStatus('error');
     }
   }, []);
 
   useEffect(() => {
-    fetch('/api/map.json')
+    // Both timed the same as `api()` above: a hung fetch here left the "Where"
+    // dropdown and boss suggestions permanently empty with no way to tell that
+    // from there genuinely being nothing to show. Timing it out at least turns
+    // an indefinite hang into the same fast, already-handled empty state.
+    fetch('/api/map.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
       .then((r) => r.json() as Promise<{ pois?: MapPoi[] }>)
       .then((d) => setPois(d.pois ?? []))
       .catch(() => setPois([]));
 
-    fetch('/api/game/raids.json')
+    fetch('/api/game/raids.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
       .then((r) => r.json() as Promise<{ data?: { name: string; tier: string }[] }>)
       .then((d) => setBosses((d.data ?? []).map((b) => ({ name: b.name, tier: b.tier }))))
       .catch(() => setBosses([]));
@@ -253,7 +289,7 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
 
     let cancelled = false;
     (async () => {
-      const cfg = await fetch('/api/push/subscribe')
+      const cfg = await fetch('/api/push/subscribe', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
         .then((r) => r.json() as Promise<{ publicKey: string | null; enabled: boolean }>)
         .catch(() => null);
       if (cancelled) return;
@@ -592,8 +628,20 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
       )}
 
       <section className="go-board" aria-label="Active flares">
+        {boardStatus === 'error' && (
+          // Same job as /live's connection pill, in the vocabulary this page
+          // already has: a small conditional note, not a toast (a poll fails
+          // every 20s here, and a toast on that cadence would be worse than
+          // the silence it replaces) and not a layout shift when things are
+          // fine (it renders nothing at all outside this branch).
+          <p className="go-note" role="status" aria-live="polite">
+            {flares.length > 0
+              ? 'Could not refresh the board — showing the last flares we had.'
+              : 'Could not load the board. Checking again shortly.'}
+          </p>
+        )}
         {flares.length === 0 ? (
-          canPost ? (
+          boardStatus === 'error' ? null : canPost ? (
             <p className="go-empty empty-art-bg">
               Nothing active right now. Fire one below when you are at a gym and want company.
             </p>
