@@ -66,7 +66,54 @@ function configHelp(url: URL): Response {
   });
 }
 
-export async function GET({ url }: APIContext): Promise<Response> {
+/**
+ * The one screen that lets a phone approve with the Discord app it already has.
+ *
+ * A browser will not hand a *redirect* off to a native app — that is a
+ * deliberate anti-hijacking rule, not an oversight — so bouncing straight from
+ * `/auth/login` to Discord guarantees the OAuth screen opens in the browser.
+ * If that browser has no Discord session, the trainer is asked for a password
+ * while being signed in on the very same phone, one app away.
+ *
+ * A real tap on a real link IS routed to the app. So on a phone we stop and
+ * offer the link instead of following it, and the extra tap buys the app
+ * handoff. Desktop skips this entirely — there is no app to hand off to, so it
+ * would be pure friction.
+ */
+function appHandoffPage(authorize: string, url: URL): string {
+  const escaped = authorize.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  const direct = new URL(url);
+  direct.searchParams.set('direct', '1');
+  const skip = direct.toString().replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Continue with Discord</title>
+<style>
+ :root{color-scheme:dark}
+ body{font:16px/1.55 system-ui,-apple-system,'Segoe UI',sans-serif;margin:0;min-height:100dvh;
+      display:flex;align-items:center;justify-content:center;padding:1.5rem;
+      background:#0d1622;color:#e8edf4}
+ main{width:100%;max-width:26rem;text-align:center}
+ h1{font-size:1.3rem;margin:0 0 .6rem}
+ p{margin:0 0 1.4rem;color:#9aa8ba;font-size:.95rem}
+ .btn{display:flex;align-items:center;justify-content:center;gap:.55rem;min-height:52px;
+      padding:0 1.25rem;border-radius:12px;background:#5865f2;color:#fff;font-weight:600;
+      text-decoration:none}
+ .btn:active{transform:translateY(1px)}
+ .alt{display:inline-block;margin-top:1.1rem;color:#7f8ea3;font-size:.85rem}
+</style></head><body>
+<main>
+ <h1>Continue with Discord</h1>
+ <p>This opens the Discord app so you can approve with the account you are
+    already signed into — no password.</p>
+ <a class="btn" href="${escaped}">Approve in Discord</a>
+ <a class="alt" href="${skip}">Use the browser instead</a>
+</main>
+</body></html>`;
+}
+
+export async function GET({ url, request }: APIContext): Promise<Response> {
   const cfg = discordConfig(env);
   if (!cfg) return configHelp(url);
 
@@ -95,16 +142,42 @@ export async function GET({ url }: APIContext): Promise<Response> {
     .replace(/\//g, '_')
     .replace(/=+$/, '');
 
+  const authorize = authorizeUrl(
+    cfg,
+    url,
+    state,
+    await pkceChallenge(verifier),
+    consent ? 'consent' : retried ? 'default' : 'none',
+  );
+
+  const ua = request.headers.get('user-agent') ?? '';
+  /*
+   * Our own Android shell already intercepts the authorize URL and hands it to
+   * the Discord app itself, so the interstitial there would be an extra tap
+   * that buys nothing. It marks itself in the User-Agent precisely so this can
+   * tell the difference server-side.
+   */
+  const inOurApp = ua.includes('PogoTxkApp/');
+  const onPhone = /Android|iPhone|iPad|iPod/i.test(ua);
+  // `direct=1` is the escape hatch the interstitial itself offers, for anyone
+  // whose Discord app is broken, absent, or simply not who they want to be.
+  const direct = url.searchParams.get('direct') === '1';
+
+  if (onPhone && !inOurApp && !direct) {
+    return new Response(appHandoffPage(authorize, url), {
+      status: 200,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'set-cookie': stateCookie(payload, url),
+        'cache-control': 'no-store',
+      },
+    });
+  }
+
   return new Response(null, {
     status: 302,
     headers: {
-      location: authorizeUrl(
-        cfg,
-        url,
-        state,
-        await pkceChallenge(verifier),
-        consent ? 'consent' : retried ? 'default' : 'none',
-      ),
+      location: authorize,
       'set-cookie': stateCookie(payload, url),
       'cache-control': 'no-store',
     },

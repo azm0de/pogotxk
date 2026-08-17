@@ -85,6 +85,15 @@ class MainActivity : AppCompatActivity() {
             )
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            /*
+             * Marks our shell so the server can tell it apart from a phone
+             * browser. /auth/login shows phones a "continue with Discord"
+             * interstitial, because a browser will not hand a redirect to a
+             * native app and only a real tap gets routed. In here that tap
+             * would be wasted — shouldOverrideUrlLoading already intercepts the
+             * authorize URL and hands it over directly.
+             */
+            settings.userAgentString = "${settings.userAgentString} PogoTxkApp/1"
             // Geolocation inside the WebView drives the site's "nearest gym"
             // logic; the bubble uses the native location APIs instead.
             settings.setGeolocationEnabled(true)
