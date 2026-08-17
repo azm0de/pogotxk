@@ -11,10 +11,23 @@ import { avatarUrl, type Role, type SessionUser, type Team } from './types';
 export const SESSION_COOKIE = 'pogotxk_session';
 export const OAUTH_STATE_COOKIE = 'pogotxk_oauth';
 
-/** Sessions last two weeks; every request within that window slides it forward. */
+/** Sessions last two weeks, and any use inside that window slides them forward. */
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
-/** Only rewrite the expiry when less than this much of the window remains. */
-const SLIDE_THRESHOLD_SECONDS = 60 * 60 * 24;
+/**
+ * How stale a session may get before use renews it.
+ *
+ * This exists to bound writes, not to bound the session: renewing on literally
+ * every request would mean a D1 write per page view. Once a day is plenty.
+ *
+ * It previously read as "only renew when less than a day REMAINS", which made
+ * the fortnight a hard deadline rather than a rolling window — the comment
+ * above said sessions slid forward on use, and they did not. Anyone who did not
+ * happen to open the site during the final 24 hours of the two weeks was signed
+ * out and sent back through Discord. That is a sign-in prompt nobody could
+ * predict or avoid, and on Android it is the expensive kind: Discord will not
+ * hand OAuth to its own app, so every one of those costs a browser login.
+ */
+const SLIDE_INTERVAL_SECONDS = 60 * 60 * 24;
 
 function toHex(buffer: ArrayBuffer): string {
   return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -145,8 +158,11 @@ export async function touchSession(db: D1Database, token: string): Promise<void>
     .first<{ expires_at: string }>();
   if (!row) return;
 
+  // Renew once the session has aged by a day, rather than waiting until it is
+  // nearly dead. Same write volume — at most one a day — but the fortnight
+  // becomes a genuinely rolling window instead of a deadline.
   const remaining = Date.parse(row.expires_at) - Date.now();
-  if (remaining > SLIDE_THRESHOLD_SECONDS * 1000) return;
+  if (remaining > (SESSION_TTL_SECONDS - SLIDE_INTERVAL_SECONDS) * 1000) return;
 
   await db
     .prepare('UPDATE sessions SET expires_at = ?2 WHERE id = ?1')
