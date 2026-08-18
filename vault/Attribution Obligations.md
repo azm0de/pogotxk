@@ -1,6 +1,6 @@
 ---
 tags: [reference, legal]
-updated: 2026-08-05
+updated: 2026-08-18
 ---
 
 # Attribution Obligations
@@ -51,6 +51,18 @@ position.
 
 Game-derived marker artwork was **not** ported. The map markers are original SVGs, which also
 made them scale and theme properly.
+
+The **Pokémon GO logo is not used**, anywhere, by Justin's explicit call — see the
+`pogotxk-design` skill, which carries the same rule.
+
+> [!warning] It was served for three days without being used
+> `Pokemon_Go.svg.webp` — the official wordmark, kept as the reference for generating our own
+> logo — was committed into `public/art/` on 2026-08-15 and answered `200` at
+> `/art/Pokemon_Go.svg.webp` until 2026-08-18. No page ever referenced it; `public/` uploads
+> everything in it regardless. It now sits in `art-src/`, which is not deployed.
+>
+> "No component uses it" is not the test. **"It is not reachable" is the test** — for anything
+> here that is licensed rather than ours.
 
 ## Map data
 

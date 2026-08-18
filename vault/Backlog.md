@@ -1,25 +1,38 @@
 ---
 tags: [planning]
-updated: 2026-08-10
+updated: 2026-08-18
 ---
 
 # Backlog
 
 Everything in the original plan is built. This is what is left, roughly by value.
 
-## Left in the working tree on purpose
+## Source art is out of `public/` — closed 2026-08-18
 
-The whole design pass — repaint, logo, hero video, icons, the home page as it now stands — shipped
-on 2026-08-10. These are the only things still uncommitted, and they were **left out
-deliberately** because they are Justin's rather than the agent's:
+Both items that used to sit here are done, and the second one closed badly enough to be worth
+recording rather than just ticking.
 
-- The **`.gitignore` edit** and the untracked **`.github/`**. That ignore rule is
-  `.github\instructions\codacy.instructions.md` — backslashes, which gitignore does not match, so
-  the file it is trying to exclude would be committed anyway. Change it to forward slashes before
-  committing either
-- **`public/art/go.webp`**, **`pogoeve.png`** and **`Pokemon_Go.svg.webp`** — untracked and
-  referenced by no code. The last is the Pokémon GO wordmark used as the reference for generating
-  our own logo; committing it would serve a trademarked logo from `/art/` for no reason
+- [x] ~~The **`.gitignore` edit** and the untracked **`.github/`**~~ — fixed in `03facef`. The
+      rule read `.github\instructions\codacy.instructions.md`, and gitignore patterns are POSIX
+      paths always: a backslash there is an escape character, not a separator, so it matched
+      nothing and the file it was meant to hide kept showing up as untracked
+- [x] ~~**`public/art/go.webp`**, **`pogoeve.png`** and **`Pokemon_Go.svg.webp`**~~ — this entry
+      warned that committing the last one "would serve a trademarked logo from `/art/` for no
+      reason". It was committed anyway in `7791fec`, with seven more, on the reasoning that they
+      were *already* being deployed and git was the only place they did not exist. Both halves of
+      that were true and the conclusion still went the wrong way: the answer to "an unreferenced
+      trademark is being served" is to stop serving it, not to start tracking it
+
+> [!danger] `public/` is a publishing decision, not a storage location
+> Everything under it is copied into the build and uploaded as a static asset, whether or not a
+> single line of code references it. **9.1 MB of the 9.3 MB in `public/art/` answered `200` in
+> production and was loaded by no page** — including the Pokémon GO wordmark at
+> `/art/Pokemon_Go.svg.webp`, which [[Attribution Obligations]] §3 forbids the site from using
+> at all.
+>
+> The ten unreferenced originals now live in **`art-src/`**, which is neither built nor deployed.
+> `art-src/README.md` maps each source to the derivatives generated from it. Source material
+> belongs there; only what a page actually loads belongs in `public/`.
 
 ## Blocked on the owner
 
