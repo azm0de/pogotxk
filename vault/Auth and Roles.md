@@ -1,6 +1,6 @@
 ---
 tags: [architecture, security]
-updated: 2026-08-18
+updated: 2026-08-19
 ---
 
 # Auth and Roles
@@ -73,11 +73,49 @@ Three surfaces, three different jars:
   pinning Chrome would recreate the bug on a phone that defaults to Samsung Internet.
 - **The Android app's WebView** — a jar Discord has *never* seen, so it was a password every
   single time. Solved separately by `MainActivity.startSignIn`, which uses a Custom Tab.
+- **A Safari web app on the Mac** — its own jar too, but with one grace the others lack:
+  **Safari copies the site's cookies into the web app at Add-to-Dock time** (WWDC23), so
+  installing while signed in inherits the session. iOS has never done this — an iPhone
+  home-screen install starts empty, still true on iOS 26. macOS web apps also keep OAuth
+  redirects *in* the app by heuristic, with `window.open` as the guarantee.
 
-> [!warning] iOS cannot be fixed
-> A standalone PWA on iOS gets its own cookie storage, there is no intent scheme, and Safari
-> will not hand a page to another browser. An iPhone home-screen install pays one Discord login
-> and there is no version of this that avoids it.
+### The floor beneath all of it, and the door around the floor — 2026-08-19
+
+Every fix above routes sign-in toward a jar that already holds a Discord session. None of them
+can help when **no jar on hand has one** — a fresh Safari on a Mac, an installed iPhone app.
+There, `prompt=none` comes back `login_required` and Discord's next screen is the
+email-and-password form.
+
+That case now goes to **`/auth/device`** instead: Discord's RFC 8628 **device authorization
+grant**, the flow console linking runs on. The page shows a short code and a link to
+`discord.com/activate`; the member approves from any Discord that is already signed in —
+usually the app one home-screen tap away — while the Worker polls
+`POST /api/v10/oauth2/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code`.
+On approval it runs the same pipeline as every other door (`fetchUser → fetchGuildRoles →
+resolveRole → upsertUser → createSession`), so it is an additional entrance, not a second
+identity system. Codes come from `POST /api/v10/oauth2/device/authorize`; the `device_code`
+lives in an HttpOnly cookie and never reaches the page.
+
+Two routes in: the callback sends `login_required` there (`interactionTarget` in
+`src/lib/auth/next.ts` — only that error; `consent_required` keeps the plain retry, because
+the approval screen is the experience we *want*), and installed non-Android apps go straight
+there from any sign-in link (`signin-surface.ts`), skipping a doomed round trip through an
+empty jar.
+
+> [!warning] The grant is real but not promised
+> The endpoints are documented under Discord's **Social SDK** (which also names the gate:
+> the application must have **"Public Client" enabled** on its OAuth2 tab — with it off the
+> device endpoint answers `401 Invalid client id` even to valid credentials, verified
+> 2026-08-19) rather than the core OAuth2 docs. So `/auth/device` treats unavailability as a
+> state, not an error: if Discord refuses, the page says so and offers the ordinary browser
+> sign-in, which is exactly the pre-2026-08-19 behaviour. Nothing breaks if the grant is ever
+> gated again.
+
+> [!important] Public Client ON changes what the token endpoint requires, not what we send
+> A public client may redeem authorization codes with PKCE alone. Every flow here already
+> does PKCE S256 and still presents the secret server-side; redirect URIs are pinned
+> byte-for-byte in the portal. Flip the toggle, then immediately re-verify one ordinary
+> sign-in round trip — the semantics change is Discord-side and silent.
 
 > [!danger] The Android redirect URI needs its single slash
 > `Auth.kt` sends `discord-<app id>:/authorize/callback` — **one** slash after the colon, which
@@ -98,7 +136,10 @@ Three surfaces, three different jars:
 
 `npm test` covers role resolution, the bootstrap override, the optional member-role gate, the
 role hierarchy, and PKCE. 23 checks in `scripts/test-auth.ts`, plus the installed-app sign-in
-handoff in `scripts/test-signin-surface.ts`.
+handoff in `scripts/test-signin-surface.ts` and the device grant — bodies, response mapping,
+cookie payload, and the `login_required` routing split — in `scripts/test-device-grant.ts`.
+`scripts/preflight-device-grant.ts` re-checks whether Discord's device endpoint accepts the
+app, shape-only, no secrets printed.
 
 ## See also
 
