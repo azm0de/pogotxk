@@ -10,6 +10,7 @@ import { avatarUrl, type Role, type SessionUser, type Team } from './types';
 
 export const SESSION_COOKIE = 'pogotxk_session';
 export const OAUTH_STATE_COOKIE = 'pogotxk_oauth';
+export const DEVICE_GRANT_COOKIE = 'pogotxk_device';
 
 /** Sessions last two weeks, and any use inside that window slides them forward. */
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
@@ -65,6 +66,22 @@ export function stateCookie(value: string, url: URL): string {
 export function clearedStateCookie(url: URL): string {
   const secure = url.protocol === 'https:' ? ' Secure;' : '';
   return `${OAUTH_STATE_COOKIE}=; Path=/; HttpOnly;${secure} SameSite=Lax; Max-Age=0`;
+}
+
+/**
+ * Parks a pending device-grant sign-in — same shape as the OAuth state cookie,
+ * because it is the same job: an HttpOnly holding pen for a flow secret the
+ * page must never see. `maxAge` comes from Discord's `expires_in` rather than
+ * a constant, so the cookie dies with the code it carries.
+ */
+export function deviceGrantCookie(value: string, url: URL, maxAge: number): string {
+  const secure = url.protocol === 'https:' ? ' Secure;' : '';
+  return `${DEVICE_GRANT_COOKIE}=${value}; Path=/; HttpOnly;${secure} SameSite=Lax; Max-Age=${Math.max(60, Math.floor(maxAge))}`;
+}
+
+export function clearedDeviceGrantCookie(url: URL): string {
+  const secure = url.protocol === 'https:' ? ' Secure;' : '';
+  return `${DEVICE_GRANT_COOKIE}=; Path=/; HttpOnly;${secure} SameSite=Lax; Max-Age=0`;
 }
 
 export async function createSession(

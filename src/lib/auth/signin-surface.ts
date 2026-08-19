@@ -103,13 +103,33 @@ export function externalLoginHref(path: string, origin: string): string {
 export function divertSignInToBrowser(href: string): boolean {
   if (!isInstalledApp()) return false;
 
-  // Android only. iOS has no intent scheme and Safari will not hand a page to
-  // another browser, so an iPhone install keeps the in-app flow and pays a
-  // one-time Discord login. Nothing here can change that.
-  if (!/android/i.test(window.navigator.userAgent)) return false;
+  // Android: out to the default browser, whose jar holds the Discord session.
+  if (/android/i.test(window.navigator.userAgent)) {
+    window.location.href = externalLoginHref(href, window.location.origin);
+    return true;
+  }
 
-  window.location.href = externalLoginHref(href, window.location.origin);
+  // Everything else installed — iPhone home screen, a Mac web app. There is
+  // no intent scheme to escape through and (on iOS) no install-time cookie
+  // copy, so the jar is empty by construction and `prompt=none` is a doomed
+  // round trip ending at Discord's password form. Skip straight to the
+  // device-grant page, where the approval happens in a Discord that is
+  // already signed in — usually the app one home-screen tap away.
+  window.location.href = deviceLoginHref(href);
   return true;
+}
+
+/**
+ * Rewrites a sign-in href to its device-grant equivalent, carrying `next`
+ * across. `/auth/login?next=%2Fgo` → `/auth/device?next=%2Fgo`.
+ *
+ * Reads `next` out of the href rather than taking it as a parameter so a call
+ * site cannot drift from its own anchor — the same reason the delegated
+ * listener reads the href off the element.
+ */
+export function deviceLoginHref(href: string): string {
+  const next = new URL(href, 'https://x.invalid').searchParams.get('next');
+  return next && next !== '/' ? `/auth/device?next=${encodeURIComponent(next)}` : '/auth/device';
 }
 
 /** Matches every way the site starts sign-in, and nothing else. */
@@ -143,8 +163,9 @@ export function signInHrefFor(target: {
  * handled in one place, and no component has to remember to opt in.
  *
  * Non-passive, because the whole job is to call `preventDefault` — and only
- * ever inside an installed app on Android, so an ordinary tab keeps following
- * the plain `href` exactly as before.
+ * ever inside an installed app, so an ordinary tab keeps following the plain
+ * `href` exactly as before. Installed on Android goes out to the default
+ * browser; installed anywhere else goes to /auth/device.
  */
 export function attachSignInHandoff(doc: Document): void {
   doc.addEventListener('click', (event) => {

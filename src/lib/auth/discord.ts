@@ -161,6 +161,147 @@ export async function exchangeCode(
   return body.access_token;
 }
 
+/* ------------------------------------------------------------ device grant --
+ *
+ * RFC 8628, for the one situation the redirect flow cannot fix: a browsing
+ * context that has no Discord session. `prompt=none` can skip the approval
+ * screen for a browser Discord knows, but nothing we send can conjure a
+ * session into a jar that has none — a fresh Safari, an installed home-screen
+ * app on iOS (whose jar starts empty by design, still true on iOS 26), a Mac
+ * web app. There, Discord shows its email-and-password form, and the project
+ * rule is that members never type Discord credentials into our flow.
+ *
+ * The device grant sidesteps the jar entirely: we show a short code, the
+ * member approves at discord.com/activate in whatever surface already holds
+ * their session — above all the Discord app on their phone — and our server
+ * polls the token endpoint until the approval lands. Discord's screens then
+ * only ever render where a session already exists.
+ *
+ * The endpoints are the ones console linking runs on. They are documented
+ * under Discord's Social SDK (which also names the gate: the application must
+ * have "Public Client" enabled on its OAuth2 tab) rather than the core OAuth2
+ * docs, so treat them as real but not promised: every caller downstream keeps
+ * a "sign in in this browser instead" fallback to the redirect flow.
+ */
+
+export const DEVICE_AUTHORIZE_URL = 'https://discord.com/api/v10/oauth2/device/authorize';
+export const DEVICE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
+
+export interface DeviceAuthorization {
+  /** Server-side credential for polling. Never sent to a browser. */
+  deviceCode: string;
+  /** Short human code, shown large so the member can verify it on Discord's screen. */
+  userCode: string;
+  /** discord.com/activate with the code prefilled — the link the member taps. */
+  verificationUriComplete: string;
+  expiresIn: number;
+  interval: number;
+}
+
+export type DevicePoll =
+  | { status: 'ok'; accessToken: string }
+  | { status: 'pending'; slowDown: boolean }
+  | { status: 'denied' }
+  | { status: 'expired' }
+  | { status: 'error'; message: string };
+
+/** Form body for the device-code request. Pure, so tests need no network. */
+export function deviceAuthorizeBody(cfg: DiscordConfig): URLSearchParams {
+  return new URLSearchParams({
+    client_id: cfg.clientId,
+    client_secret: cfg.clientSecret,
+    scope: SCOPES,
+  });
+}
+
+/** Form body for one poll of the token endpoint. Pure. */
+export function devicePollBody(cfg: DiscordConfig, deviceCode: string): URLSearchParams {
+  return new URLSearchParams({
+    client_id: cfg.clientId,
+    client_secret: cfg.clientSecret,
+    grant_type: DEVICE_GRANT_TYPE,
+    device_code: deviceCode,
+  });
+}
+
+/**
+ * Reads Discord's device-code response into our shape, or null when it is not
+ * one — a gated client answers 401 with a plain API error here, and null is
+ * what lets the caller fall back to the redirect flow instead of exploding.
+ */
+export function parseDeviceAuthorization(body: unknown): DeviceAuthorization | null {
+  const b = body as Record<string, unknown> | null;
+  if (
+    !b ||
+    typeof b.device_code !== 'string' ||
+    typeof b.user_code !== 'string' ||
+    typeof b.verification_uri !== 'string' ||
+    typeof b.expires_in !== 'number' ||
+    typeof b.interval !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    deviceCode: b.device_code,
+    userCode: b.user_code,
+    // Derived when absent so the tappable link never depends on an optional
+    // field. The query shape is Discord's own (`?user_code=XXXX`).
+    verificationUriComplete:
+      typeof b.verification_uri_complete === 'string'
+        ? b.verification_uri_complete
+        : `${b.verification_uri}?user_code=${encodeURIComponent(b.user_code)}`,
+    expiresIn: b.expires_in,
+    interval: b.interval,
+  };
+}
+
+/**
+ * Maps one token-endpoint answer to a poll status. RFC 8628 reports the
+ * not-yet states as HTTP 400 + an `error` string, so the mapping is by that
+ * string first and only then by shape.
+ */
+export function mapDevicePoll(body: unknown): DevicePoll {
+  const b = body as Record<string, unknown> | null;
+  if (b && typeof b.access_token === 'string') return { status: 'ok', accessToken: b.access_token };
+  switch (b?.error) {
+    case 'authorization_pending':
+      return { status: 'pending', slowDown: false };
+    case 'slow_down':
+      // The RFC says add five seconds and keep going; the caller stretches its
+      // interval rather than treating this as a failure.
+      return { status: 'pending', slowDown: true };
+    case 'expired_token':
+      return { status: 'expired' };
+    case 'access_denied':
+      return { status: 'denied' };
+    default:
+      return {
+        status: 'error',
+        message: typeof b?.error === 'string' ? b.error : 'Unexpected device-grant response',
+      };
+  }
+}
+
+/** Asks Discord for a device code. Null when refused — gated app, outage, anything. */
+export async function deviceAuthorize(cfg: DiscordConfig): Promise<DeviceAuthorization | null> {
+  const res = await fetch(DEVICE_AUTHORIZE_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: deviceAuthorizeBody(cfg),
+  });
+  return parseDeviceAuthorization(await res.json().catch(() => null));
+}
+
+/** One poll. The page calls its endpoint on Discord's stated interval, not a loop here. */
+export async function pollDeviceToken(cfg: DiscordConfig, deviceCode: string): Promise<DevicePoll> {
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: devicePollBody(cfg, deviceCode),
+  });
+  return mapDevicePoll(await res.json().catch(() => null));
+}
+
 export interface DiscordUser {
   id: string;
   username: string;

@@ -16,7 +16,7 @@ import {
   resolveRole,
   upsertUser,
 } from '~/lib/auth/discord';
-import { safeNext } from '~/lib/auth/next';
+import { interactionTarget, safeNext } from '~/lib/auth/next';
 import {
   clearedStateCookie,
   createSession,
@@ -87,23 +87,26 @@ export async function GET(ctx: APIContext): Promise<Response> {
   // Discord reports user-facing failures (e.g. "access_denied") this way.
   const oauthError = url.searchParams.get('error');
   if (oauthError) {
-    // `prompt=none` could not complete silently. Send them round once more
-    // with no prompt at all, letting Discord show only what it actually needs
-    // — and only once, which `stored.consent` guarantees. Deliberately NOT
-    // `consent=1`: the usual reason we land here is `login_required`, which
-    // means "no Discord session in this browser", and forcing the approval
-    // screen on a member who authorised months ago is the bug that made
-    // iPhone sign-in look broken.
-    if (NEEDS_INTERACTION.has(oauthError) && stored && !stored.consent) {
-      const retry = new URL('/auth/login', url.origin);
-      retry.searchParams.set('retry', '1');
-      // Re-validated by `safeNext` on the way back in, so a tampered cookie
-      // cannot smuggle a destination through this hop.
-      if (stored.next && stored.next !== '/') retry.searchParams.set('next', stored.next);
-      return new Response(null, {
-        status: 302,
-        headers: { location: retry.toString(), 'cache-control': 'no-store' },
-      });
+    // `prompt=none` could not complete silently. Where next depends on which
+    // screen Discord would show a human: `login_required` means this browser
+    // holds no Discord session, so the next screen is the email-and-password
+    // form — and members never type Discord credentials into our flow, so that
+    // case goes to /auth/device and gets approved from a surface that already
+    // has a session. Everything else in the family (`consent_required`,
+    // `account_selection_required`…) renders approval or picker screens, which
+    // are wanted; those keep the plain no-prompt retry. Either way only once —
+    // `stored.consent` is the loop guard it has always been. The split lives
+    // in `interactionTarget`, where a plain test can reach it; `next` is
+    // re-validated there by `safeNext`, so a tampered cookie cannot smuggle a
+    // destination through this hop.
+    if (NEEDS_INTERACTION.has(oauthError) && stored) {
+      const target = interactionTarget(oauthError, stored.next, stored.consent === true);
+      if (target) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: target, 'cache-control': 'no-store' },
+        });
+      }
     }
     return fail(oauthError, url);
   }

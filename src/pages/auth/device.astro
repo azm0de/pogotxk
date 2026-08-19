@@ -1,0 +1,286 @@
+---
+import Base from '~/layouts/Base.astro';
+import { safeNext } from '~/lib/auth/next';
+
+export const prerender = false;
+
+/**
+ * Approve the sign-in from a Discord that is already signed in, instead of
+ * typing credentials into one that is not.
+ *
+ * This page exists for browsing contexts whose cookie jar has never held a
+ * Discord session — a fresh Safari, the installed home-screen app on iOS, a
+ * Mac web app. The redirect flow cannot help there: Discord answers
+ * `login_required` and its next screen is the email-and-password form, which
+ * members never see in our flow. Here they tap through to discord.com/activate
+ * (or open it on their phone) and press Approve inside the Discord app.
+ *
+ * The page only ever handles the short user code. The device code — the
+ * credential Discord redeems — lives in an HttpOnly cookie between polls and
+ * is never in this document.
+ */
+
+const next = safeNext(Astro.url.searchParams.get('next'));
+
+// Already signed in — nothing to approve. Straight through.
+if (Astro.locals.user) return Astro.redirect(next, 302);
+
+const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURIComponent(next)}` : ''}`;
+---
+
+<Base title="Approve sign-in">
+  <section class="device" data-device data-next={next}>
+    <p class="eyebrow">Sign in</p>
+    <h1>Approve in Discord</h1>
+
+    <p class="lede">
+      No password to type here — you approve this sign-in from a Discord that is already
+      signed in, like the app on your phone.
+    </p>
+
+    <div class="code-panel" data-panel hidden>
+      <p class="code" data-code aria-label="Your approval code"></p>
+      <a class="btn btn--approve" data-open href="https://discord.com/activate" rel="noopener noreferrer" target="_blank">
+        Open Discord to approve
+      </a>
+      <p class="hint">
+        On another device? Open <strong>discord.com/activate</strong> in the Discord app or a
+        signed-in browser and enter the code above. Approve it, then come back here.
+      </p>
+    </div>
+
+    <p class="status" data-status role="status" aria-live="polite">Getting your code…</p>
+
+    <div class="actions">
+      <button class="btn btn--ghost" data-restart type="button" hidden>Get a new code</button>
+      <a class="btn btn--ghost" href={browserHref} data-browser>Sign in in this browser instead</a>
+    </div>
+
+    <noscript>
+      <p class="status">
+        This page needs JavaScript to poll for your approval. You can still{' '}
+        <a href={browserHref}>sign in in this browser</a>.
+      </p>
+    </noscript>
+  </section>
+</Base>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-device]');
+    if (!root) return;
+
+    const panel = root.querySelector('[data-panel]');
+    const codeEl = root.querySelector('[data-code]');
+    const openEl = root.querySelector('[data-open]');
+    const statusEl = root.querySelector('[data-status]');
+    const restartEl = root.querySelector('[data-restart]');
+    const next = root.getAttribute('data-next') || '/';
+
+    let interval = 5;
+    let deadline = 0;
+    let timer = 0;
+
+    const say = (text) => {
+      statusEl.textContent = text;
+    };
+
+    const stop = () => {
+      if (timer) clearTimeout(timer);
+      timer = 0;
+    };
+
+    /*
+     * The device grant can be unavailable — Discord down, or the grant gated
+     * for this app. The page's whole fallback story is that the browser link
+     * below is always there, so unavailability demotes the device UI rather
+     * than erroring the page.
+     */
+    const unavailable = () => {
+      stop();
+      panel.hidden = true;
+      restartEl.hidden = true;
+      say('Approving from Discord is not available right now — use the browser sign-in below.');
+    };
+
+    const finished = (text, canRestart) => {
+      stop();
+      restartEl.hidden = !canRestart;
+      say(text);
+    };
+
+    const tick = async () => {
+      if (Date.now() > deadline) {
+        finished('That code expired before it was approved.', true);
+        return;
+      }
+      let out;
+      try {
+        const res = await fetch('/api/auth/device/poll', { method: 'POST' });
+        out = await res.json();
+      } catch {
+        // Offline blip — keep the cadence, the cookie is patient.
+        timer = setTimeout(tick, interval * 1000);
+        return;
+      }
+
+      if (out.status === 'ok') {
+        say('Approved. Signing you in…');
+        window.location.href = out.next || next;
+        return;
+      }
+      if (out.status === 'pending') {
+        // RFC 8628: slow_down means add five seconds, permanently.
+        if (out.slowDown) interval += 5;
+        timer = setTimeout(tick, interval * 1000);
+        return;
+      }
+      if (out.status === 'denied') {
+        finished('That sign-in was declined in Discord. Nothing was changed.', true);
+        return;
+      }
+      if (out.status === 'expired') {
+        finished('That code expired before it was approved.', true);
+        return;
+      }
+      finished(out.message || 'Something went wrong talking to Discord.', true);
+    };
+
+    const start = async () => {
+      stop();
+      restartEl.hidden = true;
+      panel.hidden = true;
+      say('Getting your code…');
+      let out;
+      try {
+        const res = await fetch('/api/auth/device/start', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ next }),
+        });
+        if (!res.ok) {
+          unavailable();
+          return;
+        }
+        out = await res.json();
+      } catch {
+        unavailable();
+        return;
+      }
+
+      interval = out.interval || 5;
+      deadline = Date.now() + (out.expiresIn || 300) * 1000;
+      codeEl.textContent = out.userCode;
+      openEl.href = out.verificationUriComplete;
+      panel.hidden = false;
+      say('Waiting for you to approve…');
+      timer = setTimeout(tick, interval * 1000);
+    };
+
+    // Coming back from the Discord app is the moment the approval usually just
+    // landed — poll immediately instead of waiting out the interval.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && timer) {
+        stop();
+        void tick();
+      }
+    });
+
+    restartEl.addEventListener('click', () => void start());
+    void start();
+  })();
+</script>
+
+<style>
+  .device {
+    max-width: 52ch;
+    margin: 0 auto;
+    padding: clamp(32px, 8vw, 80px) 20px;
+  }
+  .eyebrow {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  h1 {
+    margin: 6px 0 16px;
+    font-size: clamp(1.6rem, 5vw, 2.2rem);
+  }
+  .lede {
+    color: var(--text-muted);
+    margin: 0 0 20px;
+  }
+
+  .code-panel {
+    display: grid;
+    gap: 14px;
+    padding: 18px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-sunken);
+    text-align: center;
+  }
+  /*
+   * The code is what the member matches against Discord's approval screen, so
+   * it is the loudest thing on the page — and monospace with real letter
+   * spacing, because O/0 confusion in an 8-character code is a support thread.
+   */
+  .code {
+    margin: 0;
+    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    font-size: clamp(1.6rem, 7vw, 2.1rem);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+  }
+  .hint {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+
+  .status {
+    margin: 18px 0 0;
+    padding: 10px 14px;
+    border-left: 3px solid var(--poi-gym);
+    background: var(--bg-sunken);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: 0.9rem;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 24px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 10px 18px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  /* Discord's own blurple, the same raw value .go-signin already uses — this
+     button IS "go to Discord", and borrowing their colour is the honest
+     affordance. White on #5865f2 measures 4.61:1, over the AA floor. */
+  .btn--approve {
+    background: #5865f2;
+    color: #fff;
+  }
+  .btn--ghost {
+    background: var(--bg-sunken);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+</style>

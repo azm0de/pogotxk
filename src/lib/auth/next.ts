@@ -69,3 +69,41 @@ export function signOutTarget(rawNext: string | null | undefined, wantsSwitch: b
   if (dest !== '/') params.set('next', dest);
   return `/auth/login?${params}`;
 }
+
+/**
+ * Where the callback sends someone whose `prompt=none` attempt needed a human.
+ *
+ * The error code tells us which screen Discord would show next, so the split
+ * is by what the member would actually face:
+ *
+ * - `login_required` means *no Discord session in this browser* — the next
+ *   screen is the email-and-password form, and members never type Discord
+ *   credentials into our flow. They go to `/auth/device` instead, where they
+ *   approve from a surface that already holds their session.
+ * - Everything else in the needs-interaction family (`consent_required`,
+ *   `account_selection_required`, …) renders approval or picker screens on an
+ *   existing session. Those are wanted; the plain no-prompt retry stands.
+ *
+ * `alreadyInteractive` is the loop guard the retry has always had: an attempt
+ * that was itself the retry (or a consent flow) does not bounce again — the
+ * caller falls through to its error page.
+ */
+export function interactionTarget(
+  oauthError: string,
+  rawNext: string | null | undefined,
+  alreadyInteractive: boolean,
+): string | null {
+  if (alreadyInteractive) return null;
+
+  const dest = safeNext(rawNext);
+  const params = new URLSearchParams();
+  if (dest !== '/') params.set('next', dest);
+
+  if (oauthError === 'login_required') {
+    const q = params.toString();
+    return q ? `/auth/device?${q}` : '/auth/device';
+  }
+
+  params.set('retry', '1');
+  return `/auth/login?${params}`;
+}
