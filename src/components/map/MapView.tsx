@@ -117,7 +117,8 @@ function buildPoiPopup(
   flare: LiveFlare | null,
   canFlare: boolean,
 ): HTMLElement {
-  const root = el('div', 'popup');
+  // The type modifier carries the spine colour — see `.popup--*` in the CSS.
+  const root = el('div', `popup popup--${poi.type}`);
 
   // Live activity goes above everything else — if something is happening here
   // right now, that is the only thing the reader cares about.
@@ -153,14 +154,37 @@ function buildPoiPopup(
     add(root, figure);
   }
 
+  /*
+   * The type badge is filled; the attribute badges are outlined.
+   *
+   * "Gym" and "Campsite" are different kinds of fact — the first is what this
+   * place *is*, the second is something it happens to have. Rendered as two
+   * identical saturated pills, neither one leads and the pair reads as noise
+   * rather than as a heading. Only the type keeps its fill.
+   */
   const badges = el('div', 'popup-badges');
   const typeBadge = el('span', `popup-badge popup-badge--${poi.type}`, TYPE_LABEL[poi.type]);
   add(badges, typeBadge);
-  if (poi.isCampsite) add(badges, el('span', 'popup-badge popup-badge--campsite', '★ Campsite'));
-  if (poi.isMeetupSpot) add(badges, el('span', 'popup-badge popup-badge--meetup', 'Meetup spot'));
+  if (poi.isCampsite) {
+    add(badges, el('span', 'popup-badge popup-badge--attr popup-badge--attr-campsite', '★ Campsite'));
+  }
+  if (poi.isMeetupSpot) {
+    add(badges, el('span', 'popup-badge popup-badge--attr popup-badge--attr-meetup', 'Meetup spot'));
+  }
   add(root, badges);
 
-  add(root, el('h3', 'popup-title', poi.name));
+  /*
+   * "Campsite - Welcoming", under a badge that already says ★ Campsite, spends
+   * the card's most valuable line repeating the badge. Twenty-four POIs carry
+   * that imported prefix; dropping it leaves the word that actually tells one
+   * campsite from another.
+   *
+   * Display only — `poi.name` is untouched, so the admin editor, search and
+   * the API all still show the stored name. Guarded on `isCampsite` so a place
+   * genuinely named "Campsite Road" keeps its name.
+   */
+  const title = poi.isCampsite ? poi.name.replace(/^campsite\s*[-–—]\s*/i, '') : poi.name;
+  add(root, el('h3', 'popup-title', title || poi.name));
 
   if (poi.description) add(root, el('p', 'popup-desc', poi.description));
 

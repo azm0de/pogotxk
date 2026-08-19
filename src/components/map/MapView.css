@@ -243,12 +243,38 @@
   padding: 8px 8px 0 0;
 }
 
+/*
+ * A spine along the top edge, in the colour of the pin that opened the popup.
+ *
+ * You tap a coloured pin and, without this, get a neutral card carrying no
+ * memory of which pin it came from. The spine is that tie. It does a second
+ * job too: a POI with no photograph is a ~102px card of badges and buttons
+ * with nothing to anchor it, and this gives that case a top edge.
+ *
+ * A real border rather than a pseudo-element, so it takes part in layout and
+ * the photo starts *below* the colour instead of being overlapped by it.
+ * `.popup`'s own `overflow: hidden` and radius round its ends for free.
+ *
+ * Falls back to `--border` for a type this file has not been taught, which
+ * degrades to the plain card rather than to no top edge at all.
+ */
 .popup {
   min-width: 258px;
   padding: 0 0 12px;
   overflow: hidden;
   border-radius: var(--radius);
+  border-top: 4px solid var(--border);
 }
+.popup--pokestop {
+  border-top-color: var(--poi-pokestop);
+}
+.popup--gym {
+  border-top-color: var(--poi-gym);
+}
+.popup--powerspot {
+  border-top-color: var(--poi-powerspot);
+}
+
 .popup-figure {
   margin: 0 0 10px;
   position: relative;
@@ -261,7 +287,9 @@
      size as you click between pins. */
   height: 176px;
   object-fit: cover;
-  border-radius: var(--radius) var(--radius) 0 0;
+  /* No radius of its own: it sits directly under the spine now, and `.popup`
+     already clips it to the card's rounded corners. Rounding it here as well
+     left a sliver of panel showing between the colour and the photograph. */
 }
 .popup-credit {
   position: absolute;
@@ -290,23 +318,43 @@
   color: #fff;
   background: var(--text-muted);
 }
+/* The `-badge` surfaces, not the pin hues — white on `--poi-gym` is 3.18:1.
+   See the block above these tokens in global.css. */
 .popup-badge--pokestop {
-  background: var(--poi-pokestop);
+  background: var(--poi-pokestop-badge);
 }
 .popup-badge--gym {
-  background: var(--poi-gym);
+  background: var(--poi-gym-badge);
 }
 .popup-badge--powerspot {
-  background: var(--poi-powerspot);
+  background: var(--poi-powerspot-badge);
 }
-.popup-badge--campsite {
-  background: var(--poi-campsite);
-  color: #4a2c00;
+/*
+ * Attribute badges: outlined, so the filled type badge leads.
+ *
+ * The colour lives in the border rather than the text on purpose.
+ * `--poi-campsite` is #f2a33c, which is about 2.1:1 against a white panel —
+ * nowhere near AA as label text, and the reason the filled version had to
+ * carry a hand-picked brown foreground. As a border it is decoration sitting
+ * beside a word and a star that already say what it is, and the label itself
+ * gets `--text`, which passes comfortably in both themes.
+ *
+ * One pixel comes off the vertical padding so an outlined pill still measures
+ * the same height as the filled one beside it.
+ */
+.popup-badge--attr {
+  padding: 2px 7px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
 }
-.popup-badge--meetup {
-  /* Inherits `color: #fff` from `.popup-badge`, so it needs the surface token
-     rather than `--accent`, which is a light red in dark mode. */
-  background: var(--accent-solid);
+.popup-badge--attr-campsite {
+  border-color: var(--poi-campsite);
+}
+.popup-badge--attr-meetup {
+  /* `--accent-solid`, not `--accent`: the latter inverts to a light red in
+     dark mode, which against a dark panel is a border you cannot see. */
+  border-color: var(--accent-solid);
 }
 
 .popup-title {
@@ -355,8 +403,21 @@
  * real substance of "the other 2 were harsh on the eyes" — a correctly
  * chosen colour that silently never painted, not a bad colour choice.
  */
+/*
+ * 44px, not the 35px these measured at before.
+ *
+ * This is a map read one-handed, outdoors, often while walking, and 35px was
+ * below both the comfortable target and the 44px this project already pins
+ * everywhere it matters — `.go-join`, `.go-standdown` and `.go-bell` all use
+ * it. The flare action had been given 40px on its own; the two beside it were
+ * left behind, which is the inconsistency rather than the intent.
+ */
 .leaflet-container .popup-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 1;
+  min-height: 44px;
   text-align: center;
   padding: 8px 10px;
   border: 0;
@@ -392,10 +453,8 @@
   flex: 1 0 100%;
   background: var(--red-700);
   color: #fff;
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* Height, display and centring now come from `.popup-action` above, which
+     this used to be the only action to get right. */
 }
 
 /* --------------------------------------------------------------- chrome -- */

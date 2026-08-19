@@ -70,6 +70,32 @@
   --poi-powerspot: #8257d9;
   --poi-campsite: #f2a33c;
 
+  /*
+   * The same POI hues, dark enough to put white label text on.
+   *
+   * The pins above are tuned as *pins*: large silhouettes on the Voyager
+   * basemap, where WCAG's 3:1 non-text minimum is the bar they have to clear.
+   * A map popup's type badge is a different problem — 11px white text on a
+   * fill — and at that job two of them fail outright: white on `--poi-gym` is
+   * 3.18:1 and on `--poi-pokestop` 4.11:1, both under the 4.5:1 floor.
+   *
+   * These are the badge surfaces. Each is its pin's colour scaled down in
+   * sRGB until white clears 4.6:1, which leaves the hue *exactly* where it
+   * was — 19.3°, 210.9° and 259.8° respectively, unchanged to the decimal —
+   * so a badge still reads as the same colour as the pin it came from.
+   *
+   * Powerspot already passes at 4.87:1 and is aliased rather than darkened;
+   * it is spelled out so there is one obvious place to re-check if any pin
+   * colour is ever retuned.
+   *
+   * Do NOT use these for the pins. See the note in `98fcb0b` about why the
+   * dark-mode POI lift was removed — pin contrast is measured against tiles,
+   * not against text.
+   */
+  --poi-pokestop-badge: #2c76c5; /* white on it: 4.66 */
+  --poi-gym-badge: #b75b2f; /* white on it: 4.62 */
+  --poi-powerspot-badge: var(--poi-powerspot); /* white on it: 4.87 */
+
   /* Teams */
   --team-valor: #e8453c;
   --team-mystic: #3b7dd8;
