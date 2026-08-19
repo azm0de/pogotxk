@@ -405,6 +405,25 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       })();
     </script>
 
+    {/*
+      Not `is:inline`, deliberately — this one needs a real import, and it is
+      the only script here that does.
+
+      Inside the installed app, sign-in has to leave for the trainer's own
+      browser or Discord shows a password form to someone already signed into
+      Discord one app away. The reasoning is in signin-surface.ts; the reason
+      it is delegated from the document is that the account control above is
+      built at runtime by an inline script that cannot import anything, and a
+      second copy of the intent URL would drift from the first.
+
+      Deferred by nature, which is fine: it only has to be listening before a
+      human can tap, and it does nothing at all outside an installed app.
+    */}
+    <script>
+      import { attachSignInHandoff } from '~/lib/auth/signin-surface';
+      attachSignInHandoff(document);
+    </script>
+
     <main id="main">
       <slot />
     </main>
