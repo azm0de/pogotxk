@@ -34,18 +34,32 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
     <h1>Approve in Discord</h1>
 
     <p class="lede">
-      No password to type here — you approve this sign-in from a Discord that is already
-      signed in, like the app on your phone.
+      No password, no typing — your Discord app opens with everything filled in, and you tap
+      <strong>Approve</strong>.
     </p>
 
     <div class="code-panel" data-panel hidden>
-      <p class="code" data-code aria-label="Your approval code"></p>
-      <a class="btn btn--approve" data-open href="https://discord.com/activate" rel="noopener noreferrer" target="_blank">
+      {/*
+        No target="_blank". From a home-screen app, _blank forces the in-app
+        browser sheet — the same empty cookie jar this page exists to escape,
+        so Discord asked for a login one hop later. A same-tab tap is what
+        lets iOS hand the link to the Discord app instead: discord.com's own
+        universal-link manifest registers /activate for exactly this. And when
+        the handoff fires, this page never actually navigates, so polling
+        carries on underneath. The script re-adds _blank only for ordinary
+        desktop browsers, where a new tab keeps this page visible.
+      */}
+      <a class="btn btn--approve" data-open href="https://discord.com/activate" rel="noopener noreferrer">
         Open Discord to approve
       </a>
+      <p class="code-line">
+        Code <strong class="code" data-code aria-label="Your approval code"></strong> — already
+        filled in for you. It only needs typing if you approve from a different device.
+      </p>
       <p class="hint">
-        On another device? Open <strong>discord.com/activate</strong> in the Discord app or a
-        signed-in browser and enter the code above. Approve it, then come back here.
+        If a login page opens instead of your Discord app, close it — then open
+        <strong> discord.com/activate</strong> inside the Discord app (or any signed-in
+        Discord) and enter the code above.
       </p>
     </div>
 
@@ -172,6 +186,18 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
       deadline = Date.now() + (out.expiresIn || 300) * 1000;
       codeEl.textContent = out.userCode;
       openEl.href = out.verificationUriComplete;
+      /*
+       * Same-tab wherever the Discord app could claim the link — an installed
+       * web app, or any iPhone/iPad — so the universal link can hand off to
+       * the app. A new tab only for ordinary desktop browsers, where it keeps
+       * this polling page visible while the approval happens next door.
+       */
+      const standalone =
+        window.matchMedia?.('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true;
+      const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+        (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints > 1);
+      if (!standalone && !iOS) openEl.target = '_blank';
       panel.hidden = false;
       say('Waiting for you to approve…');
       timer = setTimeout(tick, interval * 1000);
@@ -224,16 +250,23 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
     text-align: center;
   }
   /*
-   * The code is what the member matches against Discord's approval screen, so
-   * it is the loudest thing on the page — and monospace with real letter
-   * spacing, because O/0 confusion in an 8-character code is a support thread.
+   * The button is the hero; the code is a verification detail. It used to be
+   * the loudest thing on the page, which read as "copy this somewhere" — a
+   * ceremony the prefilled link makes unnecessary. Still monospace with real
+   * letter spacing, because O/0 confusion in the fallback case is a support
+   * thread.
    */
-  .code {
+  .code-line {
     margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .code {
     font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-    font-size: clamp(1.6rem, 7vw, 2.1rem);
+    font-size: 1.05rem;
     font-weight: 700;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.14em;
+    color: var(--text);
   }
   .hint {
     margin: 0;
