@@ -102,20 +102,31 @@ the approval screen is the experience we *want*), and installed non-Android apps
 there from any sign-in link (`signin-surface.ts`), skipping a doomed round trip through an
 empty jar.
 
-> [!warning] The grant is real but not promised
-> The endpoints are documented under Discord's **Social SDK** (which also names the gate:
-> the application must have **"Public Client" enabled** on its OAuth2 tab — with it off the
-> device endpoint answers `401 Invalid client id` even to valid credentials, verified
-> 2026-08-19) rather than the core OAuth2 docs. So `/auth/device` treats unavailability as a
-> state, not an error: if Discord refuses, the page says so and offers the ordinary browser
-> sign-in, which is exactly the pre-2026-08-19 behaviour. Nothing breaks if the grant is ever
-> gated again.
+> [!warning] The grant is real but not promised — and the gate has two locks
+> The endpoints are documented under Discord's **Social SDK** rather than the core OAuth2
+> docs, and opening them took two portal actions, established empirically on 2026-08-19
+> because neither alone was enough:
+>
+> 1. **Public Client ON** (OAuth2 tab) — necessary but not sufficient; the device endpoint
+>    kept answering `401 Invalid client id` (code 50023) to credentials the ordinary token
+>    endpoint accepted.
+> 2. **Social SDK enrollment** — the app sidebar's **Games → Social SDK → Getting Started**
+>    form (it moved under *Games*; older docs say a top-level "Social SDK" section). Granted
+>    self-serve as the limited tier: the app's public `flags` went 0 →
+>    `1024 = SOCIAL_LAYER_INTEGRATION_LIMITED (1 << 10)`, readable by anyone at
+>    `GET /api/v10/applications/{id}/rpc`. The endpoint opened the moment the flag landed.
+>
+> Verified same day, end to end on production: code minted through the Worker, approved from
+> the phone's Discord app — no password form anywhere — session created, and the guild-role
+> fetch succeeded, so `guilds.members.read` works under the limited tier. `/auth/device`
+> still treats refusal as a state, not an error: if Discord ever re-gates the grant, the page
+> says so and offers the ordinary browser sign-in, which is the pre-2026-08-19 behaviour.
 
-> [!important] Public Client ON changes what the token endpoint requires, not what we send
-> A public client may redeem authorization codes with PKCE alone. Every flow here already
-> does PKCE S256 and still presents the secret server-side; redirect URIs are pinned
-> byte-for-byte in the portal. Flip the toggle, then immediately re-verify one ordinary
-> sign-in round trip — the semantics change is Discord-side and silent.
+> [!important] Public Client ON changed the token endpoint's requirements, not our requests
+> A public client may redeem authorization codes with PKCE alone. Verified after flipping:
+> the token endpoint accepts **both** shapes — secretless PKCE-only *and* our usual
+> secret-plus-PKCE — so every existing flow kept working unchanged. Redirect URIs stay pinned
+> byte-for-byte in the portal; PKCE S256 was already universal here.
 
 > [!danger] The Android redirect URI needs its single slash
 > `Auth.kt` sends `discord-<app id>:/authorize/callback` — **one** slash after the colon, which
