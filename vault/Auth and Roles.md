@@ -1,6 +1,6 @@
 ---
 tags: [architecture, security]
-updated: 2026-08-05
+updated: 2026-08-18
 ---
 
 # Auth and Roles
@@ -40,6 +40,51 @@ Scopes requested: `identify` and `guilds.members.read`. No email, no messages, n
 > the very login needed to configure anything else. Without it, everyone resolves to `guest`
 > but `DISCORD_BOOTSTRAP_ADMIN_ID` still gets in.
 
+## The password-prompt question, settled
+
+Asked and re-diagnosed four times. **The OAuth request has never been the problem.** Traced
+against production on 2026-08-18:
+
+| Step | What we send |
+|---|---|
+| `/auth/login` | `prompt=none` |
+| Discord answers `login_required` | 302 → `/auth/login?retry=1&next=…` |
+| Retry | authorize with **no `prompt` key at all** |
+
+Plus PKCE, `next` preserved across the retry, and `account_selection_required` handled. Compared
+side by side with another Discord-auth site of Justin's that "worked", ours was the stricter of
+the two. There was nothing to copy across.
+
+> [!important] Discord shows a password form when the *browsing context* has no Discord session
+> That is the whole mechanism, and nothing we send can conjure one. So the question is never
+> "what are our OAuth parameters" — verify those once and move on — it is **"which browser is
+> opening the page, and has Discord ever met it?"**
+>
+> A site open in Chrome inherits Chrome's Discord session and shows the approval screen. The
+> same flow inside an installed app does not, because that context has its own cookie jar.
+
+Three surfaces, three different jars:
+
+- **A normal browser tab** — has whatever session that browser holds. Works, nothing to fix.
+- **`/go` installed to the home screen** — `display: standalone`, so a redirect to `discord.com`
+  leaves our scope and Android hands it to an in-app Custom Tab with its own jar. Fixed
+  2026-08-18: `src/lib/auth/signin-surface.ts` sends sign-in out through an `intent://` URL to
+  the default `https` handler, i.e. the browser the trainer actually uses. **No `package=`** —
+  pinning Chrome would recreate the bug on a phone that defaults to Samsung Internet.
+- **The Android app's WebView** — a jar Discord has *never* seen, so it was a password every
+  single time. Solved separately by `MainActivity.startSignIn`, which uses a Custom Tab.
+
+> [!warning] iOS cannot be fixed
+> A standalone PWA on iOS gets its own cookie storage, there is no intent scheme, and Safari
+> will not hand a page to another browser. An iPhone home-screen install pays one Discord login
+> and there is no version of this that avoids it.
+
+> [!danger] The Android redirect URI needs its single slash
+> `Auth.kt` sends `discord-<app id>:/authorize/callback` — **one** slash after the colon, which
+> is the shape Discord specifies for this flow. Discord matches redirect URIs byte for byte, and
+> the string is repeated in both the authorize request and the token exchange. It looks like a
+> typo and is not; deleting it in favour of a `://` version breaks app sign-in.
+
 ## Security properties
 
 - Session tokens are random 256-bit values; **only their SHA-256 is stored**.
@@ -52,7 +97,8 @@ Scopes requested: `identify` and `guilds.members.read`. No email, no messages, n
 ## Tests
 
 `npm test` covers role resolution, the bootstrap override, the optional member-role gate, the
-role hierarchy, and PKCE. 23 checks in `scripts/test-auth.ts`.
+role hierarchy, and PKCE. 23 checks in `scripts/test-auth.ts`, plus the installed-app sign-in
+handoff in `scripts/test-signin-surface.ts`.
 
 ## See also
 
