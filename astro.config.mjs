@@ -68,8 +68,10 @@ export default defineConfig({
   integrations: [react()],
 
   vite: {
-    // Leaflet ships its own CSS and expects a browser global; keep it out of SSR.
-    ssr: { noExternal: ['leaflet', 'leaflet.markercluster'] },
+    // Leaflet and the Protomaps vector basemap ship their own CSS and expect
+    // browser globals; keep them out of SSR. `pmtiles` rides in with the
+    // Protomaps renderer that imports it.
+    ssr: { noExternal: ['leaflet', 'leaflet.markercluster', 'protomaps-leaflet', 'pmtiles'] },
     plugins: [exportDurableObjects()],
   },
 });

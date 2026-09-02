@@ -28,6 +28,8 @@
     "astro": "^7.1.6",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
+    "pmtiles": "^4.5.0",
+    "protomaps-leaflet": "^5.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.1.13"

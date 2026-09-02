@@ -3,6 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import type { PoiType } from '~/lib/db/map';
+import { basemapLayer } from '~/components/map/basemap';
 import { poiIcon, TYPE_LABEL } from '~/components/map/markerIcons';
 import '~/components/map/MapView.css';
 import './MapEditor.css';
@@ -157,15 +158,15 @@ export default function MapEditor() {
     const map = L.map(containerRef.current, {
       center: [33.4640222, -94.0569268],
       zoom: 16,
+      // The vector basemap over-zooms past its z15 data to here; kept in step
+      // with the public map so both crop the park the same way.
+      maxZoom: 20,
       zoomControl: true,
     });
     mapRef.current = map;
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 21,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    }).addTo(map);
+    // The same self-hosted Protomaps layer the public map uses — see basemap.ts.
+    basemapLayer().addTo(map);
 
     layerRef.current = L.layerGroup().addTo(map);
 

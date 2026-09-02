@@ -145,6 +145,20 @@
   --border: #e3e3e6;
   --border-strong: #c7c7ce;
 
+  /*
+   * The map's ground — the colour behind the tiles.
+   *
+   * Deliberately NOT theme-dependent, and deliberately not `--bg-sunken`, which
+   * is dark in dark mode. The basemap is pinned to CARTO Voyager (light) in both
+   * themes — see the note in MapView.tsx — so a tile still loading, or one
+   * Leaflet never receives, must fall back to something *map-toned* rather than
+   * to a dark hole punched in a light map. On a phone on park wifi that gap is
+   * routine, and against light neighbours a `--bg-sunken` fallback read as the
+   * map being broken. This is a warm pale grey close to Voyager's own land, so a
+   * gap reads as "still loading" and disappears as the tile paints over it. It
+   * is defined once here and never overridden in the dark block, on purpose. */
+  --map-canvas: #e9e6e0;
+
   /* Neutral rather than brand-tinted: a red-tinted shadow under a red button
      reads as a glow, not a shadow. */
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.08);

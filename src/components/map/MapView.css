@@ -8,7 +8,9 @@
 .map-canvas {
   position: absolute;
   inset: 0;
-  background: var(--bg-sunken);
+  /* The map's own ground, held light in both themes — see `--map-canvas`. A
+     tile gap on a light basemap should look like paper, not a dark hole. */
+  background: var(--map-canvas);
 }
 
 /* --- compact / embedded ----------------------------------------------------
@@ -37,17 +39,64 @@
   inset: 0;
   display: grid;
   place-content: center;
-  gap: 12px;
+  gap: 14px;
   justify-items: center;
-  background: var(--bg-sunken);
-  color: var(--text-muted);
+  /* The map's own ground, not `--bg-sunken`: this sits exactly where the map
+     will be, so it should read as map paper in both themes rather than a dark
+     card in one of them. Text is a fixed ink for the same reason — `--text-muted`
+     inverts to a light grey in dark mode that would vanish on this light
+     ground. */
+  background: var(--map-canvas);
+  color: var(--ink-700);
   z-index: 500;
 }
 
-/* Leaflet paints its own panes; keep our chrome above them but below modals. */
+.map-loading {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.map-loading-ball {
+  display: block;
+  line-height: 0;
+  animation: ball-spin 0.9s linear infinite;
+}
+.map-loading-ball svg {
+  display: block;
+}
+@keyframes ball-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.map-error p {
+  margin: 0;
+  max-width: 34ch;
+  text-align: center;
+}
+.map-error button {
+  min-height: 44px;
+  padding: 8px 20px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  /* `--accent-solid`, so white on it is safe in both themes — `--accent`
+     inverts to a light red that fails under white text. */
+  background: var(--accent-solid);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.map-error button:hover {
+  background: var(--red-800);
+}
+
+/* Leaflet paints its own panes; keep our chrome above them but below modals.
+   The container background is what actually shows through between tiles, so it
+   carries the light map ground too — this is the rule that ends the dark
+   patchwork of half-loaded tiles in dark mode. */
 .leaflet-container {
   font: inherit;
-  background: var(--bg-sunken);
+  background: var(--map-canvas);
 }
 
 /* ---------------------------------------------------------------- pins -- */
@@ -275,6 +324,37 @@
   border-top-color: var(--poi-powerspot);
 }
 
+/*
+ * A photograph-less popup is otherwise a flat panel of badges and buttons under
+ * a 4px spine. These give that case a faint wash of its own pin colour, fading
+ * out of the top edge, so the card still reads as "the thing you tapped" with no
+ * image to carry it. `color-mix` keeps it to a whisper of the hue over the panel
+ * — a tint, not a fill — and it clears by 72px so the title and body sit on
+ * plain panel. `.popup` is transparent over the popup wrapper's own panel
+ * colour, which is what the gradient fades back to, so the seam is invisible.
+ */
+.popup--no-photo.popup--pokestop {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--poi-pokestop) 12%, var(--bg-panel)),
+    var(--bg-panel) 72px
+  );
+}
+.popup--no-photo.popup--gym {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--poi-gym) 12%, var(--bg-panel)),
+    var(--bg-panel) 72px
+  );
+}
+.popup--no-photo.popup--powerspot {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--poi-powerspot) 12%, var(--bg-panel)),
+    var(--bg-panel) 72px
+  );
+}
+
 .popup-figure {
   margin: 0 0 10px;
   position: relative;
@@ -466,8 +546,10 @@
   z-index: 600;
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  /* 44px, the target this project pins everywhere it matters — the map is read
+     one-handed outdoors, and 42 was just under it. */
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--bg-panel);
@@ -485,11 +567,24 @@
   bottom: 12px;
   z-index: 600;
   width: min(340px, calc(100% - 24px));
-  background: var(--bg-panel);
+  /* Frosted rather than a flat brick dropped on the map: a little of the park
+     shows through the chrome, which is what makes this read as part of a map app
+     and not a dialog sitting on top of one. 88% keeps the text comfortably
+     legible over a busy basemap; the blur does the rest of the work. */
+  background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+}
+/* Where the blur cannot run, fall back to the solid panel — never a see-through
+   wash with no blur behind it, which would leave text sitting on raw map. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .map-panel {
+    background: var(--bg-panel);
+  }
 }
 
 .panel-handle {
@@ -502,6 +597,10 @@
   background: none;
   cursor: pointer;
   text-align: left;
+  transition: background-color 0.14s ease;
+}
+.panel-handle:hover {
+  background: color-mix(in srgb, var(--bg-sunken) 70%, transparent);
 }
 .panel-grip {
   width: 26px;
@@ -509,6 +608,20 @@
   border-radius: 2px;
   background: var(--border-strong);
   flex: none;
+}
+
+/* A second read on the grip, balanced on the far side of the label: points down
+   when the panel is open, flips up when it is closed. `margin-left: auto`
+   pushes it to the trailing edge. */
+.panel-chevron {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1;
+  transition: transform 0.16s ease;
+}
+.panel-handle[aria-expanded='false'] .panel-chevron {
+  transform: rotate(180deg);
 }
 
 .panel-body {
@@ -535,6 +648,11 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+  /* A hairline between the panel's two halves — the filters above, the list
+     below — so the location list reads as its own section rather than one more
+     row of chips. */
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 .poi-list-head h3 {
   margin: 0;
@@ -673,6 +791,45 @@
   box-shadow: 0 0 0 2px rgb(255 255 255 / 0.5);
 }
 
+/*
+ * Active *type* chips wear their own colour, not the brand red.
+ *
+ * All three types are on by default, so the generic `[aria-pressed]` rule above
+ * painted the whole filter row one flat red — the header's red again, with the
+ * type hue surviving only in the 9px dot. These put each active chip back in its
+ * own colour, so the row reads as "stops, gyms, power spots" at a glance instead
+ * of as three identical switches. The `-badge` tokens rather than the pin hues:
+ * those are the versions global.css measured to carry white text (≥4.6:1),
+ * which is this exact job. White is set explicitly, not `--accent-contrast`,
+ * which is dark in dark mode. Same specificity as the rule above, so these must
+ * — and do — come after it in source. Overlay chips (Campsite, Raid Route,
+ * Hotspot) keep the accent red, so a type filter and an overlay never look like
+ * the same kind of control.
+ */
+.chip--pokestop[aria-pressed='true'] {
+  background: var(--poi-pokestop-badge);
+  border-color: var(--poi-pokestop-badge);
+  color: #fff;
+}
+.chip--gym[aria-pressed='true'] {
+  background: var(--poi-gym-badge);
+  border-color: var(--poi-gym-badge);
+  color: #fff;
+}
+.chip--powerspot[aria-pressed='true'] {
+  background: var(--poi-powerspot-badge);
+  border-color: var(--poi-powerspot-badge);
+  color: #fff;
+}
+/* On a chip that is now its own type colour, the matching dot would sink into
+   the fill — white reads cleanly and needs no ring. */
+.chip--pokestop[aria-pressed='true'] .chip-dot,
+.chip--gym[aria-pressed='true'] .chip-dot,
+.chip--powerspot[aria-pressed='true'] .chip-dot {
+  background: #fff;
+  box-shadow: none;
+}
+
 .chip-dot {
   width: 9px;
   height: 9px;
@@ -744,11 +901,13 @@
  */
 .leaflet-control-zoom.leaflet-bar {
   border: 1px solid var(--border);
-  box-shadow: none;
+  /* Floats on the same shadow as the locate button above it, so the two read as
+     one control cluster in the corner rather than two stray widgets. */
+  box-shadow: var(--shadow-md);
 }
 .leaflet-touch .leaflet-bar.leaflet-control-zoom {
   border: 1px solid var(--border);
-  box-shadow: none;
+  box-shadow: var(--shadow-md);
 }
 /*
  * Also qualified, though these were not visibly broken: Leaflet's `.leaflet-bar a`

@@ -5,6 +5,7 @@ import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 
 import type { MapData, MapPoi, PoiType } from '~/lib/db/map';
+import { basemapLayer } from './basemap';
 import { photoIcon, poiIcon, TYPE_LABEL, userIcon } from './markerIcons';
 import './MapView.css';
 
@@ -118,7 +119,10 @@ function buildPoiPopup(
   canFlare: boolean,
 ): HTMLElement {
   // The type modifier carries the spine colour — see `.popup--*` in the CSS.
-  const root = el('div', `popup popup--${poi.type}`);
+  // `--no-photo` lets a photograph-less card wear a faint wash of its own pin
+  // colour instead of reading as a flat panel; with a photo, the image is the
+  // colour and the wash would only muddy it.
+  const root = el('div', `popup popup--${poi.type}${poi.photo ? '' : ' popup--no-photo'}`);
 
   // Live activity goes above everything else — if something is happening here
   // right now, that is the only thing the reader cares about.
@@ -492,6 +496,9 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     const map = L.map(containerRef.current, {
       center: data.zone.center,
       zoom: data.zone.zoom,
+      // Was supplied by the raster tile layer; now the map owns it, and the
+      // vector basemap over-zooms past its own z15 data to reach it.
+      maxZoom: 20,
       zoomControl: false,
       // See the `compact` prop: page scroll must not be hijacked by a map the
       // reader is only scrolling past. Leaflet still zooms on ctrl/⌘ + wheel.
@@ -500,29 +507,28 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     mapRef.current = map;
 
     /*
-     * The basemap is ALWAYS CARTO Voyager (light), deliberately — it does not
-     * follow `prefers-color-scheme` the way the rest of the site does.
+     * The basemap is ALWAYS light, deliberately — it does not follow
+     * `prefers-color-scheme` the way the rest of the site does.
      *
-     * It used to swap to `dark_all` on an OS dark-mode match, on the reasoning
-     * that a map which missed a mid-session theme change would be the one thing
-     * on the page left behind. Justin reported the result as a bug: the dark
-     * basemap does not read as "the site in dark mode", it reads as the map
+     * It used to swap to a dark basemap on an OS dark-mode match, on the
+     * reasoning that a map which missed a mid-session theme change would be the
+     * one thing on the page left behind. Justin reported the result as a bug: a
+     * dark basemap does not read as "the site in dark mode", it reads as the map
      * being broken. Chrome and geography are not the same kind of surface —
      * panels, text and buttons are ours to theme, but the map is *content*, and
      * people match it against every other street map they have ever seen.
      *
-     * `MapEditor.tsx:164` has always pinned Voyager unconditionally, so this
-     * also makes the public map and the admin map agree.
+     * The tiles are our own now — Protomaps vector tiles over OpenStreetMap
+     * data, rendered in the browser with the `light` theme (the closest match to
+     * the CARTO Voyager look this map carried before). This replaced keyless
+     * CARTO once CARTO began watermarking it. The layer is built in `basemap.ts`
+     * and MapEditor.tsx builds the same one, so the admin map cannot drift.
      *
      * The controls (attribution pill, zoom bar) still theme off `--bg-panel` /
      * `--text` and so stay dark in dark mode. That is intended: they are chrome
      * sitting *on* the map, self-contained, and legible either way.
      */
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 20,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    }).addTo(map);
+    basemapLayer().addTo(map);
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -921,7 +927,22 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     <div className={`map-shell${compact ? ' map-shell--compact' : ''}`}>
       <div ref={containerRef} className="map-canvas" aria-label="Map of Spring Lake Park Pokémon GO locations" role="application" />
 
-      {!data && <div className="map-loading">Loading map…</div>}
+      {!data && (
+        <div className="map-loading" role="status">
+          <span className="map-loading-ball" aria-hidden="true">
+            {/* A Poké Ball, turning. Fixed brand colours rather than tokens so it
+                reads the same on the always-light map ground in either theme;
+                global reduced-motion freezes the spin to a resting ball. */}
+            <svg viewBox="0 0 44 44" width="40" height="40" aria-hidden="true" focusable="false">
+              <circle cx="22" cy="22" r="20" fill="#fff" stroke="#0f0f11" strokeWidth="2.5" />
+              <path d="M2 22a20 20 0 0 1 40 0Z" fill="#c8071c" />
+              <rect x="3" y="20" width="38" height="4" fill="#0f0f11" />
+              <circle cx="22" cy="22" r="6" fill="#fff" stroke="#0f0f11" strokeWidth="2.5" />
+            </svg>
+          </span>
+          Loading the park…
+        </div>
+      )}
 
       {!compact && (
         <button
@@ -950,6 +971,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
         >
           <span className="panel-grip" aria-hidden="true" />
           <strong>Map Filters</strong>
+          <span className="panel-chevron" aria-hidden="true">▾</span>
         </button>
 
         <div className="panel-body" hidden={!panelOpen}>
