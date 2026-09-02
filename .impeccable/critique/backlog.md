@@ -69,5 +69,27 @@ Clusters announce as a bare number and no `invalidateSize()` (`MapView.tsx:549-5
 - The `border-left` callout convention ×8 with no meaning attached (detector `side-tab`).
 - 24px target fix pattern applied inconsistently (padding on wrappers instead of anchors).
 
-## Audit (public) findings
-_Appended when `audit-public.md` lands._
+## Audit (public) findings — 15/20, measured
+
+| Sev | Wave | Location | Finding |
+|---|---|---|---|
+| P1 | W0 + W1-A/W1-E/W2-A | `index.astro:1912, 1003`, `about.astro:148`, `MapView.css:374` | Press-credit scrims 2.50 / 3.21 / 4.10 / (5.34 by luck):1 — one shared on-image credit class using `/blog`'s five-stop ramp + text-shadow (**W0 ships the class; owners adopt it**) |
+| P1 | W1-C | `game.css:154-156` | `--poi-gym` as text 3.18:1 → `--poi-gym-badge` |
+| P1 | W2-A | `MapView.css:455` (missing rule) | `.leaflet-container .leaflet-popup-content a { color: var(--accent) }` — 3.36:1 dark today |
+| P1 | W2-A | `MapView.css:881-883` | Attribution link 4.02:1 dark; measure against the 88% pill over the light canvas |
+| P1 | W0 + W2-A + W3 | `global.css:330-339`, `MapView.css:58-69`, `Base.astro:560, 753` | Reduced-motion kill freezes the map loader and jumps the header animations; give the loader a non-animated alternative, exempt scroll-timeline animations |
+| P1 | W3 / W1-A / W1-E / W1-D | `Base.astro:453-459, 928`; `index.astro:1743`; `legal.css:110-133`; blog tag/where links | ~20 standalone links 15–20px tall; promote the 24px pattern to a `global.css` utility (**W0**) and apply |
+| P2 | W0 | `global.css` | Add `--poi-campsite-badge`; `.mini-shiny` 1.81:1 |
+| P2 | W2-A | `MapView.tsx:1036` | h1 → h3 skip |
+| P2 | W1-B | `events.astro:107, 220-238` | Replace hand-rolled credit with `<Attribution />` outside any conditional |
+| P2 | W1-E / W1-A | `about.astro:39-43`, Discord avatar | Image dimensions |
+| P2 | W1-A | `index.astro:1026-1049` | Release `will-change` (at least under reduced motion) |
+| P3 | W3 / W2-A | `Base.astro:662, 879`, `MapView.css:117` | Cancel hover transforms under reduced motion — solved structurally by W0's `--lift` token |
+| P3 | W2-A | `MapView.tsx:698, 707` | `userPos` in rebuild deps; `poiBySlug` map |
+| P3 | later | `public/icons/*.png`, `og-default.png` | Recompress (not a redesign task) |
+| P3 | W1-B | `EventCard.css:75-92` | Use `--poi-powerspot`, delete stale rationale |
+| P3 | W1-B | `events.astro:306-311` | Stale scrim comment |
+| P3 | W2-C | `go.astro:42` | `BubbleControl` → `client:idle` |
+| P3 | W2-A | `MapView.css:575-576` | Measure `backdrop-filter` on low-end Android before keeping |
+
+Verified closed and to be **kept closed** by every wave: zero horizontal overflow on 18 routes × 375/390/430 and at 125/150% root font; keyboard path with visible rings on every stop; key-art hero scrims above 4.5:1 at every pixel; `aria-expanded` ↔ display agreement on the map panel.
