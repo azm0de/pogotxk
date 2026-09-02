@@ -283,7 +283,9 @@ is transport-independent — it does not go away at the edge:
       use a display face via `--font-display`, self-hosted, 2026-08-15. Shipped first as
       Fredoka, switched same-day to **Baloo 2** — Fredoka's extra roundness read too close to
       a kids' app. Body text is unchanged system-ui. See [[Attribution Obligations]]
-- [x] ~~`/map`'s basemap never joined the site's dark theme~~ — CARTO's tile URL now switches
+- [x] ~~`/map`'s basemap never joined the site's dark theme~~ — *superseded 2026-08-28: the
+      basemap is now self-hosted Protomaps, pinned light in both schemes; see [[Basemap]].* At the
+      time, CARTO's tile URL switched
       between `voyager` and `dark_all` on `prefers-color-scheme`, live via a `matchMedia`
       listener, not just at load. Bundled in: Leaflet's own zoom control, previously stock
       white/black, now themed off `--bg-panel`/`--text`/`--border` like the attribution

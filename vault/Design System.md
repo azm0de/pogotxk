@@ -57,12 +57,19 @@ Agent skills, in `.claude/skills/`, loaded automatically whenever anything visua
 They are meant to disagree occasionally. `pogotxk-design` wins, because its rules are licences
 and accessibility rather than preferences.
 
-> [!note] The cream collision
-> `frontend-design` names "warm cream background with a terracotta accent" as one of three looks
-> that mark a page as AI-generated. Ours is `#eef1e7` with `--poi-gym: #e2703a`, which trips that
-> description exactly — but it is inherited from the old site's `theme-color` `#123254` and its
-> cream, so it is a documented brief, not a default. The skill's own rule is that the brief wins.
-> Do not "fix" the cream. Do question anything else that drifts toward that look.
+> [!note] The cream collision (historical)
+> Before the 2026-08-10 repaint the page ground was the old site's cream `#eef1e7` with
+> `--poi-gym: #e2703a`, which tripped `frontend-design`'s "warm cream background with a
+> terracotta accent" description exactly. It was kept then as an inherited brief. The Poké Ball
+> repaint retired it: the ground is now `--bg: #f7f7f8` and `theme-color` is `#c8071c`. The rule
+> that survives is the general one — a look the skill names as an AI default needs a brief to
+> justify it, and today no shipped colour needs that defence.
+>
+> Since 2026-09-01 a third skill, **Impeccable** (`~/.claude/skills/impeccable/`, user-level),
+> supplies the process and the anti-pattern detector for visual work. Precedence:
+> `pogotxk-design` (licences, accessibility) > Impeccable (process, craft floor) >
+> `frontend-design` (taste). `PRODUCT.md` at the repo root records product truth for it, and
+> `DESIGN.md` will record the visual system once the redesign lands.
 
 `frontend-design` is vendored rather than installed as a user plugin so it travels with the repo
 and applies for anyone who clones it. Apache 2.0 permits this; `LICENSE.txt` sits beside it
@@ -75,7 +82,7 @@ Worth stating plainly, because the numbers were misread once and it changed a de
 | | Count | Where they appear |
 |---|---|---|
 | POI photos (`kind = 'photo'`) | 63 | Map popups, and the home page landmark rail |
-| Community photos (`kind = 'community_photo'`) | 9 | `/gallery`, pinned on the map, four on the home page |
+| Community photos (`kind = 'community_photo'`) | 9 | `/blog#photos` (the old `/gallery`, merged 2026-08-15), pinned on the map, four on the home page |
 
 **72 is the total, not the community count.** They are different things and carry different
 obligations. The 63 are photographs of the *places* — Bramlett Field's scoreboard, the disc golf
@@ -114,14 +121,17 @@ Chosen by Justin. Assignment to a slot is by **silhouette**, because each slot c
 | Mew | 425×431 | 0.99 | Home, "Happening now", **left** edge | Alternates sides so the page is not a column of art down one margin |
 | Incineroar | 224×406 | 0.55 | Home, "Happening now", right edge | Flanks Mew. The narrowest piece we have, which is what lets it sit in the margin of a section whose cards run edge to edge |
 | Magikarp | 386×431 | 0.90 | Home, Campsite explainer | The roomiest slot, and it is the section about **Spring Lake** Park |
-| Moltres | — | 1.0 | `/about`, left edge | Left from the earlier set; see the note below |
+| Moltres | — | 1.0 | `/live`, anchored to the top of the head block (moved from `/about`) | Left from the earlier set; see the note below |
 
 > [!note] The birds came first
 > The original set was the three team legendaries — Articuno, Zapdos, Moltres — because the hero
 > lede says the community is *"run by trainers from all three teams"*. Justin picked different
-> Pokémon for the home page, so only Moltres survives, on `/about`. That leaves it as the last
-> member of an abandoned set rather than part of a system. Either give `/about` one of the
-> current three, or restore the birds — but do not leave it as an accident.
+> Pokémon for the home page, so only Moltres survives, now on `/live` (top-anchored so the art
+> does not jump as the flare count changes; hidden below 1000px). That leaves it as the last
+> member of an abandoned set rather than part of a system. Either give `/live` one of the
+> current three, or restore the birds — but do not leave it as an accident. Incineroar is listed
+> above but no `incineroar*.webp` exists in `public/art/` after the 2026-08-18 purge; check before
+> relying on that slot.
 
 ### Importing a new one
 
@@ -298,7 +308,7 @@ the ramp at **3.49:1** — under AA, and invisible to every check except this on
 > alternative was cloning a third person's legs into the frame.
 >
 > The crop stops at x2600 instead. That costs two members at the right edge — a man in a cap with
-> his arm around a friend — which is why the caption links to `/gallery`, where the complete
+> his arm around a friend — which is why the caption links to `/blog#photos`, where the complete
 > frame with everyone still lives. **If this is ever revisited, crop or ask Nick for a different
 > frame; do not synthesise the people.**
 

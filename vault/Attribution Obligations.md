@@ -67,7 +67,9 @@ The **Pokémon GO logo is not used**, anywhere, by Justin's explicit call — se
 ## Map data
 
 © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors and
-© [CARTO](https://carto.com/attributions), rendered by Leaflet's own attribution control.
+© [Protomaps](https://protomaps.com), rendered by Leaflet's own attribution control. (CARTO was
+the tile source until 2026-08-28; see [[Basemap]] for why the tiles are now self-hosted and how
+the credit is baked into `basemap.ts`.)
 
 > That control is deliberately not replaced by a custom one in the filter panel — the panel
 > collapses, and the attribution must not collapse with it.
