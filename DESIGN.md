@@ -1,0 +1,306 @@
+---
+name: PoGo TXK
+description: The park's own wayfinding board — white laminated panels bolted over a live trail map, Poké Ball red reserved for here, now and active.
+colors:
+  red-500: "#e01329"
+  red-600: "#d10a1e"
+  red-700: "#c8071c"
+  red-800: "#b5051a"
+  red-900: "#9e0417"
+  ink-900: "#0f0f11"
+  ink-800: "#1d1d1f"
+  ink-700: "#2c2c31"
+  ink-600: "#3d3d44"
+  accent-solid: "#c8071c"
+  accent-contrast: "#ffffff"
+  live: "#d10a1e"
+  live-text: "#c8071c"
+  bg: "#f7f7f8"
+  bg-panel: "#ffffff"
+  bg-sunken: "#efeff1"
+  text: "#1d1d1f"
+  text-muted: "#5f5f68"
+  border: "#e3e3e6"
+  border-strong: "#c7c7ce"
+  map-canvas: "#e9e6e0"
+  discord: "#5865f2"
+  poi-pokestop: "#2f7fd4"
+  poi-gym: "#e2703a"
+  poi-powerspot: "#8257d9"
+  poi-campsite: "#f2a33c"
+  poi-pokestop-badge: "#2c76c5"
+  poi-gym-badge: "#b75b2f"
+  poi-campsite-badge: "#9e6a27"
+  team-valor: "#e8453c"
+  team-mystic: "#3b7dd8"
+  team-instinct: "#f2c53d"
+typography:
+  display:
+    fontFamily: "Overpass, system-ui, sans-serif"
+    fontSize: "clamp(1.9rem, 1.35rem + 2.75vw, 2.9rem)"
+    fontWeight: 800
+    lineHeight: 1.08
+    letterSpacing: "-0.02em"
+  headline:
+    fontFamily: "Overpass, system-ui, sans-serif"
+    fontSize: "clamp(1.35rem, 1.15rem + 1vw, 1.75rem)"
+    fontWeight: 800
+    lineHeight: 1.2
+    letterSpacing: "-0.015em"
+  title:
+    fontFamily: "Overpass, system-ui, sans-serif"
+    fontSize: "1.3125rem"
+    fontWeight: 800
+    lineHeight: 1.2
+    letterSpacing: "-0.015em"
+  body:
+    fontFamily: "Atkinson Hyperlegible Next, system-ui, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 400
+    lineHeight: 1.55
+  label:
+    fontFamily: "Overpass, system-ui, sans-serif"
+    fontSize: "0.6875rem"
+    fontWeight: 700
+    lineHeight: 1.3
+    letterSpacing: "0.06em"
+rounded:
+  xs: "4px"
+  sm: "8px"
+  md: "14px"
+  lg: "22px"
+  pill: "999px"
+spacing:
+  "1": "0.25rem"
+  "2": "0.5rem"
+  "3": "0.75rem"
+  "4": "1rem"
+  "5": "1.25rem"
+  "6": "1.5rem"
+  "8": "2rem"
+  "12": "3rem"
+  "16": "4rem"
+components:
+  button-primary:
+    backgroundColor: "{colors.accent-solid}"
+    textColor: "{colors.accent-contrast}"
+    rounded: "{rounded.sm}"
+    padding: "0.75rem 1.25rem"
+  button-primary-hover:
+    backgroundColor: "{colors.red-800}"
+    textColor: "{colors.accent-contrast}"
+  button-outline:
+    backgroundColor: "transparent"
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+  button-ghost:
+    backgroundColor: "transparent"
+    textColor: "{colors.red-700}"
+    rounded: "{rounded.sm}"
+  button-discord:
+    backgroundColor: "{colors.discord}"
+    textColor: "#ffffff"
+    rounded: "{rounded.sm}"
+  chip:
+    backgroundColor: "{colors.bg-panel}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.pill}"
+    padding: "0.5rem 0.75rem"
+  chip-pressed:
+    backgroundColor: "{colors.text}"
+    textColor: "{colors.bg}"
+    rounded: "{rounded.pill}"
+  card:
+    backgroundColor: "{colors.bg-panel}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.md}"
+    padding: "1rem"
+  panel:
+    backgroundColor: "{colors.bg-panel}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.md}"
+    padding: "1.25rem"
+  badge:
+    backgroundColor: "{colors.bg-sunken}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.xs}"
+    padding: "2px 0.5rem"
+  disc:
+    backgroundColor: "{colors.bg-panel}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.pill}"
+    size: "32px"
+  disc-live:
+    backgroundColor: "{colors.live}"
+    textColor: "#ffffff"
+    rounded: "{rounded.pill}"
+    size: "32px"
+---
+
+# Design System: PoGo TXK
+
+## Overview
+
+**Creative North Star: "The Park's Wayfinding Board"**
+
+The site is the physical kiosk sign at the trailhead, rebuilt for a phone. The live map is the ground; everything else is a white laminated panel bolted over it, ruled in black ink, typeset in road-sign gothic. It is read one-handed, outdoors, in daylight, in a glance — so contrast is a floor, targets are large, numerals are tabular, and every action carries a drawn arrow that points somewhere. It refuses the two shapes a Pokémon fan site defaults to: the key-art poster hub and the stat-row hero. There is no marketing key-art wall and no game logo anywhere.
+
+The palette is a Poké Ball taken literally: a red top, a white bottom, a black band. White panels carry the content, ink carries the type and the rules, and red is rationed. Red never decorates — it appears only for *here, now and active*: the You-Are-Here marker, a live flare, the current page in the nav, an RSVP you have pressed. Because the whole brand is now red, red alone is never allowed to carry meaning; every state also carries a word or a shape, so the board survives greyscale, colour blindness, and a cracked screen in sunlight.
+
+The two typefaces are chosen as materials, not decoration. Overpass descends from the Highway Gothic on every US road and park sign — it is the object this design is built from — and carries all signage: headings, numerals, labels, the running head. Atkinson Hyperlegible Next was drawn by the Braille Institute for low-vision reading and carries all body and UI text. The accessibility floor is worn as a face, not bolted on.
+
+**Key Characteristics:**
+- White panels on a warm-grey map ground; a soft real shadow lifts each panel off the board.
+- Poké Ball red reserved for here / now / active; ink for structure; never red as decoration.
+- Road-sign display type (Overpass 800) over hyperlegible body type (Atkinson Hyperlegible Next).
+- Counts rendered as black-ringed white discs; tabular numerals everywhere numbers line up.
+- An arrow drawn (never a glyph) on every action; the board reads at arm's length in daylight.
+- Accessibility is the material: 4.5:1 in both themes, 24px targets, a reduced-motion escape on every animation.
+
+## Colors
+
+A three-colour Poké Ball — red, white, black — held to a strict role split, with a set of map-only wayfinding hues that answer to shape as well as colour.
+
+### Primary
+- **Signal Red** (`#c8071c`, `--accent` / `--accent-solid` / `--red-700`): the here/now/active colour and the only accent on the page. Every red in the ramp sits at hue 353–354°, approached from the crimson side — the fire-engine red of an actual Poké Ball. A red at hue 2–6° reads as orange or brick and was rejected on sight; keep green below blue in any new red. `--accent` **inverts** in dark mode to a light red (`#ff5c6e`) so it can be read as link text on a dark page; `--accent-solid` stays this deep red in **both** themes and is the only red allowed under white text (5.99:1).
+- **Red ramp** (`--red-500` `#e01329` → `--red-900` `#9e0417`): five measured steps from 4.89:1 to 8.46:1 on white. The obvious brand reds (`#ff0000`, `#ee1515`, `#e3350d`) all fail AA and are deliberately not in the ramp; it starts at the first red that passes. `--red-800` (`#b5051a`) is the primary-button hover.
+
+### Secondary
+- **Live Red** (surface `--live` `#d10a1e`, text `--live-text` `#c8071c`): the "happening now" signal. Two tokens because one colour cannot both be a filled surface under white text and be legible text on the page — they pull in opposite directions and invert between themes. Kept one step hotter than `--accent` so a flare reads hotter than a button.
+- **Discord Blue** (`#5865f2`, `--discord`): a brand colour, not a palette colour — used only on the one button that means "go to Discord". It appears nowhere else.
+
+### Tertiary — map wayfinding hues
+- **POI pins** (`--poi-pokestop` `#2f7fd4`, `--poi-gym` `#e2703a`, `--poi-powerspot` `#8257d9`, `--poi-campsite` `#f2a33c`): the four place types, distinct in hue *and* silhouette so the map is readable in greyscale and to colour-blind users. Tuned as large pins on the light basemap (WCAG's 3:1 non-text bar). **Not** lifted in dark mode: the basemap is pinned light in both themes, so lifting them would put pale pins on pale tiles.
+- **POI badge / text surfaces** (`--poi-*-badge`, `--poi-*-text`): the same hues scaled down in sRGB (hue held to the decimal) until white text clears 4.5:1 on the badge fill, because 11px white on a raw pin colour fails. Use these — never the raw pin colour — for a type badge or type text. `--poi-campsite-text` inverts in dark mode; the others are pinned to the light value.
+- **Team colours** (`--team-valor` `#e8453c`, `--team-mystic` `#3b7dd8`, `--team-instinct` `#f2c53d`): used sparingly; `--team-instinct` is darkened via `color-mix` before use as text.
+
+### Neutral
+- **Ink** (`--ink-900` `#0f0f11` → `--ink-600` `#3d3d44`): the Poké Ball's black band — the third colour, what stops a red-and-white site from going all-red. Surfaces and chrome, not accent. `--text` is `--ink-800` (16.83:1 on white).
+- **Panel white / page grey** (`--bg-panel` `#ffffff`, `--bg` `#f7f7f8`, `--bg-sunken` `#efeff1`): the laminated-panel white on the near-white page. Dark theme: `#1e1e22` panel on `#141416` page.
+- **Map ground** (`--map-canvas` `#e9e6e0`): the colour behind the tiles, a warm pale grey close to CARTO Voyager's own land. Deliberately theme-independent and never `--bg-sunken`, so a tile still loading reads as "loading" rather than as a dark hole in the map.
+- **Borders** (`--border` `#e3e3e6`, `--border-strong` `#c7c7ce`), **muted text** (`--text-muted` `#5f5f68`, 6.32:1 on white).
+
+### Named Rules
+**The Rationed Red Rule.** Red is reserved for here, now and active — the You-Are-Here marker, a live flare, the current nav page, a pressed RSVP. It is never a decorative fill, a section accent, or a hover colour on something that is not "now". If red is on the screen, it is answering "where am I / what is live".
+
+**The `--accent-solid` Rule.** Any filled surface carrying white text uses `--accent-solid` (or `--live`, or a `-badge` POI token), never `--accent` and never a raw pin hue. `--accent` inverts to a light red in dark mode; `background: var(--accent)` + `color: #fff` is a 3.0:1 failure there — a trap six components (the header among them) shipped once.
+
+**The Second-Signal Rule.** Colour is never the only signal. Every state that has a hue also has a word or a shape: flares carry a spelled-out badge, POI types differ in silhouette, the live disc carries a pulse and the word "Live".
+
+## Typography
+
+**Display / Signage Font:** Overpass (`--font-sign`, with `system-ui` fallback) — Highway Gothic heritage; headings, numerals, labels, the running head.
+**Body / UI Font:** Atkinson Hyperlegible Next (`--font-read`, with `system-ui` fallback) — Braille Institute low-vision face; body copy and all UI text.
+
+Both are SIL OFL 1.1, self-hosted as variable-weight woff2 with the licence text beside each file (no font CDN). `font-display: swap`. There is no third face and no mono display face; `.prose code` falls back to the OS mono stack.
+
+**Character:** Road signage over a reading aid. Overpass is confident, structural, and set heavy (800) with negative tracking so a heading reads as a sign. Atkinson is wide, unambiguous, and open — built to survive sunlight and a cracked screen.
+
+### Hierarchy
+Two ramps, on purpose. The **UI ramp is fixed rem** (`--text-2xs` 0.6875rem → `--text-xl` 1.3125rem): these are chips, labels and meta read at arm's length in sunlight, and a fluid size there only makes small text smaller on the worst device. The **display ramp is fluid** (`--display-sm` → `--display-xl`), every middle term written `rem + vw` (never bare vw) so it respects the reader's root font size — a WCAG 1.4.4 exposure the old per-page H1 clamps all carried.
+
+- **Display** (Overpass 800, `--display-lg` clamp 1.9–2.9rem, lh 1.08, tracking -0.02em): the hero and largest panel titles. `--display-xl` is reserved for the home hero.
+- **Headline** (Overpass 800, `--display-sm`/`--display-md`, lh 1.2, tracking -0.015em): panel and section heads (`.panel-head h1/h2`, `.section-head h2`).
+- **Title** (Overpass 800, `--text-xl` 1.3125rem): sub-section heads (`.section-head h3`, `.prose h3`).
+- **Body** (Atkinson 400, `--text-base` 1rem, lh 1.55): paragraph text, capped at `--measure` **60ch** — not the textbook 68, because Atkinson's wide letterforms fit ~1.25 characters per ch and 68ch measured 85–96 characters a line.
+- **Label** (Overpass 700, `--text-2xs` 0.6875rem, tracking 0.06em `--tracking-caps`, uppercase): badges, the You-Are-Here caps label, micro-labels only — never a sentence.
+
+### Named Rules
+**The Tabular Numerals Rule.** Anything that is a count, a time, or a tally is set `font-variant-numeric: tabular-nums` (discs, counts, meta). Numbers on this site line up in columns and do not jitter as they change.
+
+**The Signage-Heading Rule.** Headings are signage: Overpass at 800 with tight tracking, never the body face and never a lighter weight. If it is an `h1`–`h4` it is set in `--font-sign`.
+
+## Layout
+
+A centred column model over a full-width map. `.container` caps content at `--container` (1100px) with a fluid `--gutter` (clamp 0.75–1.5rem); `--container-wide` (1180px) and `--container-narrow` (900px) exist for the map board and legal columns. Prose is capped tighter at `--measure` 60ch.
+
+Spacing is a single rem scale (`--space-1` 0.25rem … `--space-20` 5rem) plus four fluid rhythm tokens (`--space-section`, `--space-band`, `--gutter`, `--gutter-lg`) that replace hand-rolled clamps value-for-value. Two layout primitives compose everything else: `.stack` (vertical rhythm via `> * + *`, gap `--stack-gap`) and `.cluster` (wrapping flex row, gap `--cluster-gap`). Any flex or grid child holding long text, a table, or a scroll region needs `min-width: 0`, or `overflow-x: auto` silently does nothing — a trap that once put 169px of horizontal overflow on every route at 375px.
+
+**Recurring board layouts:**
+- **The board (home).** A GO Fest banner plate, the live map as the ground, and a white `.panel` of three numbered `.post`s with one arrow-button rising over the map's lower edge. Section order is the owner's and is changed only in markup, never with CSS `order`, so reading order and focus order match the screen.
+- **The tier ladder (`/raids`).** Raid bosses as a ladder, hardest tier first (5★ leads), the star count acting as the post number; a jump row puts every tier one tap from the top.
+- **The meetups-first events board (`/events`).** Today's meetups render first as `.post`s with a date block; the 60-row global game calendar is folded into a disclosure below them.
+- **The live log (`/live`).** The board's now-panel: a timestamped log where states print themselves.
+- **The action panel (`/go`).** A six-tile action grid (`nav.go-actions`) for raising a flare, Raid largest and drawn first (`go-action--primary`, icon 32px vs 26px), each tile a drawn flare icon over a label; the first thing on the screen, above the fold, opened from the Android bubble over the game.
+- **The legend (`/map`).** A white panel bolted over the board whose legend strip stays visible whether the panel is open or shut — each row a coloured dot, an ink silhouette, and the word (dot + shape + word), because a key you have to unfold is not a key.
+
+Responsive: the public header collapses its nav into a `.nav-toggle` panel below 820px; `--header-public-h` steps 72px → 64px at 430px, and `:target` anchors clear it via `scroll-margin-top`.
+
+## Elevation & Depth
+
+A hybrid: flat ink borders for structure, a soft neutral shadow to lift a laminated panel off the board. Panels sit on `--shadow-md`; borders and 2px ink rules do the structural work. Shadows are neutral, never brand-tinted — a red-tinted shadow under a red button reads as a glow, not a shadow. Dark mode deepens every shadow opacity to hold the same read on a dark ground.
+
+### Shadow Vocabulary
+- **`--shadow-sm`** (`0 1px 2px rgb(0 0 0 / 0.08)`): resting lift on small chrome.
+- **`--shadow-md`** (`0 4px 16px rgb(0 0 0 / 0.12)`): the panel shadow — a sign bolted over the board.
+- **`--shadow-lg`** (`0 12px 40px rgb(0 0 0 / 0.18)`): sheets and overlays.
+
+### Named Rules
+**The Neutral-Shadow Rule.** Shadows are always neutral black at low alpha, never tinted with the accent. Depth is a shadow; a coloured glow is a different, unwanted thing.
+
+**The Ink-Rule Rule.** Structure inside a panel is a 2px solid `--text` (ink) bottom border — under panel heads, section heads, and `.prose h2`. Depth lifts the panel; ink divides its contents.
+
+## Shapes
+
+Softly rounded rectangles, ink-ruled. Radii step `--radius-xs` 4px (badges, code) → `--radius-sm` 8px (buttons, small surfaces) → `--radius` 14px (panels, cards) → `--radius-lg` 22px (large surfaces), with `--radius-pill` 999px for chips and discs. Two silhouettes recur and carry meaning: the **disc** (a perfect circle, black ring, tabular numeral inside — a legend key) and the **teardrop map pin** (shared between the map markers and the drawn flare icons, so a raid tile and a gym marker read as the same object). Borders are ink for structure (2px `--text`), quiet grey for containment (`--border` on cards), and dashed grey for a quiet empty state.
+
+## Components
+
+### Buttons (`.btn`)
+- **Character:** a confident signpost; body-face at weight 700, 44px min-height, a 2px border that is part of the shape.
+- **Shape:** `--radius-sm` (8px), `--btn-radius` overridable.
+- **Primary** (`.btn--primary`): `--accent-solid` fill, white text (5.99:1 both themes); hover fills `--red-800`.
+- **Outline / Ghost / Discord / Block / Small:** `.btn--outline` (transparent, `currentColor` border), `.btn--ghost` (transparent, `--accent` text), `.btn--discord` (`--discord` fill, white text), `.btn--block` (full width), `.btn--sm` (32px min-height).
+- **States:** hover lifts `var(--lift)` (translateY -2px), active `var(--press)` (scale 0.97); `[aria-pressed="true"]` inverts to ink fill / page-colour text (the same move a chip makes); disabled drops to 0.6 opacity with no transform.
+- **The arrow:** `.btn--arrow` appends a drawn arrow (masked SVG on `currentColor`, sized 1em on the text baseline) that nudges `var(--nudge)` +2px on hover; `.btn--arrow-back` prepends the mirror for "Newer" / "All news" returns.
+
+### Chips (`.chip`)
+- **Style:** interactive pill (`--radius-pill`), 36px min-height, 1.5px `--border-strong` border, panel-white fill, body-face 600.
+- **State:** hover darkens the border to `--text`; `[aria-pressed="true"]` (a control) and `[aria-current]` (a link marking the current place) both invert to ink fill / page-colour text — one inverted state that holds in both themes without a second token.
+
+### Cards & Panels
+- **Panel** (`.panel`): the world's container — a sign bolted over the board. Panel-white, `--radius` (14px), `--shadow-md`, `--space-5` padding (`--panel-pad`). `.panel-head` is a baseline-aligned flex row with a 2px ink bottom rule; its `h1`/`h2` are Overpass 800 at `--display-sm`. `.panel--flush` zeroes padding.
+- **Card** (`.card`): surface only, for lists *inside* a panel — panel-white, 1px `--border`, `--radius`, `--space-4` padding (`--card-pad`, cancellable to bleed an image). Layout belongs to the consumer. Cards in a grid row stretch to equal height; prefer wrapping over truncation.
+
+### Badges (`.badge`)
+- **Style:** a small printed label — static, never interactive (use a chip for controls). Overpass 700 uppercase at `--text-2xs`, `--radius-xs`, sunken-grey fill by default (`--badge-bg`). `.badge--outline` (transparent, `currentColor` border) and `.badge--live` (`--live` fill, white text).
+
+### Navigation (header)
+- **Style:** a red bar — the Poké Ball's red top — with a 4px near-black `border-bottom` as the band and the white page below. Nav items are chips; labels in `--font-sign`.
+- **Current page** (`nav a[aria-current="page"]`): inverts to a white chip carrying a printed red disc in an ink ring (`::before`, 10px, drawn with a box-shadow ring so it costs no layout) with a lifting shadow. This is the You-Are-Here marker restated on the bar as a *sign* — and it deliberately does **not** pulse; only the live map marker animates.
+- **Go chip** (`.nav-highlight`): the one black nav chip, distinct from the white current-page chip (a white chip already means "current"). Below 820px the nav collapses into a `.nav-toggle` panel.
+
+### You-Are-Here marker (`.here`) — signature
+The board's one animated thing: an inline caps label (Overpass 800, uppercase, `--tracking-caps`) preceded by a red `--accent-solid` disc in a double ring (panel-white then ink, via layered box-shadows) that pulses `here-pulse` (scale 1→1.18, 1.6s, infinite). Marks the user's position on the map, and "Happening now" on a live meetup. Has a `prefers-reduced-motion` escape that stills the pulse.
+
+### Numbered post & disc (`.post` / `.disc`) — signature
+A waypoint post: a 2-column grid of a lookup disc and its body. `.disc` is a 32px circle, 2px ink ring, panel-white, Overpass 800, tabular numerals — a legend key, so it earns its place and is never used for decoration. `.disc--live` fills `--live` with white text for a "now" post. This is the counts-as-discs rule of the world.
+
+### On-image press credit (`.figure` / `.credit`) — signature
+A press credit that rides *on* its photograph (a licensing obligation — it must survive a crop). `.credit` is absolutely positioned along the image's bottom edge over a five-stop black gradient scrim (0.93→transparent), white text with a text-shadow, measured at 4.50–19.38:1 with 0% of the text area under 4.5:1. The two-stop scrim it replaced sat at 2.50:1 where the glyphs actually are. The parent `.figure` must be `position: relative; overflow: hidden`.
+
+### Prose (`.prose`)
+Long-form markdown and legal text, capped at `--measure` (60ch). Ink-ruled `h2`, `--space-4` inter-block rhythm via `:where()` at zero specificity (so the rhythm wins and a `.btn` inside prose keeps its own colour). Wide tables wrap in `.table-scroll` (keyboard-reachable) and keep their semantics.
+
+### Empty state (`.empty-state` / `.empty-art-bg`)
+A status, not an invitation: dashed `--border-strong`, quiet muted text, min-height 108px. Put the invitation in a solid panel with a real button instead. `.empty-art-bg` lays a faint map-pin motif behind it — our own SVG pins as a `currentColor` mask, never a photograph, because a press credit cannot ride on a faded background.
+
+## Do's and Don'ts
+
+### Do:
+- **Do** reserve red for here / now / active, and pair every stateful colour with a word or a shape (the Second-Signal Rule).
+- **Do** use `--accent-solid` (or `--live`, or a `--poi-*-badge` token) for any filled surface under white text; `--accent` and raw pin hues invert or fail in one theme.
+- **Do** add any new colour to `global.css` as a token with its measured contrast ratio in a comment; never introduce a raw hex in a component.
+- **Do** write hover/press transforms as the motion tokens (`var(--lift)`, `var(--press)`, `var(--nudge)`) so the `prefers-reduced-motion` block — which sets each to `none` — zeroes them structurally; a scoped `:hover { transform }` survives the blanket duration reset and still jumps.
+- **Do** put an arrow (`.btn--arrow`) on an action that goes somewhere, and set counts as `.disc`s with tabular numerals.
+- **Do** keep the basemap light in both themes and never cover the map's OSM/CARTO attribution; render `Attribution.astro` outside every empty-state conditional on any page using Leek Duck data.
+- **Do** keep primitives (`primitives.css`) imported by `Base.astro` only, so the admin editors stay out of the redesign; write a missing primitive locally with a `PROMOTE:` comment and batch it in.
+
+### Don't:
+- **Don't** "correct" the reds toward the brand reds (`#ff0000`, `#ee1515`, `#e3350d`) — they fail AA and were deliberately excluded; and don't let green rise above blue in a new red (it drifts orange).
+- **Don't** use red as decoration, a section accent, or a non-"now" hover colour.
+- **Don't** collapse `--live`/`--live-text` or `--accent`/`--accent-solid` into one token, or lift the POI pin hues in dark mode (the basemap is light in both themes).
+- **Don't** use the Pokémon GO logo, game key-art as a marker, or a font CDN; map markers are original SVGs.
+- **Don't** put a press photograph anywhere a credit cannot ride on the image (no faded backgrounds, no decorative collages) — use the `.empty-art-bg` map-pin motif instead.
+- **Don't** reorder the home sections with CSS `order`; move them in markup so reading and focus order match the screen.
+- **Don't** write new work against `--font-display` (a deprecated migration alias for `--font-sign`) or reach for `:global(.btn)` to restyle a primitive — set a wrapper custom property (`--btn-pad-inline`, `--card-pad`, `--panel-pad`) instead.

@@ -13,6 +13,17 @@ Pair this with the `frontend-design` skill: that one supplies taste, this one
 supplies the constraints. Where they disagree, this one wins — its rules are
 licences and accessibility, not preferences.
 
+> [!info] The visual system lives in `DESIGN.md`
+> As of the 2026-09 redesign (the **Trail-Map Kiosk** world), the durable
+> visual system — the palette roles, the two-face type ramps, the primitives in
+> `src/styles/primitives.css`, the cascade-layer architecture and the layout
+> patterns — is recorded in `DESIGN.md` at the repo root. Read it before
+> changing anything visual. This skill keeps only what outranks taste: the
+> licences, the accessibility floor, and the layout traps below. `PRODUCT.md`
+> holds the product truth. `frontend-design` and Impeccable
+> (`~/.claude/skills/impeccable/`) supply process and craft on top; precedence
+> stays this skill > Impeccable > `frontend-design`.
+
 > [!warning] Never edit CSS with `sed -i` or `perl -i`
 > Both replace the file rather than writing in place, which silently breaks
 > Vite's file watcher. The dev server then keeps serving the *previous* CSS with

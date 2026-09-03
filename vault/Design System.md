@@ -5,6 +5,17 @@ updated: 2026-08-10
 
 # Design System
 
+> [!info] Superseded for the visual system by `DESIGN.md` (2026-09)
+> The **Trail-Map Kiosk** redesign shipped on branch `impeccable-redesign`: the
+> site is now the park's wayfinding board — white panels bolted over the live
+> map, Poké Ball red rationed to here/now/active, Overpass signage over Atkinson
+> Hyperlegible Next body, a shared primitives layer. The canonical visual
+> reference is now `DESIGN.md` at the repo root (derived from the shipped code),
+> and the operative rules live in the `pogotxk-design` skill. This note is kept
+> for its history and the invisible decisions it records; where it describes the
+> *old* look (the Baloo 2 display face, the stat-row hero, the `.art-band`
+> Pokémon watermarks, the landmark rail), `DESIGN.md` is what shipped.
+
 The tokens themselves live in `src/styles/global.css` and are commented there. This note is
 about the rules around them and the decisions that are not visible in the CSS.
 
