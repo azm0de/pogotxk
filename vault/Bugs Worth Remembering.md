@@ -153,6 +153,17 @@ despite it being configured. See [[Configuration]].
 `/offline/`; `Cache.put()` rejects redirected responses. The one page whose entire job is working
 when nothing else does, silently absent — and `Promise.allSettled` swallowed the error.
 
+**The park map stopped loading for anyone the service worker controlled (2026-09-03).** The
+basemap is one pmtiles file read in byte ranges. The worker's cache-first rule for `/media/`
+checked `res.ok` — true for a 206 — and `Cache.put()` rejects partial responses; a rejection
+inside `respondWith` fails the whole request with `net::ERR_FAILED`, so every tile range died
+while `curl` got a clean 206 in 200ms. The worker is registered on `/map` and `/go` and claims
+every page, so it hit the home board too, and only browsers that had never opened those pages
+(fresh headless profiles, for one) ever saw tiles — which is why it looked intermittent and got
+blamed on headless networking first. Ranged requests now bypass the worker entirely, and only a
+complete 200 is ever put in a cache, inside a try. The same rule is what let a cached whole video
+be handed back to iOS's range probe.
+
 **Filter panel visible while reporting collapsed.** `.panel-body { display: grid }` outranks the
 UA's `[hidden] { display: none }`, so `aria-expanded="false"` and actual visibility disagreed.
 

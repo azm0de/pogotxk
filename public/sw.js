@@ -6,16 +6,24 @@
  * everything and risk showing a stale raid".
  *
  * Rules:
- *   * App shell and icons: cache-first. They change only on deploy.
- *   * Map tiles: cache-first with a bounded cache. The park does not move.
+ *   * App shell, icons, build assets and media: cache-first. They change only
+ *     on deploy, and media keys are never rewritten.
+ *   * Anything asked for in byte ranges: not touched at all. The basemap is one
+ *     pmtiles file read sixteen bytes at a time, and video is probed the same
+ *     way on iOS. The Cache API refuses to store a 206 — `cache.put` rejects —
+ *     and a rejection inside `respondWith` fails the whole request, which is
+ *     how the park map stopped loading for everyone the worker controlled.
+ *     The browser's own HTTP cache handles ranges, and /media already sends a
+ *     year of `immutable`.
  *   * Anything under /api/: network-only. A cached flare board is worse than
  *     no flare board — it would show a raid that ended twenty minutes ago.
  *   * Navigations: network-first, falling back to the cached shell offline.
  */
 
-const VERSION = 'v2';
+// v3: ranged requests bypass the worker, and the raster tile cache is gone with
+// the raster tiles. Bumping the version drops the v2 shell cache on activate.
+const VERSION = 'v3';
 const SHELL_CACHE = `shell-${VERSION}`;
-const TILE_CACHE = `tiles-${VERSION}`;
 
 /**
  * Trailing slash is load-bearing. Prerendered pages are served as static assets
@@ -35,9 +43,6 @@ const SHELL_ASSETS = [
   '/site.webmanifest',
 ];
 
-/** Roughly a few zoom levels over one park. Old entries are evicted FIFO. */
-const MAX_TILES = 400;
-
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -54,27 +59,31 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => key !== SHELL_CACHE && key !== TILE_CACHE)
-            .map((key) => caches.delete(key)),
-        ),
+        Promise.all(keys.filter((key) => key !== SHELL_CACHE).map((key) => caches.delete(key))),
       )
       .then(() => self.clients.claim()),
   );
 });
 
-/** Keep a cache from growing without bound, oldest first. */
-async function trimCache(cacheName, maxEntries) {
-  const cache = await caches.open(cacheName);
-  const keys = await cache.keys();
-  if (keys.length <= maxEntries) return;
-  await Promise.all(keys.slice(0, keys.length - maxEntries).map((key) => cache.delete(key)));
-}
-
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
+
+  /*
+   * A byte-range request is the browser's business, not the worker's.
+   *
+   * The basemap (`/media/basemap/*.pmtiles`) is a single file that
+   * protomaps-leaflet reads in ranges: a 16-byte header, then a slice per
+   * tile. iOS probes video the same way before it will play it. Two things go
+   * wrong the moment a worker answers these from a cache: `cache.put` of a 206
+   * rejects ("partial response is unsupported"), and inside `respondWith` that
+   * rejection fails the request outright — which is exactly how the park map
+   * printed "not loading" for everyone the worker controlled while the server
+   * was answering 206 in 200ms. And a whole 200 that *was* stored would be
+   * handed back to a request for sixteen bytes. So: step aside. The response
+   * carries a year of `immutable`, and the browser's HTTP cache does ranges.
+   */
+  if (request.headers.has('range')) return;
 
   const url = new URL(request.url);
 
@@ -82,29 +91,9 @@ self.addEventListener('fetch', (event) => {
   // are all time-sensitive; a stale answer here is actively misleading.
   if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
 
-  // Map tiles — immutable for our purposes, and the expensive thing to refetch.
-  if (/basemaps\.cartocdn\.com|tile\.openstreetmap\.org/.test(url.hostname)) {
-    event.respondWith(
-      caches.open(TILE_CACHE).then(async (cache) => {
-        const hit = await cache.match(request);
-        if (hit) return hit;
-        try {
-          const res = await fetch(request);
-          if (res.ok) {
-            await cache.put(request, res.clone());
-            void trimCache(TILE_CACHE, MAX_TILES);
-          }
-          return res;
-        } catch {
-          // No tile is better than a broken image; Leaflet handles the gap.
-          return new Response('', { status: 504 });
-        }
-      }),
-    );
-    return;
-  }
-
-  // Hashed build assets and our own icons never change under the same URL.
+  // Hashed build assets, our own icons and media never change under the same
+  // URL. (The raster tile cache that used to sit here went with the raster
+  // tiles; the vector basemap is the ranged file above.)
   if (
     url.origin === self.location.origin &&
     (url.pathname.startsWith('/_astro/') ||
@@ -116,7 +105,17 @@ self.addEventListener('fetch', (event) => {
         const hit = await cache.match(request);
         if (hit) return hit;
         const res = await fetch(request);
-        if (res.ok) await cache.put(request, res.clone());
+        // Only a complete 200 is worth keeping — `ok` is true for a 206 too —
+        // and a cache that will not take it must never fail the request that
+        // fetched it: storage full, opaque, partial, whatever the reason, the
+        // reader gets the response and the cache goes without.
+        if (res.status === 200) {
+          try {
+            await cache.put(request, res.clone());
+          } catch {
+            /* served uncached */
+          }
+        }
         return res;
       }),
     );
