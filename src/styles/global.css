@@ -261,7 +261,9 @@
    * bare vw: a bare-vw clamp ignores the reader's root font size, which is a
    * WCAG 1.4.4 exposure the old per-page H1 clamps all carried.
    */
-  --display-sm: clamp(1.35rem, 1.15rem + 1vw, 1.75rem);
+  /* Floor at 1.55rem, not 1.35: at 375px the fluid term computes to 22.15px,
+     1.15px above --text-xl, so h2 and h3 looked the same on the phone. */
+  --display-sm: clamp(1.55rem, 1.15rem + 1vw, 1.75rem);
   --display-md: clamp(1.6rem, 1.25rem + 1.75vw, 2.25rem);
   --display-lg: clamp(1.9rem, 1.35rem + 2.75vw, 2.9rem);
   --display-xl: clamp(2.2rem, 1.4rem + 4vw, 3.6rem); /* reserved for the hero */

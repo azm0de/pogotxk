@@ -295,6 +295,12 @@
     --badge-bg: var(--live);
     --badge-fg: #fff;
   }
+  /* Destructive or irreversible: an ink-filled plate, never red. Red on this
+     site answers "where am I / what is live"; a fourth meaning would blunt it. */
+  .badge--warn {
+    --badge-bg: var(--text);
+    --badge-fg: var(--bg);
+  }
 
   /* ----------------------------------------------------------------- chip -- */
   /* An interactive pill with aria-pressed. The pressed state uses text-on-bg
