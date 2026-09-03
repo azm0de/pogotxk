@@ -34,6 +34,12 @@ function configHelp(url: URL): Response {
       }</td></tr>`,
   );
 
+  // Deliberately outside the design system. This page renders only when the
+  // Worker is missing its Discord secrets — a deploy failure, noindex, seen by
+  // whoever is fixing the config and nobody else. It carries its own palette so
+  // it cannot depend on a stylesheet that the same misconfiguration might have
+  // broken, and so the detector's findings here are a known exclusion, not an
+  // open question. "present" / "MISSING" are words as well as colours.
   const body = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>Sign-in not configured</title>
