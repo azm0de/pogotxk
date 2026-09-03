@@ -191,10 +191,13 @@
 
 .g-grid {
   display: grid;
-  /* auto-fit, not auto-fill: a tier with one boss (the 5-star rung, most weeks)
-     gets a card that fills its panel instead of a lone 180px card beside three
-     empty tracks, which read as an unfinished sign at desktop widths. */
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  /* auto-fit with a capped track: a tier with one boss (the 5-star rung, most
+     weeks) no longer sits beside three empty tracks, and no longer stretches
+     to 1,076px either — a sprite marooned in the middle of a card with its CP
+     value 740px from its label was the same void moved inside the card. The
+     lone card is a card-sized card at the panel's left edge. */
+  grid-template-columns: repeat(auto-fit, minmax(180px, 320px));
+  justify-content: start;
   gap: var(--space-3);
   margin: 0;
   padding: 0;
