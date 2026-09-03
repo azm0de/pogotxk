@@ -12,6 +12,31 @@ const TYPES: PoiType[] = ['pokestop', 'gym', 'powerspot'];
 const STATUSES = ['published', 'pending', 'rejected', 'archived'] as const;
 type Status = (typeof STATUSES)[number];
 
+/** The badge variant each non-published status wears. The word is always
+ *  printed beside it — colour is never the only signal here. */
+const STATUS_BADGE: Record<Status, string> = {
+  published: 'badge--live',
+  pending: '',
+  rejected: '',
+  archived: 'badge--retired',
+};
+
+/**
+ * The Ambassador star, drawn from the same path the map pin's Campsite badge
+ * uses (`markerIcons.ts`) so the list and the pin are the same shape. A glyph
+ * (★) stood here before; the world draws its icons.
+ */
+function StarIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"
+      />
+    </svg>
+  );
+}
+
 interface AdminPoi {
   id: number;
   slug: string;
@@ -191,6 +216,35 @@ export default function MapEditor() {
     });
   }, [pois, query, typeFilter]);
 
+  /**
+   * The current lists, readable from inside a Leaflet handler.
+   *
+   * Declared before every effect that reads them, because effects run in
+   * declaration order and this one has to have written the refs first.
+   */
+  const visibleRef = useRef<AdminPoi[]>([]);
+  const poisRef = useRef<AdminPoi[]>([]);
+  useEffect(() => {
+    visibleRef.current = visible;
+    poisRef.current = pois;
+  });
+
+  /**
+   * Everything the marker layer is built from *except* position.
+   *
+   * The rebuild effect used to be keyed on `visible`, so dragging one pin —
+   * which writes the new position back into state — tore down and rebuilt all
+   * 104 markers. Position is now synced onto the existing marker instead, and
+   * the layer is only rebuilt when a pin's identity, icon or opacity changes.
+   */
+  const markerKey = useMemo(
+    () =>
+      visible
+        .map((p) => `${p.id}:${p.type}:${p.is_campsite}:${p.is_meetup_spot}:${p.status}:${p.name}`)
+        .join('|'),
+    [visible],
+  );
+
   // --- render markers -------------------------------------------------------
   useEffect(() => {
     const layer = layerRef.current;
@@ -200,7 +254,7 @@ export default function MapEditor() {
     layer.clearLayers();
     markersRef.current.clear();
 
-    for (const poi of visible) {
+    for (const poi of visibleRef.current) {
       const marker = L.marker([poi.lat, poi.lng], {
         icon: poiIcon({
           type: poi.type,
@@ -214,20 +268,29 @@ export default function MapEditor() {
 
       marker.on('click', () => setSelectedId(poi.id));
 
+      // Where the pin was when this drag started. Read at dragstart rather than
+      // closed over from the render, because the marker now outlives the render
+      // that created it and its position is updated in place.
+      let origin = marker.getLatLng();
+      marker.on('dragstart', () => {
+        origin = marker.getLatLng();
+      });
+
       // Persist immediately on drop. Anything else means a moved pin can be
       // lost by navigating away, which is exactly the failure the old
       // hand-edited markers.js had.
       marker.on('dragend', async () => {
         const { lat, lng } = marker.getLatLng();
+        const name = poisRef.current.find((p) => p.id === poi.id)?.name ?? poi.name;
         try {
           await api(`/api/admin/pois/${poi.id}`, {
             method: 'PATCH',
             body: JSON.stringify({ lat: Number(lat.toFixed(7)), lng: Number(lng.toFixed(7)) }),
           });
           setPois((prev) => prev.map((p) => (p.id === poi.id ? { ...p, lat, lng } : p)));
-          notify('ok', `Moved ${poi.name}`);
+          notify('ok', `Moved ${name}`);
         } catch (err) {
-          marker.setLatLng([poi.lat, poi.lng]); // snap back on failure
+          marker.setLatLng(origin); // snap back on failure
           notify('err', err instanceof Error ? err.message : 'Could not move');
         }
       });
@@ -235,7 +298,20 @@ export default function MapEditor() {
       marker.addTo(layer);
       markersRef.current.set(poi.id, marker);
     }
-  }, [visible, notify]);
+  }, [markerKey, notify]);
+
+  // A position change moves the one marker it belongs to — from a drag, or from
+  // the latitude and longitude fields in the form.
+  useEffect(() => {
+    for (const poi of visible) {
+      const marker = markersRef.current.get(poi.id);
+      if (!marker) continue;
+      const at = marker.getLatLng();
+      if (Math.abs(at.lat - poi.lat) > 1e-9 || Math.abs(at.lng - poi.lng) > 1e-9) {
+        marker.setLatLng([poi.lat, poi.lng]);
+      }
+    }
+  }, [visible]);
 
   // Highlight the selection without rebuilding every marker.
   useEffect(() => {
@@ -243,15 +319,25 @@ export default function MapEditor() {
       const el = marker.getElement();
       if (el) el.classList.toggle('is-selected', id === selectedId);
     }
-    if (selectedId) {
-      const poi = pois.find((p) => p.id === selectedId);
-      if (poi) mapRef.current?.panTo([poi.lat, poi.lng]);
-    }
-  }, [selectedId, visible, pois]);
+  }, [selectedId, markerKey]);
+
+  // Pan on selection only. Panning on every position change would chase the map
+  // across the park as someone types into the latitude field.
+  useEffect(() => {
+    if (selectedId === null) return;
+    const poi = poisRef.current.find((p) => p.id === selectedId);
+    if (poi) mapRef.current?.panTo([poi.lat, poi.lng]);
+  }, [selectedId]);
 
   // --- save / delete --------------------------------------------------------
   const save = useCallback(async () => {
     if (!selected || !draft) return;
+    // The coordinate fields are typed into, so they can be empty or half-typed.
+    // Name the problem and the fix rather than sending NaN to the API.
+    if (!Number.isFinite(draft.lat) || !Number.isFinite(draft.lng)) {
+      notify('err', 'Latitude and longitude must both be numbers. Fill them in, or revert.');
+      return;
+    }
     setBusy(true);
     try {
       await api(`/api/admin/pois/${selected.id}`, {
@@ -260,6 +346,8 @@ export default function MapEditor() {
           name: draft.name,
           type: draft.type,
           description: draft.description || null,
+          lat: Number(draft.lat.toFixed(7)),
+          lng: Number(draft.lng.toFixed(7)),
           status: draft.status,
           sponsor: draft.sponsor || null,
           isCampsite: draft.isCampsite,
@@ -335,6 +423,7 @@ export default function MapEditor() {
     <div className="editor">
       <aside className="editor-list">
         <div className="editor-list-head">
+          <h1 className="editor-title">Map editor</h1>
           <input
             type="search"
             placeholder="Search POIs…"
@@ -379,9 +468,14 @@ export default function MapEditor() {
               >
                 <span className={`chip-dot chip-dot--${p.type}`} aria-hidden="true" />
                 <span className="editor-item-name">{p.name}</span>
-                {p.is_campsite === 1 && <span className="editor-star" title="Campsite">★</span>}
+                {p.is_campsite === 1 && (
+                  <>
+                    <StarIcon className="editor-star" />
+                    <span className="sr-only">Campsite</span>
+                  </>
+                )}
                 {p.status !== 'published' && (
-                  <span className="editor-status">{p.status}</span>
+                  <span className={`badge ${STATUS_BADGE[p.status]}`}>{p.status}</span>
                 )}
               </button>
             </li>
@@ -391,20 +485,22 @@ export default function MapEditor() {
       </aside>
 
       <div className="editor-map-wrap">
-        <div ref={containerRef} className="editor-map" />
+        {/* Leaflet's container is a focusable scroll region with no name of its
+            own; without this it is announced as an unlabelled group. */}
+        <div ref={containerRef} className="editor-map" role="application" aria-label="POI map" />
 
         <div className="editor-toolbar">
           <button
             type="button"
-            className={`tool-btn${addMode ? ' is-on' : ''}`}
+            className="btn"
             aria-pressed={addMode}
             onClick={() => setAddMode((v) => !v)}
             disabled={busy}
           >
-            {addMode ? 'Click the map to place…' : '+ Add POI'}
+            {addMode ? 'Click the map to place…' : 'Add POI'}
           </button>
           {addMode && (
-            <button type="button" className="tool-btn tool-btn--ghost" onClick={() => setAddMode(false)}>
+            <button type="button" className="btn" onClick={() => setAddMode(false)}>
               Cancel
             </button>
           )}
@@ -422,13 +518,16 @@ export default function MapEditor() {
           <div className="editor-hint">
             <h2>Nothing selected</h2>
             <p>
-              Pick a location from the list or the map to edit it. Drag any pin to move it — that
-              saves immediately.
+              Pick a location from the list or the map to edit it. Drag any pin to move it, or type
+              its coordinates into the form.
             </p>
-            <p>Use <strong>+ Add POI</strong> then click the map to place a new one.</p>
+            <p>
+              Press <strong>Add POI</strong>, then click the map to place a new one.
+            </p>
           </div>
         ) : (
           <form
+            className="admin-form"
             onSubmit={(e) => {
               e.preventDefault();
               void save();
@@ -436,7 +535,7 @@ export default function MapEditor() {
           >
             <header className="form-head">
               <h2>{selected.name}</h2>
-              <code>{selected.slug}</code>
+              <code className="admin-code">{selected.slug}</code>
             </header>
 
             <label>
@@ -492,7 +591,7 @@ export default function MapEditor() {
                   checked={draft.isCampsite}
                   onChange={(e) => set('isCampsite', e.target.checked)}
                 />
-                <span>★ Campsite</span>
+                <span>Campsite</span>
               </label>
               <label className="check">
                 <input
@@ -512,10 +611,46 @@ export default function MapEditor() {
               </label>
             </fieldset>
 
-            <p className="form-coords">
-              {selected.lat.toFixed(6)}, {selected.lng.toFixed(6)}
-              <span> — drag the pin to move</span>
-            </p>
+            {/*
+              Repositioning without a pointer.
+
+              These two fields, not the drag, are what makes moving a POI
+              reachable from a keyboard (WCAG 2.1.1) — and they are also how a
+              surveyed coordinate gets pasted in exactly. Dragging still works
+              and still saves on drop; these save with the rest of the form.
+            */}
+            <div className="form-coords">
+              <label>
+                <span>Latitude</span>
+                <input
+                  type="number"
+                  step="0.0000001"
+                  min={-90}
+                  max={90}
+                  inputMode="decimal"
+                  required
+                  value={Number.isFinite(draft.lat) ? draft.lat : ''}
+                  onChange={(e) => set('lat', e.target.valueAsNumber)}
+                />
+              </label>
+              <label>
+                <span>Longitude</span>
+                <input
+                  type="number"
+                  step="0.0000001"
+                  min={-180}
+                  max={180}
+                  inputMode="decimal"
+                  required
+                  value={Number.isFinite(draft.lng) ? draft.lng : ''}
+                  onChange={(e) => set('lng', e.target.valueAsNumber)}
+                />
+              </label>
+              <p className="form-coords-hint">
+                Seven decimal places. Dragging the pin on the map fills these in and saves straight
+                away.
+              </p>
+            </div>
 
             <div className="form-photo">
               <span className="form-photo-label">Photo</span>
@@ -540,18 +675,23 @@ export default function MapEditor() {
             </div>
 
             <div className="form-actions">
-              <button type="submit" className="btn" disabled={!dirty || busy}>
+              <button type="submit" className="btn btn--primary btn--sm" disabled={!dirty || busy}>
                 {busy ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
               </button>
               <button
                 type="button"
-                className="btn btn--ghost"
+                className="btn btn--outline btn--sm"
                 onClick={() => setDraft(toDraft(selected))}
                 disabled={!dirty || busy}
               >
                 Revert
               </button>
-              <button type="button" className="btn btn--danger" onClick={archive} disabled={busy}>
+              <button
+                type="button"
+                className="btn btn--danger btn--sm"
+                onClick={archive}
+                disabled={busy}
+              >
                 Archive
               </button>
             </div>

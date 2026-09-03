@@ -1,249 +1,175 @@
 /*
  * Post editor.
  *
- * The generic bits (.btn, .form-grid, .form-note, .form-actions) are scoped
- * under `.posts` rather than declared globally: MeetupEditor.css owns the same
- * names, and two islands' stylesheets can end up in one bundle.
+ * The generic vocabulary — `.btn`, `.badge`, `.chip`, `.panel`, `.card`,
+ * `.prose`, `.empty-state`, and the `.admin-form` / `.admin-row` names from
+ * `Admin.astro` — is shared now that the layout loads `primitives.css`. It used
+ * to be reimplemented here under `.posts` to avoid colliding with
+ * `MeetupEditor.css` when two islands' stylesheets land in one bundle; the
+ * shared definitions removed the collision rather than working around it.
+ *
+ * What is left below is this surface's own layout: the tag input, the pane
+ * switch and the two writing panes.
  */
 
 .posts {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 24px 20px 72px;
-  display: grid;
-  gap: 18px;
+  font-family: var(--font-read);
 }
 
 .posts-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 .posts-head h1 {
-  margin: 0 0 4px;
-  font-size: 1.5rem;
+  margin: 0;
+  font-size: var(--display-sm);
 }
 .posts-head p {
-  margin: 0;
-  max-width: 62ch;
+  margin: var(--space-2) 0 0;
+  max-width: var(--measure);
   color: var(--text-muted);
-  font-size: 0.86rem;
-}
-
-.posts .btn {
-  padding: 9px 16px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.posts .btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.posts .btn--ghost {
-  background: var(--bg-sunken);
-  color: var(--text);
-  border: 1px solid var(--border);
+  font-size: var(--text-md);
 }
 
 /* Reserved height so the layout does not jump when a message appears. */
 .posts-toast {
   margin: 0;
-  min-height: 1.1rem;
+  min-height: 1.1rem; /* one line of --text-md at --lh-ui; the message's own box */
   padding: 0;
   border-radius: var(--radius-sm);
-  font-weight: 600;
-  font-size: 0.86rem;
+  font-weight: 700;
+  font-size: var(--text-md);
 }
 .posts-toast--ok,
 .posts-toast--err {
-  padding: 10px 14px;
-  color: #fff;
+  padding: var(--space-3) var(--space-4);
+  color: #fff; /* on --accent-solid 5.99:1 and on --live 5.00:1, both themes */
 }
+/* `--accent-solid`, not `--accent`: `--accent` inverts to a light red in dark
+   mode and this pairing measured 3.0:1 there. */
 .posts-toast--ok {
-  background: var(--accent);
+  background: var(--accent-solid); /* white on it: 5.99:1, both themes */
 }
 .posts-toast--err {
-  background: var(--live);
-}
-
-.posts-empty {
-  margin: 0;
-  padding: 24px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  color: var(--text-muted);
-  font-size: 0.88rem;
-  text-align: center;
+  background: var(--live); /* white on it: 5.00:1 light, 5.99:1 dark */
 }
 
 /* ------------------------------------------------------------------ form -- */
 
 .post-form {
   display: grid;
-  gap: 12px;
-  padding: 18px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  gap: var(--space-3);
 }
 
 .post-form-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
+  border-bottom: 2px solid var(--text);
 }
 .post-form-head h2 {
   margin: 0;
-  font-size: 1.05rem;
-}
-.post-form-view {
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.post-form label {
-  display: grid;
-  gap: 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.post-form input,
-.post-form select,
-.post-form textarea {
-  width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
-  color: var(--text);
-  font: inherit;
-  font-weight: 400;
-}
-.post-form textarea {
-  resize: vertical;
-}
-
-.posts .form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-items: start;
-}
-
-.posts .form-note {
-  margin: 0;
-  padding: 9px 12px;
-  border-left: 3px solid var(--accent);
-  background: var(--bg-sunken);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.posts .form-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
+  font-size: var(--display-sm);
 }
 
 /* ------------------------------------------------------------------ tags -- */
 
 .tag-field {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
+  min-width: 0;
 }
 .tag-input {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 5px 7px;
-  border: 1px solid var(--border);
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
 }
 .tag-input:focus-within {
-  border-color: var(--accent);
+  border-color: var(--text);
 }
 .tag-input input {
   flex: 1;
   min-width: 8ch;
+  min-height: 32px !important; /* it sits inside the field's own 44px box */
   border: 0 !important;
   background: none !important;
-  padding: 4px 2px !important;
+  padding: var(--space-1) 2px !important;
 }
 .tag-input input:focus-visible {
   outline: none;
 }
 
+/* Ink, not red. A tag is not "here, now or active" — it is the same inverted
+   pill a pressed chip wears, which is the world's mark for a set thing. */
 .tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 4px 3px 9px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 0.74rem;
-  font-weight: 600;
+  gap: var(--space-1);
+  padding: 2px 2px 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--text);
+  color: var(--bg);
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 .tag-chip button {
   display: grid;
   place-items: center;
-  width: 17px;
-  height: 17px;
+  /* 24px is the target floor (SC 2.5.8). It was 17px. */
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: rgb(255 255 255 / 0.22);
+  background: none;
   color: inherit;
-  font-size: 0.8rem;
-  line-height: 1;
   cursor: pointer;
 }
 .tag-chip button:hover {
-  background: rgb(255 255 255 / 0.4);
+  background: rgb(255 255 255 / 0.22);
+}
+.tag-chip button svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* ------------------------------------------------------------------- pin -- */
 
 .pin-field {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   align-content: start;
+  min-width: 0;
 }
 .pin-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text);
 }
+/* The pin toggle is a `.btn` with `aria-pressed`, so it inverts to ink the way
+   every other toggle on the board does. */
 .pin-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
+  justify-content: flex-start;
+  border-color: var(--border-strong);
   text-align: left;
 }
-.pin-toggle[aria-pressed='true'] {
-  background: var(--poi-campsite);
-  border-color: var(--poi-campsite);
-  color: #4a2c00;
+.pin-toggle svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
 }
 
 /* ------------------------------------------------------------ body panes -- */
@@ -252,41 +178,45 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-top: 4px;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
 }
 .body-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text);
 }
 
 .pane-switch {
   display: inline-flex;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
   background: var(--bg-sunken);
 }
 .pane-switch button {
-  padding: 4px 12px;
+  /* 28px tall inside a 32px rail: over the 24px floor, where it was ~22px. */
+  min-height: 28px;
+  padding: 0 var(--space-3);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: none;
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-family: var(--font-read);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text);
   cursor: pointer;
 }
 .pane-switch button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--text);
+  color: var(--bg);
 }
 
 .body-panes {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 420px;
 }
 .body-panes--split {
@@ -294,22 +224,37 @@
 }
 
 .body-input {
+  /* A 1fr grid track holding a monospace textarea: without this it refuses to
+     shrink below its longest line and pushes the pane out of the page. */
+  min-width: 0;
   min-height: 420px;
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace !important;
-  font-size: 0.86rem !important;
-  line-height: 1.6;
+  /* Markdown is written in columns, so the body pane is the one place on the
+     site that needs a mono face. The site ships none; this is the OS stack
+     DESIGN.md points `.prose code` at. */
+  font-family: ui-monospace, monospace !important;
+  font-size: var(--text-md) !important;
+  line-height: var(--lh-body);
   resize: vertical;
 }
 
+/*
+ * The preview is `.prose` — the same typography the published post gets, which
+ * is the whole point of a preview. `min-width: 0` because it is a 1fr track
+ * holding `pre { overflow-x: auto }`, and without it the scroll region silently
+ * does nothing and a wide code block widens the page instead.
+ */
 .body-preview {
+  min-width: 0;
   overflow-y: auto;
   max-height: 70vh;
-  padding: 14px 18px;
+  padding: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
-  font-size: 0.94rem;
-  line-height: 1.65;
+  --prose-measure: none;
+  /* The published page rules its h2s in ink; inside a grey pane a hairline
+     reads as a divider rather than as a second heading level. */
+  --prose-rule: 1px solid var(--border-strong);
 }
 /* Faint while React catches the preview up with the textarea. */
 .body-preview.is-stale {
@@ -318,59 +263,8 @@
 .body-preview > :first-child {
   margin-top: 0;
 }
-.body-preview h2 {
-  font-size: 1.25rem;
-  margin: 1.4em 0 0.35em;
-}
-.body-preview h3 {
-  font-size: 1.05rem;
-  margin: 1.2em 0 0.3em;
-}
-.body-preview p,
-.body-preview ul,
-.body-preview ol {
-  margin: 0 0 0.9em;
-}
-.body-preview ul,
-.body-preview ol {
-  padding-left: 1.3em;
-}
-.body-preview blockquote {
-  margin: 1em 0;
-  padding-left: 14px;
-  border-left: 3px solid var(--accent);
-  color: var(--text-muted);
-}
-.body-preview code {
-  padding: 1px 5px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-panel);
-  font-size: 0.86em;
-}
-.body-preview pre {
-  padding: 12px 14px;
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel);
-}
-.body-preview pre code {
-  padding: 0;
-  border: 0;
-  background: none;
-}
-.body-preview img {
-  border-radius: var(--radius-sm);
-}
 .body-preview figcaption {
-  font-size: 0.78rem;
-  color: var(--text-muted);
   text-align: center;
-}
-.body-preview hr {
-  border: 0;
-  border-top: 1px solid var(--border);
 }
 
 /* ------------------------------------------------------------------ list -- */
@@ -378,150 +272,30 @@
 .posts-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-}
-.posts-filters button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-panel);
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.posts-filters button[aria-pressed='true'] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
+  gap: var(--space-2);
 }
 .filter-count {
-  font-size: 0.7rem;
-  opacity: 0.75;
+  /* No opacity on a count: white at 75% over a filled chip measured 3.36:1 on
+     the public map, and a count is data. */
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
 }
 
-.post-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.post-row {
-  display: grid;
-  grid-template-columns: 1fr 190px auto auto;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.post-row-main {
+.post-row-tags {
   min-width: 0;
 }
-.post-row-main h3 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  font-size: 0.95rem;
-}
-.post-row-pin {
-  color: var(--poi-campsite);
-}
-.post-row-main p {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 3px 0 0;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-.post-row-main code {
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--bg-sunken);
-  font-size: 0.92em;
-}
-.post-row-tags {
-  color: var(--accent);
-}
 
-.post-row-when {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-.post-state {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--bg-sunken);
-  color: var(--text-muted);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.post-state--live {
-  background: var(--accent-solid);
-  color: #fff;
-}
-.post-state--scheduled {
-  background: var(--poi-campsite);
-  color: #4a2c00;
-}
-.post-state--archived {
-  background: var(--live);
-  color: #fff;
-}
-
-.post-row-actions {
-  display: flex;
-  gap: 6px;
-}
-.post-row-actions button {
-  padding: 6px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.post-row-actions .danger {
-  color: var(--live-text);
-  border-color: var(--live-text);
-  background: transparent;
+/* The pinned star in a row title. `--poi-campsite-text`, not the raw pin hue:
+   that measured ~2.08:1 as a 14px icon on the panel. */
+.admin-row-main h3 svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--poi-campsite-text); /* 4.62:1 light, 7.97:1 dark */
 }
 
 @media (max-width: 860px) {
-  .posts .form-grid {
-    grid-template-columns: 1fr;
-  }
   .body-panes--split {
     grid-template-columns: 1fr;
-  }
-  .post-row {
-    grid-template-columns: 1fr auto;
-    grid-template-areas: 'main state' 'when when' 'actions actions';
-  }
-  .post-row-main {
-    grid-area: main;
-  }
-  .post-row-when {
-    grid-area: when;
-  }
-  .post-state {
-    grid-area: state;
-    justify-self: end;
-  }
-  .post-row-actions {
-    grid-area: actions;
   }
 }

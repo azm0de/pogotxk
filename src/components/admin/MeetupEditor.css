@@ -1,256 +1,81 @@
+/*
+ * Meetup editor.
+ *
+ * `.btn`, `.badge`, `.panel`, `.card`, `.empty-state` and the `.admin-form` /
+ * `.admin-row` names come from the shared vocabulary now that `Admin.astro`
+ * loads `primitives.css`. This file used to own its own copies of all of them,
+ * which is how its list row ended up with the same four columns as the news
+ * list in a different order.
+ */
+
 .meetups {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 24px 20px 64px;
-  display: grid;
-  gap: 22px;
+  font-family: var(--font-read);
 }
 
 .meetups-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 .meetups-head h1 {
-  margin: 0 0 4px;
-  font-size: 1.5rem;
+  margin: 0;
+  font-size: var(--display-sm);
 }
 .meetups-head p {
-  margin: 0;
-  max-width: 60ch;
+  margin: var(--space-2) 0 0;
+  max-width: var(--measure);
   color: var(--text-muted);
-  font-size: 0.86rem;
-}
-.meetups-head code,
-.form-note code {
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--bg-sunken);
-  font-size: 0.9em;
+  font-size: var(--text-md);
 }
 
-.meetups h2 {
-  font-size: 1rem;
-  margin: 0 0 10px;
-  color: var(--text-muted);
+.meetups section h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xl);
 }
 
 .meetups-toast {
   margin: 0;
-  padding: 10px 14px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
-  font-weight: 600;
-  font-size: 0.86rem;
+  font-weight: 700;
+  font-size: var(--text-md);
 }
 .meetups-toast--ok {
   background: var(--accent-solid);
-  color: #fff;
+  color: #fff; /* white on --accent-solid: 5.99:1, both themes */
 }
 .meetups-toast--err {
   background: var(--live);
-  color: #fff;
-}
-
-.meetups-empty {
-  color: var(--text-muted);
-  font-size: 0.88rem;
-  padding: 16px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  margin: 0;
+  color: #fff; /* white on --live: 5.00:1 light, 5.99:1 dark */
 }
 
 /* ------------------------------------------------------------------ form -- */
 
 .meetup-form {
   display: grid;
-  gap: 12px;
-  padding: 18px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  gap: var(--space-3);
 }
 .meetup-form h2 {
   margin: 0;
-  color: var(--text);
-  font-size: 1.05rem;
-}
-.meetup-form label {
-  display: grid;
-  gap: 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.meetup-form input,
-.meetup-form select,
-.meetup-form textarea {
-  width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
-  color: var(--text);
-  font: inherit;
-  font-weight: 400;
-}
-.meetup-form textarea {
-  resize: vertical;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.form-note {
-  margin: 0;
-  padding: 9px 12px;
-  border-left: 3px solid var(--accent);
-  background: var(--bg-sunken);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.form-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-}
-.btn {
-  padding: 9px 16px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.btn--ghost {
-  background: var(--bg-sunken);
-  color: var(--text);
-  border: 1px solid var(--border);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--text);
+  font-size: var(--display-sm);
 }
 
 /* ------------------------------------------------------------------ list -- */
 
-.meetup-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-.meetup-list--past {
-  opacity: 0.7;
+/* A past meetup is history, not a dimmed row: 0.7 opacity took its muted text
+   to 3.9:1. The heading above the list already says which list this is. */
+.meetup-list--past .admin-row-main h3 {
+  font-weight: 700;
 }
 
-.meetup-row {
-  display: grid;
-  grid-template-columns: 190px 1fr auto auto;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.meetup-row--cancelled .meetup-main h3 {
+.meetup-row--cancelled .admin-row-main h3 {
   text-decoration: line-through;
 }
 
-.meetup-when {
-  display: grid;
-  font-size: 0.8rem;
-}
-.meetup-when strong {
-  font-size: 0.84rem;
-}
-.meetup-when span {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-}
-
-.meetup-main h3 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-.meetup-main p {
-  margin: 2px 0 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
 .meetup-repeat {
-  color: var(--accent);
-}
-
-.meetup-status {
-  font-size: 0.64rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--bg-sunken);
   color: var(--text-muted);
-}
-.meetup-status--published {
-  background: var(--accent-solid);
-  color: #fff;
-}
-.meetup-status--cancelled {
-  background: var(--live);
-  color: #fff;
-}
-
-.meetup-actions {
-  display: flex;
-  gap: 6px;
-}
-.meetup-actions button {
-  padding: 6px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.meetup-actions .danger {
-  color: var(--live-text);
-  border-color: var(--live-text);
-  background: transparent;
-}
-
-@media (max-width: 720px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  .meetup-row {
-    grid-template-columns: 1fr auto;
-    grid-template-areas: 'when status' 'main main' 'actions actions';
-  }
-  .meetup-when {
-    grid-area: when;
-  }
-  .meetup-main {
-    grid-area: main;
-  }
-  .meetup-status {
-    grid-area: status;
-    justify-self: end;
-  }
-  .meetup-actions {
-    grid-area: actions;
-  }
 }

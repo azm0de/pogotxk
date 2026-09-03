@@ -40,6 +40,49 @@ type PaneMode = 'write' | 'split' | 'preview';
 
 const STATUS_FILTERS = ['all', 'draft', 'scheduled', 'published', 'archived'] as const;
 
+/**
+ * The badge each public state wears. One vocabulary across the console: red is
+ * "now" and nothing else, an outline is "committed but not yet", muted is over.
+ * The word is printed in every case — colour is never the only signal.
+ */
+const STATE_BADGE: Record<'draft' | 'scheduled' | 'live' | 'archived', string> = {
+  draft: '',
+  scheduled: 'badge--outline',
+  live: 'badge--live',
+  archived: 'badge--retired',
+};
+
+/** The Campsite/pinned star, from the same path the map pin's badge uses. */
+function StarIcon({ filled }: { filled: boolean }) {
+  const d = 'M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z';
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d={d}
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={filled ? 0 : 2}
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** A drawn remove mark; the world does not use glyphs as icons. */
+function RemoveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M6 6l12 12M18 6L6 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
@@ -280,7 +323,7 @@ export default function PostEditor() {
   }, [posts]);
 
   return (
-    <div className="posts">
+    <div className="posts admin-page admin-page--wide">
       <header className="posts-head">
         <div>
           <h1>News</h1>
@@ -289,8 +332,8 @@ export default function PostEditor() {
             below — nothing needs deploying.
           </p>
         </div>
-        <button type="button" className="btn" onClick={startNew}>
-          + New post
+        <button type="button" className="btn btn--primary" onClick={startNew}>
+          New post
         </button>
       </header>
 
@@ -299,17 +342,17 @@ export default function PostEditor() {
       </p>
 
       {editingId !== null && (
-        <form className="post-form" onSubmit={submit} ref={formRef}>
+        <form className="post-form panel admin-form" onSubmit={submit} ref={formRef}>
           <div className="post-form-head">
             <h2>{editingId === 'new' ? 'New post' : 'Edit post'}</h2>
             {editingId !== 'new' && form.slug && (
               <a
-                className="post-form-view"
+                className="btn btn--outline btn--sm btn--arrow"
                 href={`/blog/${form.slug}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                View on site ↗
+                View on site
               </a>
             )}
           </div>
@@ -420,7 +463,7 @@ export default function PostEditor() {
                       aria-label={`Remove tag ${tag}`}
                       onClick={() => set('tags', form.tags.filter((t) => t !== tag))}
                     >
-                      ×
+                      <RemoveIcon />
                     </button>
                   </span>
                 ))}
@@ -440,11 +483,11 @@ export default function PostEditor() {
               <span className="pin-label">Placement</span>
               <button
                 type="button"
-                className="pin-toggle"
+                className="btn pin-toggle"
                 aria-pressed={form.pinned}
                 onClick={() => set('pinned', !form.pinned)}
               >
-                <span aria-hidden="true">{form.pinned ? '★' : '☆'}</span>
+                <StarIcon filled={form.pinned} />
                 {form.pinned ? 'Pinned to the top' : 'Pin to the top'}
               </button>
             </div>
@@ -488,7 +531,7 @@ export default function PostEditor() {
             )}
             {pane !== 'write' && (
               <div
-                className={`body-preview${previewStale ? ' is-stale' : ''}`}
+                className={`body-preview prose${previewStale ? ' is-stale' : ''}`}
                 aria-live="off"
                 // Safe by construction: renderMarkdown escapes the source before
                 // it emits a single tag, so nothing an author types can become
@@ -501,12 +544,12 @@ export default function PostEditor() {
           <div className="form-actions">
             {/* Saving mid-fetch would write the empty placeholder body over
                 the real one. */}
-            <button type="submit" className="btn" disabled={busy || bodyLoading}>
+            <button type="submit" className="btn btn--primary" disabled={busy || bodyLoading}>
               {busy ? 'Saving…' : editingId === 'new' ? 'Create post' : 'Save changes'}
             </button>
             <button
               type="button"
-              className="btn btn--ghost"
+              className="btn btn--outline"
               onClick={() => setEditingId(null)}
               disabled={busy}
             >
@@ -521,6 +564,7 @@ export default function PostEditor() {
           <button
             key={value}
             type="button"
+            className="chip"
             aria-pressed={filter === value}
             onClick={() => setFilter(value)}
           >
@@ -531,41 +575,50 @@ export default function PostEditor() {
       </div>
 
       {visible.length === 0 ? (
-        <p className="posts-empty">Nothing here yet. Create a post above.</p>
+        <p className="empty-state">Nothing here yet. Create a post above.</p>
       ) : (
-        <ul className="post-list">
+        <ul className="admin-rows">
           {visible.map((post) => {
             const state = publicState(post);
             return (
-              <li key={post.id} className="post-row">
-                <div className="post-row-main">
+              <li key={post.id} className="card admin-row">
+                <div className="admin-row-main">
                   <h3>
                     {post.pinned && (
-                      <span className="post-row-pin" title="Pinned" aria-label="Pinned">
-                        ★
-                      </span>
+                      <>
+                        <StarIcon filled />
+                        <span className="sr-only">Pinned</span>
+                      </>
                     )}
                     {post.title}
                   </h3>
                   <p>
-                    <code>/blog/{post.slug}</code>
-                    {post.tags.length > 0 && <span className="post-row-tags">{post.tags.map((t) => `#${t}`).join(' ')}</span>}
+                    <code className="admin-code">/blog/{post.slug}</code>
+                    {post.tags.length > 0 && (
+                      <span className="post-row-tags">
+                        {post.tags.map((t) => `#${t}`).join(' ')}
+                      </span>
+                    )}
                   </p>
                 </div>
 
-                <div className="post-row-when">
+                <div className="admin-row-when">
                   {post.publishedAt ? formatInZone(post.publishedAt) : 'No date'}
                 </div>
 
-                <span className={`post-state post-state--${state}`}>{state}</span>
+                <span className={`badge admin-row-status ${STATE_BADGE[state]}`}>{state}</span>
 
-                <div className="post-row-actions">
-                  <button type="button" onClick={() => void startEdit(post)}>
+                <div className="admin-row-actions">
+                  <button
+                    type="button"
+                    className="btn btn--outline btn--sm"
+                    onClick={() => void startEdit(post)}
+                  >
                     Edit
                   </button>
                   <button
                     type="button"
-                    className="danger"
+                    className="btn btn--danger btn--sm"
                     onClick={() => void remove(post)}
                     disabled={busy}
                   >

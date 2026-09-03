@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './MediaLibrary.css';
 
 /**
@@ -11,6 +11,11 @@ import './MediaLibrary.css';
  *
  * Uploading already worked from the map editor, so this is deliberately not a
  * second uploader: it is a browser and an editor for what is already stored.
+ *
+ * The credit renders *on* the photograph here, through the same `.figure` /
+ * `.credit` primitives the public site uses, because that is where the credit
+ * has to live — and because a library whose job is attribution should show at a
+ * glance which pictures carry theirs.
  */
 
 interface MediaItem {
@@ -49,6 +54,25 @@ const FILTERS = [
 ] as const;
 
 type FilterId = (typeof FILTERS)[number]['id'];
+
+/** Everything inside the sheet that can take focus, in document order. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** A drawn close mark — the world does not use glyphs as icons. */
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M6 6l12 12M18 6L6 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -92,6 +116,11 @@ export default function MediaLibrary() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
 
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLUListElement>(null);
+  /** The tile the sheet was opened from, so focus can go back to it. */
+  const openerRef = useRef<HTMLButtonElement | null>(null);
+
   const load = useCallback(async () => {
     try {
       const data = await api<{ media: MediaItem[] }>('/api/admin/media?limit=500');
@@ -130,7 +159,8 @@ export default function MediaLibrary() {
     };
   }, [items]);
 
-  const open = useCallback((item: MediaItem) => {
+  const open = useCallback((item: MediaItem, trigger: HTMLButtonElement) => {
+    openerRef.current = trigger;
     setOpenId(item.id);
     setDraft(toDraft(item));
     setStatus('');
@@ -139,7 +169,60 @@ export default function MediaLibrary() {
   const close = useCallback(() => {
     setOpenId(null);
     setDraft(null);
+    const opener = openerRef.current;
+    openerRef.current = null;
+    // After a save the list is reloaded, so the tile that opened the sheet may
+    // no longer be the same element. Fall back to the first tile rather than
+    // dropping focus on <body>, which would send the next Tab back to the top
+    // of the page.
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) opener.focus();
+      else gridRef.current?.querySelector<HTMLButtonElement>('.media-tile')?.focus();
+    });
   }, []);
+
+  /**
+   * Dialog focus management.
+   *
+   * `role="dialog" aria-modal="true"` was already here and did nothing on its
+   * own: focus stayed behind the sheet, Tab walked out into the page under it,
+   * and Escape did nothing (WCAG 2.4.3, the ARIA dialog pattern). Focus goes to
+   * the sheet on open so its name is announced, Tab wraps inside it, Escape
+   * closes it, and `close()` puts focus back on the tile.
+   */
+  useEffect(() => {
+    if (openId === null) return;
+    const sheet = sheetRef.current;
+    sheet?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key !== 'Tab' || !sheet) return;
+      const stops = Array.from(sheet.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (stops.length === 0) {
+        e.preventDefault();
+        sheet.focus();
+        return;
+      }
+      const first = stops[0]!;
+      const last = stops[stops.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === sheet)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [openId, close]);
 
   const save = useCallback(async () => {
     if (openId === null || !draft) return;
@@ -163,34 +246,48 @@ export default function MediaLibrary() {
 
   if (error) {
     return (
-      <p className="media-error" role="alert">
-        {error}
-      </p>
+      <div className="media admin-page admin-page--wide">
+        <p className="media-error" role="alert">
+          {error}
+        </p>
+      </div>
     );
   }
 
-  if (!items) return <p className="media-loading">Loading media…</p>;
+  if (!items)
+    return (
+      <div className="media admin-page admin-page--wide">
+        <p className="media-loading">Loading media…</p>
+      </div>
+    );
 
   const openItem = items.find((i) => i.id === openId) ?? null;
 
   return (
-    <div className="media">
+    <div className="media admin-page admin-page--wide">
+      <header className="panel-head media-head">
+        <h1>Media</h1>
+        <p className="count">
+          {items.length} {items.length === 1 ? 'item' : 'items'}
+        </p>
+      </header>
+
       <div className="media-bar">
         <div className="media-filters" role="group" aria-label="Filter media">
           {FILTERS.map((f) => (
             <button
               key={f.id}
               type="button"
-              className="media-chip"
+              className="chip"
               aria-pressed={filter === f.id}
               onClick={() => setFilter(f.id)}
             >
               {f.label}
               {f.id === 'needs-credit' && gaps.credit > 0 && (
-                <span className="media-count">{gaps.credit}</span>
+                <span className="disc media-count">{gaps.credit}</span>
               )}
               {f.id === 'needs-alt' && gaps.alt > 0 && (
-                <span className="media-count">{gaps.alt}</span>
+                <span className="disc media-count">{gaps.alt}</span>
               )}
             </button>
           ))}
@@ -213,24 +310,35 @@ export default function MediaLibrary() {
         {gaps.alt > 0 && ` · ${gaps.alt} with no alt text`}
       </p>
 
-      <ul className="media-grid">
+      <ul className="media-grid" ref={gridRef}>
         {visible.map((item) => (
           <li key={item.id}>
-            <button type="button" className="media-tile" onClick={() => open(item)}>
-              <img
-                src={`/media/${item.r2_key}`}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                width={item.width ?? 320}
-                height={item.height ?? 240}
-              />
+            <button
+              type="button"
+              className="media-tile"
+              onClick={(e) => open(item, e.currentTarget)}
+            >
+              {/* Spans rather than <figure>/<figcaption>: this is inside a
+                  <button>, whose content model does not allow them. The classes
+                  are the primitives'; the scrim and its measured contrast are
+                  unchanged. */}
+              <span className="figure media-figure">
+                <img
+                  src={`/media/${item.r2_key}`}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  width={item.width ?? 320}
+                  height={item.height ?? 240}
+                />
+                {item.credit && <span className="credit">{item.credit}</span>}
+              </span>
               <span className="media-tile-meta">
                 <span className="media-tile-name">{item.r2_key.split('/').pop()}</span>
                 <span className="media-tile-flags">
-                  {!item.credit && <span className="media-flag media-flag--warn">no credit</span>}
-                  {!item.alt && <span className="media-flag">no alt</span>}
-                  {item.kind === 'community_photo' && <span className="media-flag">community</span>}
+                  {!item.credit && <span className="badge media-flag--gap">No credit</span>}
+                  {!item.alt && <span className="badge">No alt</span>}
+                  {item.kind === 'community_photo' && <span className="badge">Community</span>}
                 </span>
               </span>
             </button>
@@ -238,33 +346,41 @@ export default function MediaLibrary() {
         ))}
       </ul>
 
-      {visible.length === 0 && (
-        <p className="media-empty">Nothing matches that filter.</p>
-      )}
+      {visible.length === 0 && <p className="empty-state">Nothing matches that filter.</p>}
 
       {openItem && draft && (
         <div className="media-sheet-backdrop" onClick={close} role="presentation">
           <div
-            className="media-sheet"
+            className="media-sheet admin-form"
+            ref={sheetRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            aria-label={`Edit ${openItem.r2_key}`}
+            aria-labelledby="media-sheet-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="media-sheet-head">
-              <h2>Attribution</h2>
-              <button type="button" className="media-close" onClick={close} aria-label="Close">
-                ✕
+              <h2 id="media-sheet-title">Attribution</h2>
+              <button
+                type="button"
+                className="media-close"
+                onClick={close}
+                aria-label="Close, without saving"
+              >
+                <CloseIcon />
               </button>
             </div>
 
-            <img className="media-preview" src={`/media/${openItem.r2_key}`} alt="" />
+            <figure className="figure media-figure media-figure--preview">
+              <img src={`/media/${openItem.r2_key}`} alt="" />
+              {openItem.credit && <figcaption className="credit">{openItem.credit}</figcaption>}
+            </figure>
 
             <p className="media-facts">
               {openItem.mime} · {openItem.width ?? '?'}×{openItem.height ?? '?'} ·{' '}
               {formatBytes(openItem.bytes)}
               <br />
-              <code>{openItem.r2_key}</code>
+              <code className="admin-code">{openItem.r2_key}</code>
             </p>
 
             <label className="media-field">
@@ -339,10 +455,20 @@ export default function MediaLibrary() {
             </label>
 
             <div className="media-sheet-foot">
-              <button type="button" className="media-save" onClick={save} disabled={saving}>
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                onClick={save}
+                disabled={saving}
+              >
                 {saving ? 'Saving…' : 'Save'}
               </button>
-              <a className="media-view" href={`/media/${openItem.r2_key}`} target="_blank" rel="noopener noreferrer">
+              <a
+                className="btn btn--outline btn--sm btn--arrow"
+                href={`/media/${openItem.r2_key}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Open the file
               </a>
               <span className="media-status" role="status" aria-live="polite">

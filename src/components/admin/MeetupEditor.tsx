@@ -37,6 +37,13 @@ interface Form {
   status: Meetup['status'];
 }
 
+/** One status vocabulary across the console; the word is always printed. */
+const STATUS_BADGE: Record<Meetup['status'], string> = {
+  draft: '',
+  published: 'badge--live',
+  cancelled: 'badge--retired',
+};
+
 const EMPTY: Form = {
   title: '',
   descriptionMd: '',
@@ -206,25 +213,36 @@ export default function MeetupEditor() {
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  /*
+   * One row shape across the console: name, when, status, actions. The news
+   * list used the same four columns with the first two swapped, so the two
+   * lists never scanned the same way; `.admin-row` in Admin.astro is now the
+   * single definition and this list reads in its order.
+   */
   const row = (m: Meetup) => (
-    <li key={m.id} className={`meetup-row meetup-row--${m.status}`}>
-      <div className="meetup-when">
-        <strong>{formatInZone(m.starts_at, m.tz)}</strong>
-        {m.ends_at && <span>→ {formatInZone(m.ends_at, m.tz).split(', ').pop()}</span>}
-      </div>
-      <div className="meetup-main">
+    <li key={m.id} className={`card admin-row meetup-row--${m.status}`}>
+      <div className="admin-row-main">
         <h3>{m.title}</h3>
         <p>
           {m.poi_name ?? m.location_text ?? 'No location set'}
-          {m.recurrence_rule && <span className="meetup-repeat"> · repeats</span>}
+          {m.recurrence_rule && <span className="meetup-repeat">Repeats</span>}
         </p>
       </div>
-      <span className={`meetup-status meetup-status--${m.status}`}>{m.status}</span>
-      <div className="meetup-actions">
-        <button type="button" onClick={() => startEdit(m)}>
+      <div className="admin-row-when">
+        <strong>{formatInZone(m.starts_at, m.tz)}</strong>
+        {m.ends_at && <span>to {formatInZone(m.ends_at, m.tz).split(', ').pop()}</span>}
+      </div>
+      <span className={`badge admin-row-status ${STATUS_BADGE[m.status]}`}>{m.status}</span>
+      <div className="admin-row-actions">
+        <button type="button" className="btn btn--outline btn--sm" onClick={() => startEdit(m)}>
           Edit
         </button>
-        <button type="button" className="danger" onClick={() => void remove(m)} disabled={busy}>
+        <button
+          type="button"
+          className="btn btn--danger btn--sm"
+          onClick={() => void remove(m)}
+          disabled={busy}
+        >
           Delete
         </button>
       </div>
@@ -232,17 +250,17 @@ export default function MeetupEditor() {
   );
 
   return (
-    <div className="meetups">
+    <div className="meetups admin-page">
       <header className="meetups-head">
         <div>
           <h1>Meetups</h1>
           <p>
-            This replaces editing <code>meetup.js</code> every week. Published meetups appear on
-            the home page and in the calendar feed.
+            This replaces editing <code className="admin-code">meetup.js</code> every week.
+            Published meetups appear on the home page and in the calendar feed.
           </p>
         </div>
-        <button type="button" className="btn" onClick={startNew}>
-          + New meetup
+        <button type="button" className="btn btn--primary" onClick={startNew}>
+          New meetup
         </button>
       </header>
 
@@ -253,7 +271,7 @@ export default function MeetupEditor() {
       )}
 
       {editingId !== null && (
-        <form className="meetup-form" onSubmit={submit}>
+        <form className="meetup-form panel admin-form" onSubmit={submit}>
           <h2>{editingId === 'new' ? 'New meetup' : 'Edit meetup'}</h2>
 
           <label>
@@ -289,8 +307,9 @@ export default function MeetupEditor() {
 
           {preview && (
             <p className="form-note">
-              Interpreted as <strong>{preview}</strong> in <code>{form.tz}</code>. The site works
-              out CST vs CDT automatically.
+              Interpreted as <strong>{preview}</strong> in{' '}
+              <code className="admin-code">{form.tz}</code>. The site works out CST vs CDT
+              automatically.
             </p>
           )}
 
@@ -302,10 +321,12 @@ export default function MeetupEditor() {
                 onChange={(e) => set('poiId', e.target.value ? Number(e.target.value) : null)}
               >
                 <option value="">— none —</option>
+                {/* A word, not a glyph: an <option> cannot carry a drawn icon,
+                    and "★" told a screen reader "black star". */}
                 {pois.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.is_meetup_spot ? '★ ' : ''}
                     {p.name}
+                    {p.is_meetup_spot ? ' (meetup spot)' : ''}
                   </option>
                 ))}
               </select>
@@ -356,12 +377,12 @@ export default function MeetupEditor() {
           </div>
 
           <div className="form-actions">
-            <button type="submit" className="btn" disabled={busy}>
+            <button type="submit" className="btn btn--primary" disabled={busy}>
               {busy ? 'Saving…' : editingId === 'new' ? 'Create meetup' : 'Save changes'}
             </button>
             <button
               type="button"
-              className="btn btn--ghost"
+              className="btn btn--outline"
               onClick={() => setEditingId(null)}
               disabled={busy}
             >
@@ -374,16 +395,16 @@ export default function MeetupEditor() {
       <section>
         <h2>Upcoming ({upcoming.length})</h2>
         {upcoming.length ? (
-          <ul className="meetup-list">{upcoming.map(row)}</ul>
+          <ul className="admin-rows">{upcoming.map(row)}</ul>
         ) : (
-          <p className="meetups-empty">Nothing scheduled. Create one above.</p>
+          <p className="empty-state">Nothing scheduled. Create one above.</p>
         )}
       </section>
 
       {past.length > 0 && (
         <section>
           <h2>Past ({past.length})</h2>
-          <ul className="meetup-list meetup-list--past">{past.slice(0, 20).map(row)}</ul>
+          <ul className="admin-rows meetup-list--past">{past.slice(0, 20).map(row)}</ul>
         </section>
       )}
     </div>

@@ -1,11 +1,34 @@
+/*
+ * The media library.
+ *
+ * Its job is attribution, so the credit is drawn where the credit has to live —
+ * on the photograph. `.figure` / `.credit` are the primitives the public site
+ * uses for exactly that; this file only tightens the padding for a 130px tile.
+ *
+ * `.chip`, `.badge`, `.btn`, `.panel-head`, `.empty-state` and the `.admin-form`
+ * field vocabulary all come from the shared system now that `Admin.astro` loads
+ * `primitives.css`.
+ */
+
+.media {
+  font-family: var(--font-read);
+}
+
 .media-loading,
-.media-error,
-.media-empty {
-  margin: 24px 0;
+.media-error {
+  margin: var(--space-6) 0;
   color: var(--text-muted);
 }
 .media-error {
   color: var(--live-text);
+  font-weight: 700;
+}
+
+.media-head {
+  margin-bottom: var(--space-4);
+}
+.media-head h1 {
+  font-size: var(--display-sm);
 }
 
 .media-bar {
@@ -13,69 +36,54 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .media-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
-.media-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 13px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-panel);
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.media-chip:hover {
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-.media-chip[aria-pressed='true'] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-}
-
-/* The count is the point of these two filters — it should read as a tally of
-   outstanding work, not as decoration. */
+/*
+ * The outstanding-work tally, as the board draws a count: a black-ringed white
+ * disc with a tabular numeral in it. It used to be a raw `--poi-gym` fill under
+ * white text at 3.18:1, which is the exact pairing `global.css` has a
+ * `--poi-gym-badge` token for — but a count on this site is a disc, and a disc
+ * needs no hue at all.
+ */
 .media-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--poi-gym);
-  color: #fff;
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
+  --disc-size: 20px;
+  font-size: var(--text-2xs);
+  border-width: 1.5px;
+}
+/* On a pressed chip the disc sits on the ink fill, so it inverts with it. */
+.chip[aria-pressed='true'] .media-count {
+  border-color: var(--bg);
 }
 
+.media-search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
 .media-search input {
   width: 100%;
-  min-width: 200px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  min-width: 0;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
   background: var(--bg-panel);
-  color: inherit;
-  font: inherit;
-  font-size: 0.88rem;
+  color: var(--text);
+  font-family: var(--font-read);
+  font-size: var(--text-md);
 }
 
 .media-summary {
-  margin: 0 0 14px;
-  font-size: 0.82rem;
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -86,13 +94,14 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .media-tile {
   display: grid;
   gap: 0;
   width: 100%;
+  min-width: 0;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -100,28 +109,55 @@
   overflow: hidden;
   cursor: pointer;
   text-align: left;
-  color: inherit;
+  color: var(--text);
+  font-family: var(--font-read);
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    transform var(--dur-1) var(--ease-out);
 }
 .media-tile:hover {
-  border-color: var(--accent);
+  border-color: var(--text);
+  transform: var(--lift);
 }
-.media-tile img {
+.media-tile:active {
+  transform: var(--press);
+}
+
+/* The photograph, with its credit riding on it. `display: block` because on a
+   tile this is a <span> — a <figure> is not allowed inside a <button>. */
+.media-figure {
+  display: block;
+  margin: 0;
+  height: 130px;
+}
+.media-figure img {
   display: block;
   width: 100%;
-  height: 130px;
+  height: 100%;
   object-fit: cover;
   background: var(--bg-sunken);
+}
+/*
+ * The measured five-stop scrim is the primitive's; only the box is tightened,
+ * because on a 130px tile the primitive's `--space-6` top padding would cover
+ * half the picture. The gradient — and so the contrast — is untouched.
+ */
+.media-figure .credit {
+  padding: var(--space-5) var(--space-2) var(--space-1);
+  font-size: var(--text-2xs);
 }
 
 .media-tile-meta {
   display: grid;
-  gap: 5px;
-  padding: 9px 10px 10px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  min-width: 0;
 }
 .media-tile-name {
-  font-size: 0.76rem;
+  font-size: var(--text-sm);
   /* Keys are long and the interesting part is the end, but wrapping them makes
      the grid ragged — one line, clipped, with the full value in the sheet. */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -129,20 +165,17 @@
 .media-tile-flags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
 }
-.media-flag {
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  font-size: 0.66rem;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-.media-flag--warn {
-  border-color: var(--poi-gym);
-  color: var(--poi-gym);
+/*
+ * A missing credit is a licensing gap, not a nice-to-have, so it is the one
+ * flag that inverts to ink. It used to be `--poi-gym` text on a pale outline at
+ * 3.18:1 — a hue carrying the whole message, at 10.5px. Ink carries it here and
+ * the word carries it everywhere.
+ */
+.media-flag--gap {
+  --badge-bg: var(--text);
+  --badge-fg: var(--bg);
 }
 
 /* --- edit sheet ----------------------------------------------------------- */
@@ -150,95 +183,98 @@
 .media-sheet-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--z-overlay);
   display: grid;
   place-items: center;
-  padding: 16px;
-  background: rgb(0 0 0 / 0.55);
+  padding: var(--space-4);
+  /* The Poké Ball's black band as a scrim, mixed rather than a raw rgba, so the
+     one dark in this palette is the one behind the sheet. */
+  background: color-mix(in srgb, var(--ink-900) 62%, transparent);
 }
 
 .media-sheet {
   width: min(560px, 100%);
   max-height: 90dvh;
   overflow-y: auto;
-  padding: 18px 20px 20px;
+  padding: var(--space-5);
   border-radius: var(--radius-lg);
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--bg-panel);
   box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: var(--space-3);
+}
+.media-sheet:focus {
+  /* The dialog takes focus on open so its label is announced; it is not a
+     control, so it does not draw a ring for that. Everything inside it does. */
+  outline: none;
 }
 
 .media-sheet-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--text);
 }
 .media-sheet-head h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--display-sm);
 }
 .media-close {
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1.5px solid var(--border-strong);
   border-radius: 50%;
   background: var(--bg-panel);
-  color: inherit;
+  color: var(--text);
   cursor: pointer;
 }
+.media-close:hover {
+  border-color: var(--text);
+}
+.media-close svg {
+  width: 16px;
+  height: 16px;
+}
 
-.media-preview {
-  display: block;
-  width: 100%;
-  max-height: 240px;
-  object-fit: contain;
+/* In the sheet the picture is the thing being described, so it is shown whole
+   rather than cropped to a tile. */
+.media-figure--preview {
+  height: auto;
   border-radius: var(--radius);
   background: var(--bg-sunken);
 }
+.media-figure--preview img {
+  height: auto;
+  max-height: 240px;
+  object-fit: contain;
+}
 
 .media-facts {
-  margin: 10px 0 16px;
-  font-size: 0.76rem;
+  margin: 0;
+  font-size: var(--text-sm);
   color: var(--text-muted);
+  min-width: 0;
 }
 .media-facts code {
-  font-size: 0.72rem;
   word-break: break-all;
 }
 
 .media-field {
   display: grid;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-.media-field > span {
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-.media-field em {
-  font-weight: 400;
-  font-style: normal;
-  color: var(--text-muted);
-}
-.media-field input,
-.media-field textarea,
-.media-field select {
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel);
-  color: inherit;
-  font: inherit;
-  font-size: 0.88rem;
-  resize: vertical;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .media-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: var(--space-3);
 }
 @media (max-width: 460px) {
   .media-row {
@@ -250,26 +286,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-top: 4px;
-}
-.media-save {
-  padding: 10px 20px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 700;
-  cursor: pointer;
-}
-.media-save:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-.media-view {
-  font-size: 0.84rem;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
 }
 .media-status {
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }

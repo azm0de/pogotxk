@@ -136,14 +136,14 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
   const pct = total > 0 ? Math.round((uploaded / total) * 100) : 0;
 
   return (
-    <section className="import-panel">
+    <section className="import-panel panel">
       <div className="import-head">
         <div>
           <h2>Legacy data import</h2>
           <p>
             Pulls every PokéStop, Gym, Power Spot, photo, the raid route and the hotspot from{' '}
-            <code>pokemontxk.com</code> into this site. Safe to re-run — it upserts rather than
-            duplicating, and skips photos already stored.
+            <code className="admin-code">pokemontxk.com</code> into this site. Safe to re-run — it
+            upserts rather than duplicating, and skips photos already stored.
           </p>
         </div>
         <div className="import-state">
@@ -165,8 +165,16 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
 
       {phase === 'media' && (
         <div className="import-progress">
-          <div className="import-bar">
-            <span style={{ width: `${pct}%` }} />
+          <div
+            className="import-bar"
+            role="progressbar"
+            aria-label="Photos copied"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            {/* A transform, not a width: see the note in ImportPanel.css. */}
+            <span style={{ transform: `scaleX(${pct / 100})` }} />
           </div>
           <p>
             {uploaded} of {total} photos ({pct}%)
@@ -183,7 +191,7 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
           <p>
             <strong>Anything added or edited in the admin console will be lost.</strong>
           </p>
-          <button type="button" className="btn btn--danger" onClick={() => void run(true)}>
+          <button type="button" className="btn btn--danger btn--sm" onClick={() => void run(true)}>
             Clear and re-import anyway
           </button>
         </div>
@@ -197,16 +205,20 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
 
       {phase === 'done' && summary && (
         <p className="import-done">
-          Imported {summary.pois?.total} locations and {summary.media?.rows} photos.{' '}
-          {summary.media?.withCredit} carry a photographer credit.{' '}
-          <a href="/map">Open the map →</a>
+          <span>
+            Imported {summary.pois?.total} locations and {summary.media?.rows} photos.{' '}
+            {summary.media?.withCredit} carry a photographer credit.
+          </span>
+          <a className="btn btn--outline btn--sm btn--arrow" href="/map">
+            Open the map
+          </a>
         </p>
       )}
 
       <div className="import-actions">
         <button
           type="button"
-          className="btn"
+          className="btn btn--primary"
           onClick={() => void run(false)}
           disabled={busy}
           aria-busy={busy}
@@ -220,7 +232,7 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
                 : 'Import from pokemontxk.com'}
         </button>
         {phase === 'done' && (
-          <a className="btn btn--ghost" href="/admin/map">
+          <a className="btn btn--outline btn--arrow" href="/admin/map">
             Open the map editor
           </a>
         )}

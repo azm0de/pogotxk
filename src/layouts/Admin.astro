@@ -1,5 +1,19 @@
 ---
 import '~/styles/global.css';
+/*
+ * The back room of the board.
+ *
+ * `primitives.css` used to be deliberately withheld from this layout — that one
+ * omission is what kept the admin editors out of the 2026-09 redesign while
+ * `.btn`, `.card` and the rest became global names. The owner brought admin in
+ * (W4), so the shared vocabulary is imported here and the four island
+ * stylesheets defer to it instead of reimplementing it four times.
+ *
+ * React islands have no scoping, so they get the primitives exactly as written.
+ * The `<style is:global>` block below adds the handful of admin-only names that
+ * are not in `primitives.css`; each carries a PROMOTE note.
+ */
+import '~/styles/primitives.css';
 import { hasRole } from '~/lib/auth/types';
 
 interface Props {
@@ -84,7 +98,10 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
       <div class="admin-user">
         {user.avatarUrl && <img src={user.avatarUrl} alt="" width="26" height="26" />}
         <span class="admin-user-name">{user.displayName}</span>
-        <span class={`admin-role admin-role--${user.role}`}>{user.role}</span>
+        <span
+          class:list={['badge', 'admin-role', user.role === 'admin' ? 'admin-role--admin' : 'badge--outline']}
+          >{user.role}</span
+        >
         <a class="admin-signout" href="/auth/logout">Sign out</a>
       </div>
     </header>
@@ -93,9 +110,233 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
       <slot />
     </main>
 
+    <!--
+      Admin-only additions to the shared vocabulary.
+
+      Global rather than scoped because every consumer is a React island, which
+      Astro's scoping cannot reach. Each name is declared exactly once in the
+      whole admin surface, so nothing here competes with an island stylesheet
+      for order.
+    -->
+    <style is:global>
+      /* PROMOTE: .btn--danger — the destructive form of the primitive button
+         (Archive a POI, Delete a post or meetup, Clear and re-import). Three
+         admin islands hand-rolled it; the public site has no destructive action
+         yet, which is why it is not in primitives.css. Outline rather than
+         filled: it should read as the thing you have to mean. */
+      .btn--danger {
+        background: transparent;
+        border-color: var(--live-text);
+        color: var(--live-text);
+      }
+      .btn--danger:hover {
+        background: var(--live-text);
+        border-color: var(--live-text);
+        color: var(--bg-panel);
+      }
+
+      /* PROMOTE: .badge--retired — a status that is over (archived, cancelled).
+         Muted ink on the badge's own sunken fill: 5.50:1. The public site has no
+         retired state to print, so it is admin-local for now. */
+      .badge--retired {
+        --badge-fg: var(--text-muted);
+      }
+
+      /* ------------------------------------------------------- admin page -- */
+      /* The centred column every non-map admin surface sits in. */
+      .admin-page {
+        max-width: var(--container-narrow);
+        margin-inline: auto;
+        padding: var(--space-6) var(--gutter) var(--space-16);
+        display: grid;
+        gap: var(--space-5);
+      }
+      .admin-page--wide {
+        max-width: var(--container);
+      }
+
+      /* ------------------------------------------------------- admin form -- */
+      /*
+       * One field vocabulary for all four editors. It used to be written out in
+       * each island stylesheet, and each one inherited the label's own font-size
+       * into `font: inherit` on the control — which rendered every input at
+       * ~12.5px. The control is set at --text-base on purpose: it is the size
+       * iOS will not zoom into, and it is the one thing here that gets typed in.
+       */
+      .admin-form label {
+        display: grid;
+        gap: var(--space-1);
+        font-size: var(--text-sm);
+        font-weight: 700;
+        color: var(--text);
+      }
+      .admin-form label em {
+        font-style: normal;
+        font-weight: 400;
+        color: var(--text-muted);
+      }
+      .admin-form input,
+      .admin-form select,
+      .admin-form textarea {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        padding: var(--space-2) var(--space-3);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-sm);
+        background: var(--bg-sunken);
+        color: var(--text);
+        font-family: var(--font-read);
+        font-size: var(--text-base);
+        font-weight: 400;
+        line-height: var(--lh-ui);
+      }
+      .admin-form textarea {
+        min-height: 0;
+        resize: vertical;
+        line-height: var(--lh-body);
+      }
+      .admin-form input[type='checkbox'] {
+        /* 18px is the box; the label row around it is the target. */
+        min-width: 0;
+        min-height: 0;
+        width: 18px;
+        height: 18px;
+        margin: 0;
+        accent-color: var(--accent-solid);
+      }
+      /* A checkbox and its words read as one line, not as a stacked field. */
+      .admin-form .check {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 32px;
+        font-weight: 400;
+        font-size: var(--text-md);
+      }
+
+      /* A two-up field row that stacks on a phone. */
+      .admin-form .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-3);
+        align-items: start;
+      }
+      @media (max-width: 720px) {
+        .admin-form .form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* A quiet aside inside a form. It was a 3px coloured border-left in two
+         editors — the world retired those above 1px. */
+      .form-note {
+        margin: 0;
+        padding: var(--space-2) var(--space-3);
+        background: var(--bg-sunken);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: var(--text-sm);
+        color: var(--text);
+      }
+
+      .form-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin-top: var(--space-1);
+      }
+
+      /* ------------------------------------------------------- admin rows -- */
+      /*
+       * One list-row grid for meetups and news. They used to be
+       * `190px 1fr auto auto` and `1fr 190px auto auto` — the same row with its
+       * first two columns swapped, so the two lists never scanned the same way.
+       * Name first in both: it is the thing you are looking for; the when column
+       * is tabular and fixed beside it.
+       */
+      .admin-rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: var(--space-2);
+      }
+      .admin-row {
+        display: grid;
+        grid-template-columns: 1fr 190px auto auto;
+        align-items: center;
+        gap: var(--space-3);
+      }
+      .admin-row-main {
+        min-width: 0;
+      }
+      .admin-row-main h3 {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin: 0;
+        font-size: var(--text-lg);
+      }
+      .admin-row-main p {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2) var(--space-3);
+        margin: var(--space-1) 0 0;
+        min-width: 0;
+        font-size: var(--text-sm);
+        color: var(--text-muted);
+      }
+      .admin-row-when {
+        display: grid;
+        min-width: 0;
+        font-size: var(--text-sm);
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .admin-row-when strong {
+        color: var(--text);
+      }
+      .admin-row-actions {
+        display: flex;
+        gap: var(--space-2);
+      }
+      @media (max-width: 860px) {
+        .admin-row {
+          grid-template-columns: 1fr auto;
+          grid-template-areas: 'main status' 'when when' 'actions actions';
+        }
+        .admin-row-main {
+          grid-area: main;
+        }
+        .admin-row-when {
+          grid-area: when;
+        }
+        .admin-row-status {
+          grid-area: status;
+          justify-self: end;
+        }
+        .admin-row-actions {
+          grid-area: actions;
+        }
+      }
+
+      /* A machine name printed as data — an audit action, a slug, an R2 key.
+         Deliberately declares no typeface: there is no mono face in this design
+         system, and a bare <code> already renders in the OS mono stack, which is
+         exactly the fallback DESIGN.md documents for `.prose code`. */
+      .admin-code {
+        padding: 1px var(--space-1);
+        border-radius: var(--radius-xs);
+        background: var(--bg-sunken);
+        font-size: 0.92em; /* relative to its own line, as .prose code is */
+      }
+    </style>
+
     <style>
       body {
         background: var(--bg-sunken);
+        font-family: var(--font-read);
       }
       body.is-full-bleed {
         height: 100dvh;
@@ -108,43 +349,71 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
         min-height: 0;
       }
 
+      /* ------------------------------------------------------------ header --
+       *
+       * The board's bar, in the back room. The public site wears the Poké Ball's
+       * red top; the console wears the black band instead, so a screenshot of
+       * admin can never be mistaken for the site itself. Everything else — the
+       * chips, the You-Are-Here plate on the current page — is the same object.
+       */
       .admin-header {
+        /*
+         * The bar is --ink-900 in both themes, so its foreground is pinned
+         * rather than themed. Measured against #0f0f11:
+         *   --header-fg    #ffffff        19.83:1
+         *   --header-fg-2  0.9 white      16.0:1
+         *   --header-line  a hairline, never text
+         */
+        --header-fg: #ffffff;
+        --header-fg-2: rgb(255 255 255 / 0.9);
+        --header-line: rgb(255 255 255 / 0.34);
+        --header-wash: rgb(255 255 255 / 0.14);
+
         display: flex;
         align-items: center;
-        gap: 20px;
+        gap: var(--space-5);
+        /* The admin bar's own height, and only the admin bar's. The public
+           header is --header-public-h; the two must not be keyed to each other. */
         height: var(--header-h);
-        padding: 0 16px;
+        padding-inline: var(--gutter);
         background: var(--ink-900);
-        color: #fff;
+        color: var(--header-fg);
         flex: none;
       }
 
       .admin-brand {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: var(--space-2);
       }
       .admin-brand div {
         display: flex;
         flex-direction: column;
-        line-height: 1.15;
+        line-height: var(--lh-heading);
       }
       .admin-brand strong {
-        font-size: 0.92rem;
+        font-family: var(--font-sign);
+        font-size: var(--text-md);
+        font-weight: 800;
+        letter-spacing: var(--tracking-tight);
       }
       .admin-brand span:last-child {
-        font-size: 0.7rem;
-        opacity: 0.6;
+        font-size: var(--text-2xs);
+        color: var(--header-fg-2);
       }
+      /* The engraved plate: the wordmark set, not the raster, at bar size. */
       .admin-mark {
         display: grid;
         place-items: center;
         width: 32px;
         height: 32px;
-        border-radius: 9px;
-        background: rgb(255 255 255 / 0.12);
-        font-size: 0.66rem;
+        border-radius: var(--radius-sm);
+        background: var(--header-wash);
+        border: 1px solid var(--header-line);
+        font-family: var(--font-sign);
+        font-size: var(--text-2xs);
         font-weight: 800;
+        letter-spacing: var(--tracking-caps);
       }
 
       nav {
@@ -153,7 +422,7 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
       }
       nav ul {
         display: flex;
-        gap: 3px;
+        gap: var(--space-1);
         margin: 0;
         padding: 0;
         list-style: none;
@@ -164,55 +433,103 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
         display: none;
       }
       nav a {
-        display: block;
-        padding: 6px 12px;
-        border-radius: 8px;
-        color: rgb(255 255 255 / 0.75);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 32px;
+        padding: var(--space-2) var(--space-3);
+        border: 1px solid transparent;
+        border-radius: var(--radius-pill);
+        color: var(--header-fg-2);
         text-decoration: none;
-        font-size: 0.85rem;
-        font-weight: 600;
+        font-family: var(--font-sign);
+        font-size: var(--text-md);
+        font-weight: 700;
         white-space: nowrap;
+        transition:
+          background-color var(--dur-2) var(--ease-out),
+          border-color var(--dur-2) var(--ease-out),
+          color var(--dur-2) var(--ease-out);
       }
       nav a:hover {
-        background: rgb(255 255 255 / 0.09);
-        color: #fff;
+        background: var(--header-wash);
+        border-color: var(--header-line);
+        color: var(--header-fg);
       }
+      /*
+       * You Are Here, on the ink bar: the same white plate the public header
+       * wears, carrying the red disc in its ink ring. `--accent-solid`, never
+       * `--accent`, because this is dark text on a white chip and `--accent`
+       * inverts to the light red meant for the opposite job.
+       */
       nav a[aria-current='page'] {
-        background: rgb(255 255 255 / 0.18);
-        color: #fff;
+        background: var(--header-fg);
+        border-color: var(--header-fg);
+        color: var(--accent-solid); /* 5.99:1 on white, both themes */
+        /* The selected plate is the one thing on the bar that should look like
+           it sits on top of it rather than in it. */
+        box-shadow: var(--shadow-md);
+      }
+      nav a[aria-current='page']::before {
+        content: '';
+        flex: none;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent-solid);
+        /* The band's ink as a ring, drawn with a shadow so the disc keeps its
+           10px and the ring costs no layout. */
+        box-shadow: 0 0 0 2px var(--ink-900);
+      }
+      nav a[aria-current='page']:hover {
+        background: var(--header-fg);
+        color: var(--accent-solid);
+      }
+
+      /*
+       * The global focus ring is `outline: 3px solid var(--accent)`, and in dark
+       * mode that light red on this near-black bar is fine — but in light mode
+       * it is #c8071c on #0f0f11, 1.7:1. White is the only value that holds
+       * against both the bar and the white current-page plate, which the 2px
+       * offset separates it from.
+       */
+      .admin-header a:focus-visible {
+        outline: 3px solid var(--header-fg);
+        outline-offset: 2px;
       }
 
       .admin-user {
         display: flex;
         align-items: center;
-        gap: 8px;
-        font-size: 0.8rem;
+        gap: var(--space-2);
+        font-size: var(--text-sm);
       }
       .admin-user img {
         border-radius: 50%;
       }
       .admin-user-name {
-        font-weight: 600;
+        font-weight: 700;
       }
       .admin-role {
-        padding: 2px 7px;
-        border-radius: 999px;
-        font-size: 0.64rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        background: rgb(255 255 255 / 0.16);
+        /* On the bar, not on a panel: the badge's own tokens are repointed at
+           the pinned bar foreground rather than the themed page colours. */
+        --badge-bg: transparent;
+        --badge-fg: var(--header-fg);
       }
       .admin-role--admin {
-        background: var(--poi-campsite);
-        color: #4a2c00;
+        --badge-bg: var(--header-fg);
+        --badge-fg: var(--ink-900); /* 19.83:1 */
       }
       .admin-signout {
-        color: rgb(255 255 255 / 0.65);
+        /* 24px standalone target (SC 2.5.8) without moving the bar's baseline. */
+        display: inline-block;
+        padding-block: 5px;
+        margin-block: -5px;
+        color: var(--header-fg-2);
         text-decoration: none;
       }
       .admin-signout:hover {
-        color: #fff;
+        color: var(--header-fg);
         text-decoration: underline;
       }
 

@@ -1,9 +1,40 @@
+/*
+ * The map editor — the board's back room, with the board itself in the middle.
+ *
+ * Three panes bolted edge to edge rather than floating: a list, the live map,
+ * and the form for whatever is selected. `Admin.astro` now loads
+ * `primitives.css`, so `.btn`, `.badge`, `.chip`, `.empty-state` and the
+ * `.admin-form` field vocabulary come from the shared system; what is left here
+ * is this surface's own layout.
+ *
+ * This file is loaded *after* `MapView.css`, which the editor imports for
+ * `.pin*`, `.chip*` and the Leaflet overrides. Anything the editor needs to
+ * behave differently is written under a class the editor sets, never by
+ * rewriting a MapView rule.
+ *
+ * ------------------------------------------------------------------ z-index
+ * The two raw integers below are exempt from the `--z-*` scale for the same
+ * reason `MapView.css` is: they interleave with Leaflet's own pane order
+ * (markers 600, popups 700, controls 800), and a `--z-overlay` here would put
+ * the toolbar under the popups it has to sit over. Each carries its reason.
+ */
+
+/*
+ * `minmax(0, 1fr)`, not `1fr`: a `1fr` track's automatic minimum is min-content,
+ * and the list rows are `white-space: nowrap` — so one long POI name
+ * ("Spring Lake Park Veterans Memorial Fountain and Plaza") widened the whole
+ * grid past the viewport and put 27px of horizontal scroll on the editor at
+ * 451px. `min-width: 0` on the flex child is necessary but not sufficient; the
+ * track has to be allowed under its content too. Same family as the 169px
+ * overflow bug in global.css's notes.
+ */
 .editor {
   display: grid;
-  grid-template-columns: 270px 1fr 330px;
+  grid-template-columns: 270px minmax(0, 1fr) 330px;
   height: 100%;
   min-height: 0;
   background: var(--bg-sunken);
+  font-family: var(--font-read);
 }
 
 /* ------------------------------------------------------------------ list -- */
@@ -13,6 +44,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
 }
@@ -23,84 +55,118 @@
 }
 
 .editor-list-head {
-  padding: 12px;
+  padding: var(--space-3);
   border-bottom: 1px solid var(--border);
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   flex: none;
 }
-.editor-list-head input {
+/* The page's only h1. The editor is full-bleed, so it lives at the top of the
+   list column rather than in a page header that does not exist here. */
+.editor-title {
+  margin: 0;
+  font-family: var(--font-sign);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
+}
+.editor-list-head input[type='search'] {
   width: 100%;
-  padding: 8px 11px;
-  border: 1px solid var(--border);
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
   color: var(--text);
-  font: inherit;
+  font-family: var(--font-read);
+  font-size: var(--text-base);
 }
 
 .editor-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: var(--space-1);
 }
+/* The type chips ride MapView.css's `.chip`, which is sized for a thumb. In a
+   270px column they need to fit four to two rows. */
+.editor-filters .chip {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}
+/* A tally, not a warning colour. It used to be `--poi-gym` at 11px: 3.18:1. */
 .editor-drafts {
   margin: 0;
-  font-size: 0.74rem;
-  color: var(--poi-gym);
-  font-weight: 600;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .editor-items {
   list-style: none;
   margin: 0;
-  padding: 6px;
+  padding: var(--space-1);
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 .editor-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 7px 9px;
+  min-height: 36px;
+  padding: var(--space-2);
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
+  color: var(--text);
   text-align: left;
   cursor: pointer;
-  font-size: 0.86rem;
+  font-family: var(--font-read);
+  font-size: var(--text-md);
 }
 .editor-item:hover {
   background: var(--bg-sunken);
 }
+/*
+ * The selected row is "the place you are", and the board's move for that is the
+ * chip's ink inversion — not the accent. `--accent` inverts to a light red in
+ * dark mode, and the red on this screen belongs to the selected pin on the map.
+ */
 .editor-item.is-active {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--text);
+  color: var(--bg);
+}
+.editor-item.is-active .editor-star {
+  color: inherit;
 }
 .editor-item-name {
   flex: 1;
+  /* Without this the flex item refuses to shrink below its text and the
+     ellipsis never fires — the 169px-overflow bug class. */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The Campsite star, drawn from the same path the map pin's badge uses. */
 .editor-star {
-  color: var(--poi-campsite);
+  flex: none;
+  display: block;
+  width: 14px;
+  height: 14px;
+  color: var(--poi-campsite-text); /* 4.62:1 light, 7.97:1 dark */
 }
-.editor-status {
-  font-size: 0.64rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: var(--poi-gym);
-  color: #fff;
+.editor-item .badge {
+  flex: none;
 }
 .editor-empty {
-  padding: 16px;
+  padding: var(--space-4);
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--text-md);
 }
 
 /* ------------------------------------------------------------------- map -- */
@@ -116,63 +182,52 @@
 
 .editor-toolbar {
   position: absolute;
-  top: 12px;
+  top: var(--space-3);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 600;
+  z-index: 600; /* Leaflet's marker pane: with the pins, under the popups */
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
-.tool-btn {
-  padding: 9px 16px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
+/* The primitive button, shaped for a floating map control. */
+.editor-toolbar .btn {
+  --btn-radius: var(--radius-pill);
+  --btn-pad-inline: var(--space-4);
+  min-height: 40px;
+  font-size: var(--text-md);
+  border-color: var(--border-strong);
   box-shadow: var(--shadow-md);
-}
-.tool-btn.is-on {
-  background: var(--poi-gym);
-  border-color: var(--poi-gym);
-  color: #fff;
-}
-.tool-btn--ghost {
-  background: var(--bg-sunken);
-}
-.tool-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .editor-toast {
   position: absolute;
   left: 50%;
-  bottom: 18px;
+  bottom: var(--space-5);
   transform: translateX(-50%);
-  z-index: 700;
+  z-index: 700; /* Leaflet's popup pane: a result has to clear an open popup */
   margin: 0;
-  padding: 9px 16px;
-  border-radius: 999px;
-  font-size: 0.84rem;
-  font-weight: 600;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
+  font-weight: 700;
   box-shadow: var(--shadow-lg);
   max-width: min(90%, 520px);
 }
 .editor-toast--ok {
   background: var(--accent-solid);
-  color: #fff;
+  color: #fff; /* white on --accent-solid: 5.99:1, both themes */
 }
 .editor-toast--err {
   background: var(--live);
-  color: #fff;
+  color: #fff; /* white on --live: 5.00:1 light, 5.99:1 dark */
 }
 
 /* Selected pin — a ring rather than a colour change, so the type hue stays
    readable while selected. */
 .leaflet-marker-icon.is-selected .pin {
+  /* Two shadows: a hard white one to separate the pin from the basemap, then
+     the accent glow. Raw white because it is a halo against the always-light
+     tiles, not text, and it must not invert with the theme. */
   filter: drop-shadow(0 0 0 #fff) drop-shadow(0 0 4px var(--accent));
   transform: scale(1.18);
 }
@@ -181,106 +236,90 @@
 
 .editor-form form,
 .editor-hint {
-  padding: 14px;
+  padding: var(--space-4);
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   align-content: start;
 }
 .editor-hint {
-  color: var(--text-muted);
-  font-size: 0.86rem;
+  color: var(--text);
+  font-size: var(--text-md);
 }
 .editor-hint h2 {
-  font-size: 1rem;
-  color: var(--text);
+  margin: 0;
+  font-size: var(--text-xl);
+}
+.editor-hint p {
+  margin: 0;
+  color: var(--text-muted);
 }
 
+.form-head {
+  display: grid;
+  gap: var(--space-1);
+}
 .form-head h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--text-xl);
 }
 .form-head code {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
-}
-
-.editor-form label {
-  display: grid;
-  gap: 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.editor-form input[type='text'],
-.editor-form input:not([type]),
-.editor-form select,
-.editor-form textarea {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
-  color: var(--text);
-  font: inherit;
-  font-weight: 400;
-}
-.editor-form textarea {
-  resize: vertical;
 }
 
 .form-flags {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 8px 12px 12px;
+  padding: var(--space-2) var(--space-3) var(--space-3);
   margin: 0;
   display: grid;
-  gap: 6px;
+  gap: var(--space-1);
+  min-width: 0;
 }
 .form-flags legend {
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  padding: 0 4px;
-}
-.check {
-  display: flex !important;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
   color: var(--text);
-  font-size: 0.85rem;
-}
-.check input {
-  width: auto;
-  margin: 0;
+  padding: 0 var(--space-1);
 }
 
+/*
+ * Coordinates are editable, not a caption.
+ *
+ * They used to be printed as text with "drag the pin to move" beside them,
+ * which left repositioning a POI with no non-pointer method at all (WCAG 2.1.1).
+ * Drag is still there and still saves on drop; these two fields are the way to
+ * do it without a mouse, and the way to paste a surveyed coordinate.
+ */
 .form-coords {
-  margin: 0;
-  font-size: 0.74rem;
-  font-family: ui-monospace, monospace;
-  color: var(--text-muted);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  min-width: 0;
 }
-.form-coords span {
-  font-family: var(--font);
+.form-coords input {
+  font-variant-numeric: tabular-nums;
+}
+.form-coords-hint {
+  margin: 0;
+  grid-column: 1 / -1;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .form-photo {
   display: grid;
-  gap: 8px;
-  padding: 10px;
+  gap: var(--space-2);
+  padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
+  min-width: 0;
 }
 .form-photo-label {
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
+  color: var(--text);
 }
 .form-photo img {
   width: 100%;
@@ -290,58 +329,50 @@
 }
 .form-photo-none {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-md);
   color: var(--text-muted);
 }
+/* A file input's own button cannot be styled, so the label is the control and
+   the input is hidden inside it. */
 .upload-btn {
-  display: inline-block !important;
-  text-align: center;
-  padding: 8px 12px;
-  border: 1px dashed var(--border-strong);
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px dashed var(--border-strong);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.82rem;
-  color: var(--accent) !important;
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text) !important;
+}
+.upload-btn:hover {
+  border-color: var(--text);
+}
+.upload-btn:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 .upload-btn input {
-  display: none;
+  /* Not `display: none`: a hidden-but-focusable input is what gives the label
+     its focus ring through `:focus-within`. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.form-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 4px;
-}
-.btn {
-  padding: 9px 14px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.btn--ghost {
-  background: var(--bg-sunken);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-.btn--danger {
-  background: transparent;
-  color: var(--live-text);
-  border: 1px solid var(--live);
+/* Archive is destructive and sits away from Save and Revert. */
+.form-actions .btn--danger {
   margin-left: auto;
 }
 
 @media (max-width: 1080px) {
   .editor {
-    grid-template-columns: 220px 1fr;
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
   }
   .editor-form {
     grid-column: 1 / -1;
@@ -349,15 +380,14 @@
     border-left: 0;
     border-top: 1px solid var(--border);
   }
-  .editor {
-    grid-template-rows: 1fr auto;
-  }
 }
 
 @media (max-width: 680px) {
   .editor {
-    grid-template-columns: 1fr;
-    grid-template-rows: 150px 1fr auto;
+    grid-template-columns: minmax(0, 1fr);
+    /* The head (title, search, four chips, the draft tally) is ~150px on its
+       own, so 180px left the list itself two rows short of useful. */
+    grid-template-rows: 240px 1fr auto;
   }
   .editor-list {
     border-right: 0;
