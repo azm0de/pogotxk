@@ -43,4 +43,8 @@ The board is one object that fits one screen: the map plate with the white panel
 
 ## Unresolved
 
-Whether the header keeps the wordmark image beside the typeset brand for a transition period. Whether `/events` folds the global calendar by default on desktop as well as mobile.
+Whether `/events` folds the global calendar by default on desktop as well as mobile.
+
+## Owner amendments (2026-09-03)
+
+The header stays typeset. The home page gains a masthead above the board — the wordmark raster as the page's h1 — and three pieces of Pokémon artwork return on full-bleed `.art-band`s (shiny Lucario beside the masthead, Mew at the foot of the calendar, Magikarp beside the Campsite panel), each standing in clear band, never behind text. The home calendar's four rows are posters: the art is the whole card, the words in white with a one-pixel ink outline under a soft shadow, no scrim and no provenance plate. These are the owner's calls and are recorded in DESIGN.md as deviations, not precedent.

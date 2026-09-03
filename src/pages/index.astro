@@ -366,6 +366,41 @@ function homeWhen(event: CalendarEvent): string {
 <Base title="PoGo TXK">
   <div class="home">
     {/*
+      THE MASTHEAD: the wordmark, back at the top of the page on the owner's
+      call, and the page's h1 — the heading element holds the image and its
+      `alt` reads exactly what the words would. Below 640px the stacked cut;
+      from 640px the wide one, a third of the height at the same width. Shiny
+      Lucario stands at the band's right edge at every width: the band is
+      full-bleed so he has an edge to stand against, and the wordmark keeps to
+      the container so the two never meet.
+    */}
+    <div class="masthead-band art-band">
+      <header class="masthead container">
+        <h1 class="masthead-title">
+          <picture>
+            <source
+              media="(min-width: 640px)"
+              srcset="/art/logo-txk-wide.webp"
+              width="1574"
+              height="575"
+            />
+            {/* No `fetchpriority="high"`: the old hero measured worse LCP with
+                it than without, over three runs, and Chrome already ranks a
+                large first-viewport image High on its own. */}
+            <img
+              class="wordmark"
+              src="/art/logo-txk-classic.webp"
+              width="850"
+              height="793"
+              alt="Pokémon GO Texarkana"
+              decoding="async"
+            />
+          </picture>
+        </h1>
+      </header>
+    </div>
+
+    {/*
       THE BANNER, and the board it sits on.
 
       The photograph is the first thing on the page because a stranger's first
@@ -444,7 +479,8 @@ function homeWhen(event: CalendarEvent): string {
       */}
       <div class="panel board-panel">
         <div class="panel-head">
-          <h1 id="board-title">Spring Lake Park</h1>
+          {/* An h2 now: the masthead's wordmark is the page's h1. */}
+          <h2 id="board-title">Spring Lake Park</h2>
         </div>
         {/*
           The arrow rides with the title plate, above the three posts.
@@ -714,6 +750,7 @@ function homeWhen(event: CalendarEvent): string {
       thumbnail with the time as the loudest line, and its outbound link is a
       source line at the foot of the row rather than a red "Details" button.
     */}
+    <div class="calendar-band art-band">
     <section class="band container" aria-labelledby="on-now-heading">
       <div class="section-head">
         <h2 id="on-now-heading">On the calendar</h2>
@@ -769,6 +806,7 @@ function homeWhen(event: CalendarEvent): string {
       */}
       <Attribution />
     </section>
+    </div>
 
     {
       photos.length > 0 && (
@@ -880,6 +918,7 @@ function homeWhen(event: CalendarEvent): string {
       </div>
     </section>
 
+    <div class="campsite-band art-band">
     <section class="band container" aria-labelledby="campsite-heading">
       <div class="panel prose campsite">
         <h2 id="campsite-heading">What is a Community Campsite?</h2>
@@ -903,6 +942,7 @@ function homeWhen(event: CalendarEvent): string {
         </p>
       </div>
     </section>
+    </div>
 
     {/*
       The page ends on the ask rather than on a glossary entry: where to be, and
@@ -1228,12 +1268,13 @@ function homeWhen(event: CalendarEvent): string {
   /*
    * The board's title plate, one step down from the round-1 `--display-lg`.
    *
-   * It is still the page's h1 and still the largest heading on it, but the plate
-   * is a name over a map that is already showing the park — spending 46px of a
-   * 812px screen saying "Spring Lake Park" above a picture of Spring Lake Park
-   * pushed the one post carrying a date and a button below the fold.
+   * The largest typeset heading on the page (the h1 is the wordmark image in
+   * the masthead), but the plate is a name over a map that is already showing
+   * the park — spending 46px of a 812px screen saying "Spring Lake Park" above
+   * a picture of Spring Lake Park pushed the one post carrying a date and a
+   * button below the fold.
    */
-  .board-panel .panel-head h1 {
+  .board-panel .panel-head h2 {
     font-size: var(--display-md);
     line-height: var(--lh-heading);
   }
@@ -1689,6 +1730,130 @@ function homeWhen(event: CalendarEvent): string {
       grid-template-columns: minmax(220px, 38%) minmax(0, 1fr);
       align-items: start;
       gap: var(--space-6);
+    }
+  }
+
+  /* ------------------------------------------------------------- masthead --
+   * The wordmark at the top, on the owner's call. It is the brand in the
+   * Pokémon logotype, and it keeps to the container's left edge, where a plate
+   * on a kiosk is bolted. Lucario stands at the band's right edge with his feet
+   * on the board's top edge; the band is full-bleed (`.art-band`) so the screen
+   * crops him, not the container. He looks to the viewer's left, which from the
+   * right edge is into the page, so he is not mirrored here.
+   */
+  .masthead-band {
+    --art-src: url('/art/lucario-shiny.webp');
+    --art-ratio: 0.65; /* 280x431, trimmed */
+    --art-bottom: 0;
+    --art-right: calc(-1 * clamp(24px, 6vw, 40px));
+    /* Shorter than the band at every width, so his ears never rise behind the
+       sticky header: 130px wide is 200px tall against a 207px band. */
+    --art-w: clamp(104px, 28vw, 130px);
+  }
+  .masthead {
+    padding-top: var(--space-5);
+  }
+  .masthead-title {
+    margin: 0;
+    line-height: 0;
+  }
+  .wordmark {
+    display: block;
+    width: 100%;
+    max-width: 200px;
+    height: auto;
+  }
+  @media (min-width: 640px) {
+    .masthead-band {
+      /* His right edge on the container's content edge — the gutter plus
+         whatever the viewport has beyond 1100px, halved — so he lines up with
+         the wordmark's left edge across the band. Sized against the band:
+         126px wide is 194px tall under a 199px band. */
+      --art-right: calc(max(0px, (100% - var(--container)) / 2) + var(--gutter));
+      --art-w: clamp(110px, 9vw, 126px);
+    }
+    .masthead {
+      padding-top: var(--space-6);
+    }
+    /* The wide cut, and never within 160px of the right gutter, which is the
+       room Lucario needs at the narrow end of this range. */
+    .wordmark {
+      max-width: min(480px, calc(100% - 160px));
+    }
+  }
+
+  /* --------------------------------------------------------- calendar art --
+   * Mew, drifting, at the foot of the calendar. An animated WebP in the band's
+   * `::after`, so reduced motion swaps the file for one frame — there is
+   * nothing to pause on a background image. From 768px he stands beside the
+   * credit, which keeps to its measure and leaves the band's right side empty;
+   * below that the credit runs the full width, so the band opens a strip under
+   * it for him to stand in, bottom-left, mirrored to face in.
+   */
+  .calendar-band {
+    --art-src: url('/art/mew-anim.webp');
+    --art-ratio: 0.708; /* 255x360, trimmed */
+    --art-flip: -1;
+    --art-left: calc(-1 * clamp(8px, 2vw, 16px));
+    --art-bottom: 0;
+    --art-w: clamp(110px, 30vw, 130px);
+    /* The strip: his own height plus a little ground under the credit. */
+    padding-bottom: calc(var(--art-w) / 0.708 + var(--space-3));
+  }
+  @media (min-width: 768px) {
+    .calendar-band {
+      --art-flip: 1;
+      --art-left: auto;
+      --art-right: calc(max(0px, (100% - var(--container)) / 2) + var(--gutter));
+      --art-w: clamp(110px, 11vw, 150px);
+      padding-bottom: 0;
+    }
+  }
+
+  /* --------------------------------------------------------- campsite art --
+   * Magikarp, flopping, beside the Campsite panel. Pixel art at its trimmed
+   * 384x369, scaled with NEAREST when it was made (see DESIGN.md provenance).
+   * The panel is opaque and the art sits behind everything at z −1, so he can
+   * never stand on the panel: from 900px the panel narrows to its measure and
+   * he takes the room it leaves on the right; below that the band opens a strip
+   * under the panel, bottom-right, bled a little off the edge.
+   */
+  .campsite-band {
+    --art-src: url('/art/magikarp-anim.webp');
+    --art-ratio: 1.04;
+    --art-right: calc(-1 * clamp(16px, 5vw, 36px));
+    --art-bottom: 0;
+    --art-w: clamp(150px, 40vw, 190px);
+    padding-bottom: calc(var(--art-w) / 1.04 + var(--space-2));
+  }
+  @media (min-width: 900px) {
+    .campsite-band {
+      --art-right: calc(max(0px, (100% - var(--container)) / 2) + var(--gutter));
+      --art-w: clamp(180px, 20vw, 240px);
+      padding-bottom: 0;
+    }
+    /* The prose already stops at its 60ch measure; the panel now stops with
+       it, and the fish has the 280px that were empty panel. */
+    .campsite {
+      max-width: calc(100% - 280px);
+    }
+  }
+
+  /*
+   * One frame each under reduced motion.
+   *
+   * These sit BELOW the base rules on purpose: a media query adds no
+   * specificity, so `.calendar-band` here and `.calendar-band` above are an
+   * exact tie decided by source order. Above them, this block would lose and
+   * quietly do nothing — which is precisely how the old Magikarp swap shipped
+   * dead for a month.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .calendar-band {
+      --art-src: url('/art/mew-still.webp');
+    }
+    .campsite-band {
+      --art-src: url('/art/magikarp-still.webp');
     }
   }
 
