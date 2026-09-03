@@ -100,27 +100,41 @@
 }
 
 /* --- the poster variant -----------------------------------------------------
-   The art is the card. A 16:9 plate with the words on a scrim at its foot, in
-   white, the way a press credit rides on a photograph — and measured the same
-   way: the scrim is opaque enough where the glyphs sit for white to clear
-   4.5:1 over the brightest key art, and a text-shadow carries the rest. No
-   provenance plate: the whole card is the link, and the credit the licence
-   asks for is the Attribution block under the list. */
+   The art is the card. A 16:9 plate with the words at its foot in white and
+   nothing shading the picture: the owner wants the whole image showing, so
+   the legibility rides on the letters alone. Each glyph carries a tight dark
+   halo drawn with layered text shadows — dense within a pixel of the stroke
+   and gone a few pixels out — the way a caption is set on a photograph. It is
+   measured the way it renders: the card screenshotted with and without its
+   words, the difference isolating the glyphs, and white read against the
+   pixels one CSS pixel outside every glyph edge, over the real artwork
+   (.impeccable/review/poster-halo.json). No provenance plate: the whole card
+   is the link, and the credit the licence asks for is the Attribution block
+   under the list. */
 .event-card--poster {
   --card-pad: 0;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
   position: relative;
+  /* Its own stacking context, so the art can sit under the in-flow words at
+     z -1 without falling behind the page. The words stay in flow so the
+     title's stretched link resolves against the card and covers all of it; a
+     positioned body would leave only the bottom strip clickable. */
+  isolation: isolate;
   aspect-ratio: 16 / 9;
   min-height: 200px;
   padding: 0;
   overflow: hidden;
-  /* The scrim's own ink, so a card with no art still has a ground. */
+  /* The ground behind a card with no art, and behind the art while it loads. */
   background: var(--ink-800);
-  color: #fff; /* on the 0.92 scrim: 15.6:1 over white art, more over anything else */
+  color: #fff;
 }
 .event-card--poster .event-image {
   position: absolute;
   inset: 0;
+  z-index: var(--z-art);
   width: 100%;
   height: 100%;
   border-radius: 0;
@@ -130,20 +144,36 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform var(--dur-3) var(--ease-out);
 }
 .event-card--poster .event-body {
-  position: absolute;
-  inset: auto 0 0 0;
-  padding: var(--space-10) var(--space-4) var(--space-4);
-  background: linear-gradient(
-    to top,
-    rgb(0 0 0 / 0.92) 0%,
-    rgb(0 0 0 / 0.88) 45%,
-    rgb(0 0 0 / 0.7) 70%,
-    rgb(0 0 0 / 0.3) 88%,
-    transparent 100%
-  );
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+  padding: var(--space-4);
+  /*
+   * The halo: a one-pixel outline under a soft shadow.
+   *
+   * Blur alone cannot do this. A shadow's blur is a Gaussian, and at a convex
+   * corner — the end of every stroke in the 14px caps line — it fades to the
+   * product of two edges, a quarter of what it is along a side; measured, a
+   * blur-only stack left 5–17% of glyph edges under 4.5:1 over pale sky, every
+   * one of them a corner. The eight unblurred 1px offsets are the glyph
+   * dilated by one pixel in every direction, so the pixel outside every edge
+   * and every corner is solid ink by construction; the blurred layers only
+   * soften where that outline meets the picture. text-shadow inherits, so
+   * every line gets it. Measured in .impeccable/review/poster-halo.json.
+   */
+  text-shadow:
+    1px 0 0 #000,
+    -1px 0 0 #000,
+    0 1px 0 #000,
+    0 -1px 0 #000,
+    1px 1px 0 #000,
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    0 0 2px #000,
+    0 0 2px #000,
+    0 0 4px rgb(0 0 0 / 0.8),
+    0 0 8px rgb(0 0 0 / 0.6);
 }
 .event-card--poster .event-when,
 .event-card--poster .event-title,
@@ -151,14 +181,19 @@
 .event-card--poster .event-blurb {
   color: #fff;
 }
-.event-card--poster .event-where {
-  color: rgb(255 255 255 / 0.85);
-}
-/* Badges over art: outlined in white, no fill, so nothing greys the picture. */
+/* Badges over art: outlined in white, no fill, and the same halo on the whole
+   plate — border and letters — through a drop shadow, since a text shadow
+   cannot reach the border. */
 .event-card--poster .badge {
   --badge-bg: transparent;
   --badge-fg: #fff;
-  border: 1.5px solid rgb(255 255 255 / 0.85);
+  border: 1.5px solid #fff;
+  text-shadow: none;
+  /* Chained, so each shadow is cast from the last: four unblurred 1px offsets
+     compound into the same one-pixel outline the text has, on the border as
+     well as the letters, and the blurred one softens its edge. */
+  filter: drop-shadow(1px 0 0 #000) drop-shadow(-1px 0 0 #000) drop-shadow(0 1px 0 #000)
+    drop-shadow(0 -1px 0 #000) drop-shadow(0 0 2px rgb(0 0 0 / 0.8));
 }
 .event-card--poster .badge--live {
   --badge-bg: var(--live);
@@ -175,9 +210,6 @@
 }
 .event-card--poster.event-card--linked:hover .event-image img {
   transform: var(--poster-hover, scale(1.03));
-}
-.event-card--poster .event-image img {
-  transition: transform var(--dur-3) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
   .event-card--poster {
