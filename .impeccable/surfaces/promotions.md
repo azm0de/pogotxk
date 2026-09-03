@@ -45,6 +45,14 @@ Owner: main thread. **Applied 2026-09-02 (during W2, files disjoint from W2 owne
 - Leek Duck weather/type icons: **words are fine**; the proxy stays narrow.
 - Recurring-meetup grouping bug: **fix now** in this branch, with a test.
 
+## Round 2 (2026-09-03)
+- [x] `.badge--warn` (ink plate for irreversible), `.caption` (prose beside a heading), `.btn--danger` and `.badge--retired` (from W4 admin) promoted into `primitives.css`. W4's local copies in `Admin.astro`'s `is:global` block can be deleted at the next admin touch.
+- [x] Links are ink + underline site-wide (`global.css` reset); `--accent` only in `.prose`, `.btn--primary`, and deliberate "now" affordances.
+- [x] `--display-sm` floor 1.55rem. `--z-skip-link` used. Icons resized to their declared sizes. `auth/login.ts` declared an exclusion.
+- [ ] Font preload for Overpass + Atkinson roman in `Base.astro` (after W5-operate releases the file).
+- [ ] `DESIGN.md`: links-are-ink Don't; CARTO → Protomaps at L180; the new primitives; admin now in-world (documenter rerun).
+- [ ] Admin: real-session confirmation of PATCH on drag/lat-lng, media upload, markdown preview with real posts (Justin).
+
 ## Finish reviewer's open items — resolved 2026-09-03
 - `/map` locate placement on wide screens: **fixed** (`b38382f`) — sits beside the legend's bottom corner at ≥641px, measured clear of zoom and attribution at 1280.
 - `/go` Raid vs Gym takedown icons: **kept**. Raid is the red full-width tile, Gym takedown an outlined tile with the strike arrow; the label is always present, so the icon pair never carries the distinction alone.

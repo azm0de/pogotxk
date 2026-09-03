@@ -98,6 +98,19 @@
     border-color: var(--discord);
     color: #fff; /* white on --discord: 4.61:1 measured */
   }
+  /* Destructive: outlined in the live-text red (which inverts correctly), never
+     a red fill — a filled red button is the primary action's shape. Promoted
+     from three admin islands that each hand-rolled it. */
+  .btn--danger {
+    background: transparent;
+    border-color: currentColor;
+    color: var(--live-text);
+  }
+  .btn--danger:hover {
+    background: var(--red-800);
+    border-color: var(--red-800);
+    color: #fff; /* white on --red-800: 7.00:1 */
+  }
   .btn--block {
     display: flex;
     width: 100%;
@@ -300,6 +313,12 @@
   .badge--warn {
     --badge-bg: var(--text);
     --badge-fg: var(--bg);
+  }
+  /* A status that is over (archived, cancelled, past): outlined and muted. */
+  .badge--retired {
+    background: transparent;
+    border: 1.5px solid currentColor;
+    color: var(--text-muted);
   }
 
   /* ----------------------------------------------------------------- chip -- */
