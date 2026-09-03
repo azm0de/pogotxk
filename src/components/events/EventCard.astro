@@ -38,9 +38,11 @@ interface Props {
   /**
    * How much of the row the artwork takes. `thumb` is the 64px square the
    * calendar scans past sixty times; `plate` runs the art down the whole left
-   * side of the card, for a short list where the picture is the point.
+   * side of the card; `poster` makes the art the whole card, with the words on
+   * a scrim at its foot and no provenance plate — for the home page's short
+   * list, where the owner wants the picture to be the card.
    */
-  art?: 'thumb' | 'plate';
+  art?: 'thumb' | 'plate' | 'poster';
 }
 
 const {
@@ -150,7 +152,7 @@ const source = sourceLabel();
   an invisible affordance is not an affordance.
 */}
 <article
-  class={`event-card card${externalUrl ? ' event-card--linked' : ''}${art === 'plate' ? ' event-card--plate' : ''}`}
+  class={`event-card card${externalUrl ? ' event-card--linked' : ''}${art === 'plate' ? ' event-card--plate' : ''}${art === 'poster' ? ' event-card--poster' : ''}`}
   id={anchor}
   data-state={state}
   data-source={event.source}
@@ -258,7 +260,7 @@ const source = sourceLabel();
     {blurb && <p class="event-blurb">{blurb}</p>}
 
     {
-      source && (
+      source && art !== 'poster' && (
         <p class="event-actions">
           {/* Not a link: the title above it already goes here, and it carries
               the "(opens in a new tab)" note for both of them. */}

@@ -99,6 +99,92 @@
   position: relative;
 }
 
+/* --- the poster variant -----------------------------------------------------
+   The art is the card. A 16:9 plate with the words on a scrim at its foot, in
+   white, the way a press credit rides on a photograph — and measured the same
+   way: the scrim is opaque enough where the glyphs sit for white to clear
+   4.5:1 over the brightest key art, and a text-shadow carries the rest. No
+   provenance plate: the whole card is the link, and the credit the licence
+   asks for is the Attribution block under the list. */
+.event-card--poster {
+  --card-pad: 0;
+  display: block;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  min-height: 200px;
+  padding: 0;
+  overflow: hidden;
+  /* The scrim's own ink, so a card with no art still has a ground. */
+  background: var(--ink-800);
+  color: #fff; /* on the 0.92 scrim: 15.6:1 over white art, more over anything else */
+}
+.event-card--poster .event-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  background: var(--ink-800);
+}
+.event-card--poster .event-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.event-card--poster .event-body {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: var(--space-10) var(--space-4) var(--space-4);
+  background: linear-gradient(
+    to top,
+    rgb(0 0 0 / 0.92) 0%,
+    rgb(0 0 0 / 0.88) 45%,
+    rgb(0 0 0 / 0.7) 70%,
+    rgb(0 0 0 / 0.3) 88%,
+    transparent 100%
+  );
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+}
+.event-card--poster .event-when,
+.event-card--poster .event-title,
+.event-card--poster .event-where,
+.event-card--poster .event-blurb {
+  color: #fff;
+}
+.event-card--poster .event-where {
+  color: rgb(255 255 255 / 0.85);
+}
+/* Badges over art: outlined in white, no fill, so nothing greys the picture. */
+.event-card--poster .badge {
+  --badge-bg: transparent;
+  --badge-fg: #fff;
+  border: 1.5px solid rgb(255 255 255 / 0.85);
+}
+.event-card--poster .badge--live {
+  --badge-bg: var(--live);
+  border-color: var(--live);
+}
+.event-card--poster .event-actions {
+  display: none;
+}
+/* The whole poster is the link; the hover ring has no border to change, so
+   the picture lifts instead. */
+.event-card--poster.event-card--linked:hover {
+  border-color: transparent;
+  box-shadow: var(--shadow-md);
+}
+.event-card--poster.event-card--linked:hover .event-image img {
+  transform: var(--poster-hover, scale(1.03));
+}
+.event-card--poster .event-image img {
+  transition: transform var(--dur-3) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .event-card--poster {
+    --poster-hover: none;
+  }
+}
+
 /* --- the row's own hierarchy ---------------------------------------------
    When first in the DOM, because "when" is the question and it should be the
    first thing read out. Not the loudest, though: at 21/700 over an 18/700 title

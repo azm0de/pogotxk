@@ -734,7 +734,7 @@ function homeWhen(event: CalendarEvent): string {
                     when={homeWhen(event)}
                     state={happening.live.includes(event) ? 'live' : 'ongoing'}
                     showImage
-                    art="plate"
+                    art="poster"
                     stateNamedByGroup
                   />
                 </li>
@@ -1421,6 +1421,14 @@ function homeWhen(event: CalendarEvent): string {
     padding: 0;
     display: grid;
     gap: var(--space-3);
+  }
+  /* Posters, two abreast on a wide screen: one 16:9 card across a 1,052px
+     band would be 590px tall, a hero rather than a row. */
+  @media (min-width: 768px) {
+    .rows {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-4);
+    }
   }
   .rows :global(.event-blurb) {
     display: none;
