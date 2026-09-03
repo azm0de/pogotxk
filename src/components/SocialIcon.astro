@@ -23,8 +23,20 @@
  * traced from the app icon: the purple-to-cyan tile, the concentric rings, the
  * flame, and the white dome at its base.
  *
- * All four are used nominatively — to link to our own presence on each service.
+ * All four are used nominatively, to link to our own presence on each service.
  * The marks remain the property of their owners.
+ *
+ * > [!note] Every hex below is exempt from the tokens rule
+ * > These are not palette values and must never become tokens. Each is a
+ * > brand's own published logo colour (Discord blurple, Facebook blue,
+ * > Instagram's gradient stops, Campfire's purple-to-cyan tile and flame), or
+ * > the white and black inside a mark's own drawing. Tokenising them would put
+ * > a brand logo under our theme, which is both wrong and a trademark problem:
+ * > a mark used nominatively has to be the mark. `#fff` and `#000` inside the
+ * > Campfire mask are luminance values for the mask, not colours at all.
+ * >
+ * > The header's treatment takes none of them: `bare` fills in `currentColor`
+ * > and the caller supplies the colour.
  */
 
 interface Props {

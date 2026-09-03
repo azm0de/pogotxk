@@ -3,7 +3,7 @@ import '~/styles/global.css';
 import '~/styles/primitives.css';
 import PokeBall from '~/components/PokeBall.astro';
 import SocialIcon from '~/components/SocialIcon.astro';
-import { SOCIALS } from '~/lib/socials';
+import { SOCIALS, DISCORD_INVITE } from '~/lib/socials';
 
 interface Props {
   title: string;
@@ -21,7 +21,7 @@ interface Props {
 
 const {
   title,
-  description = 'PoGo TXK — the Pokémon GO community for Texarkana, Texas and Arkansas. Spring Lake Park Campsite map, meetups, raids, and community news.',
+  description = 'PoGo TXK: the Pokémon GO community for Texarkana, Texas and Arkansas. Spring Lake Park Campsite map, meetups, raids, and community news.',
   fullBleed = false,
   ogImage = '/og-default.png',
   ogType = 'website',
@@ -48,7 +48,7 @@ const nav = [
   { href: '/live', label: 'Live' },
   { href: '/raids', label: 'Raids' },
   { href: '/blog', label: 'News' },
-  { href: '/go', label: 'Go', ball: true, describe: 'the PoGo TXK app' },
+  { href: '/go', label: 'Go', highlight: true, describe: 'the PoGo TXK app' },
 ];
 
 const path = Astro.url.pathname;
@@ -63,6 +63,9 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
+    {/* The bar's own red, as a literal. A meta attribute cannot read a CSS
+        custom property, and the browser paints its window chrome with this
+        before any stylesheet exists. Keep it equal to `--accent-solid`. */}
     <meta name="theme-color" content="#c8071c" />
 
     <meta property="og:type" content={ogType} />
@@ -93,35 +96,36 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <a class="skip-link" href="#main">Skip to content</a>
 
     <header class="site-header">
-      <a class="brand" href="/">
-        {/*
-          The stacked mark, TEXARKANA under the GO as usual. The wide 2.74:1
-          lockup is still built at /art/logo-txk-wide.webp if this reads too
-          small — inside a fixed 60px header the stacking costs real legibility,
-          because the three tiers have to share the height the wide one spends
-          on two.
+      {/*
+        The brand is typeset, not an image.
 
-          `alt` carries the full name because this image *is* the site's name —
-          it replaced the text that used to say it.
-        */}
-        <img
-          class="brand-logo"
-          src="/art/logo-txk-classic.webp"
-          width="850"
-          height="793"
-          alt="PoGo TXK — Pokémon GO Texarkana"
-        />
+        The wordmark raster (`/art/logo-txk-classic.webp`) stacks three tiers of
+        lettering into a square, so inside a bar this height it renders about
+        62px wide and "TEXARKANA" is a smudge under the "GO". It stays a brand
+        asset for OG images and app icons; here the mark and the name are set
+        instead, which reads at a glance and scales with the reader's own font
+        size. The owner released the header from the raster on 2026-09-01.
+
+        The link's accessible name is unchanged: the ball is decorative and the
+        span carries the words.
+      */}
+      <a class="brand" href="/">
+        <PokeBall size={30} class="brand-ball" />
+        <span class="brand-name">PoGo TXK</span>
       </a>
 
       {/*
-        A Poké Ball rather than three lines. It only exists below 820px, where
-        the nav collapses into a panel.
+        The menu, below 820px only, where the nav collapses into a panel.
+
+        The ball with the word beside it, not the ball alone. On its own it was
+        an unlabelled control that happened to be the same mark as the brand two
+        inches to its left, and the word is what tells them apart.
 
         Sits before the nav in source order deliberately: with the panel closed
         the links are `display: none` and out of the tab order entirely, and
         with it open Tab moves straight from the button into them. That is the
-        whole focus management this needs — no trapping, no moving focus on
-        open, nothing to get wrong.
+        whole focus management this needs, with no trapping and nothing to get
+        wrong.
       */}
       <button
         class="nav-toggle"
@@ -130,7 +134,8 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         aria-controls="primary-nav"
         aria-label="Open menu"
       >
-        <PokeBall size={30} />
+        <PokeBall size={24} />
+        <span class="nav-toggle-label">Menu</span>
       </button>
 
       <nav id="primary-nav" aria-label="Primary">
@@ -139,41 +144,33 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
             nav.map((item) => (
               <li>
                 {/*
-                  Appended in an `sr-only` span, not set as an `aria-label`.
+                  "Go" is a word now, in the black chip, rather than a third
+                  Poké Ball in a bar that already has two. A mark on its own told
+                  a sighted visitor nothing, and it was the same mark as the menu
+                  button a few pixels away.
 
-                  "Go" alone reads as a verb with no object — a screen-reader
-                  user pulling up a list of links sees it beside "Map" and
-                  "Events" with no way to tell what it does. `aria-label` fixes
-                  that for assistive tech but leaves `textContent` as "Go", which
-                  is what Lighthouse's link-text audit reads, so it kept failing
-                  while looking fixed.
+                  The longer name rides in an `sr-only` span rather than an
+                  `aria-label`. "Go" alone reads as a verb with no object, and a
+                  screen-reader user pulling up a list of links sees it beside
+                  "Map" and "Events" with no way to tell what it does.
+                  `aria-label` fixes that for assistive tech but leaves
+                  `textContent` as "Go", which is what Lighthouse's link-text
+                  audit reads, so it kept failing while looking fixed. This way
+                  the name is descriptive for both, and it still *starts* with
+                  the visible word, so speech input users saying "click Go" match
+                  (WCAG 2.5.3).
 
-                  This way the name is genuinely descriptive for both, the
-                  visible chip is untouched, and the accessible name still
-                  *starts* with the visible word — WCAG 2.5.3, so speech input
-                  users saying "click Go" still match.
-                */}
-                {/*
-                  The ball replaces the word rather than joining it, but the word
-                  is still in the markup — `.nav-go-label` is clipped to sr-only
-                  in the row and made visible again in the phone panel.
-
-                  Both halves of that matter. In the panel it has to be a word:
-                  the menu button that opened the panel is itself a Poké Ball, so
-                  a second one in the list underneath would be two identical
-                  marks doing different jobs. And in the row it has to still be
-                  *there*, because an icon whose label is `display: none` leaves
-                  the accessible name as " — the PoGo TXK app", and leaves
-                  Lighthouse's link-text audit reading an empty link.
+                  The disc before the current item is drawn in CSS, not here: it
+                  is decoration for a state the markup already carries in
+                  `aria-current`.
                 */}
                 <a
                   href={item.href}
-                  class:list={[item.highlight && 'nav-highlight', item.ball && 'nav-go']}
+                  class:list={[item.highlight && 'nav-highlight']}
                   aria-current={isCurrent(item.href) ? 'page' : undefined}
                 >
-                  {item.ball && <PokeBall size={26} class="nav-go-ball" />}
-                  {item.ball ? <span class="nav-go-label">{item.label}</span> : item.label}
-                  {item.describe && <span class="sr-only"> — {item.describe}</span>}
+                  {item.label}
+                  {item.describe && <span class="sr-only">, {item.describe}</span>}
                 </a>
               </li>
             ))
@@ -182,9 +179,11 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       </nav>
 
       {/*
-        The same four links as the home page's "Find us", from the same source —
-        see `~/lib/socials`. Marks only: there is no room for labels beside eight
-        nav items, and these are four icons a member already recognises.
+        The same four links as the home page's "Find us", from the same source:
+        see `~/lib/socials`. Marks only, because there is no room for labels
+        beside seven nav items, and these are four icons a member already
+        recognises. The 28px box around each 22px glyph is what carries them
+        over the 24px target floor.
 
         After the nav, not tucked against the brand where they used to sit. That
         is a source order change rather than a CSS one on purpose: they are
@@ -321,10 +320,14 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         const here = location.pathname + location.search;
         const next = encodeURIComponent(here);
 
+        // The primitives are written into the markup here because these nodes
+        // never pass through Astro. `.btn .btn--sm .btn--outline` is the shared
+        // pill; the `.account-*` classes beside it carry only what the header
+        // adds to it (white on the red bar, the pill radius, the hit area).
         const signedOut = () => {
           root.append(
             el('a', {
-              className: 'account-signin',
+              className: 'account-signin btn btn--sm btn--outline',
               href: '/auth/login?next=' + next,
               textContent: 'Sign in',
             }),
@@ -333,7 +336,9 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
 
         const signedIn = (user) => {
           const details = el('details', { className: 'account-menu' });
-          const summary = el('summary', { className: 'account-summary' });
+          const summary = el('summary', {
+            className: 'account-summary btn btn--sm btn--outline',
+          });
           summary.setAttribute('aria-label', 'Account menu');
 
           if (user.avatarUrl) {
@@ -364,7 +369,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           // a link to its own confirmation page rather than a raw button
           // here — this menu is not the place to put something irreversible
           // one misclick away.
-          const panel = el('div', { className: 'account-panel' });
+          const panel = el('div', { className: 'account-panel panel' });
           panel.append(
             el('a', { href: '/auth/logout?next=' + next, textContent: 'Sign out' }),
             // Signing out here does not sign out of Discord — this is the only
@@ -433,29 +438,38 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       !fullBleed && (
         <footer class="site-footer">
           {/*
-            The header carries the wordmark as an image; the footer had
-            nothing of its own — just the same body-weight text as the legal
-            paragraph beneath it, on every page on the site. This is the
-            favicon's mark (`variant="neutral"`, a dark ring rather than the
-            header's white one — `--bg-sunken` is not the header's known red
-            in either theme) paired with the same display face the headings
-            use, so it reads as the site's mark rather than another line of
-            copy.
+            The board's foot. It repeats the header's plate at the bottom of
+            the page, so the chrome closes with the same mark it opened with,
+            and the fan-use notice sits under it as the fine print it is.
+
+            `variant="neutral"` gives the mark a dark ring rather than the
+            header's white one: `--bg-sunken` is not the header's known red in
+            either theme, and a white ring would erase itself here in light
+            mode.
+
+            The footer stays chrome. The ask belongs to the page above it, and
+            every page ends on its own.
           */}
           <p class="footer-brand">
-            <PokeBall size={20} variant="neutral" /> PoGo TXK
+            <PokeBall size={22} variant="neutral" /> PoGo TXK
           </p>
-          <p>
-            Pokémon GO Texarkana. Not officially affiliated with
-            Pokémon GO. Pokémon and its trademarks are ©1995–2026 Nintendo, Creatures, and
-            GAMEFREAK. All images and names owned and trademarked by Nintendo, Niantic, The
-            Pokémon Company, and GAMEFREAK are property of their respective owners.
+          <p class="footer-legal">
+            Pokémon GO Texarkana. A fan site, run by players. Not affiliated with Niantic,
+            Nintendo, Creatures or GAME FREAK, and not endorsed by them. Pokémon and its
+            trademarks are ©1995–2026 Nintendo, Creatures and GAME FREAK. All images and names
+            owned or trademarked by Nintendo, Niantic, The Pokémon Company and GAME FREAK are
+            the property of their respective owners.
           </p>
           <p class="footer-links">
-            <a href="/about">About</a> · <a href="/conduct">Code of Conduct</a> ·{' '}
-            <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> ·{' '}
-            <a href="https://discord.com/invite/2sYR5YdRpH" rel="noopener noreferrer" target="_blank"
-              >Discord</a
+            <a class="target" href="/about">About</a> ·{' '}
+            <a class="target" href="/conduct">Code of Conduct</a> ·{' '}
+            <a class="target" href="/terms">Terms</a> ·{' '}
+            <a class="target" href="/privacy">Privacy</a> ·{' '}
+            <a
+              class="target"
+              href={DISCORD_INVITE}
+              rel="noopener noreferrer"
+              target="_blank">Discord</a
             >
           </p>
         </footer>
@@ -497,229 +511,169 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         min-height: 0;
       }
 
+      /* ------------------------------------------------------------- header --
+       *
+       * The board's title bar. The Poké Ball read across the top of every page:
+       * the red top, the black band under it, and the white page below.
+       */
       .site-header {
+        /*
+         * The bar is a known deep red in both themes, so its foreground is
+         * pinned rather than themed. Three raw values, and they are raw on
+         * purpose because they are measured against this gradient and nothing
+         * else:
+         *
+         *   --header-fg     white on the gradient's lightest stop: 5.99:1
+         *   --header-fg-2   0.9 white on its darkest stop:         4.92:1
+         *   --header-line   a hairline, never text
+         *
+         * 0.82 white was 4.34:1 and already under AA before it was raised.
+         * Nothing here goes below 0.9.
+         */
+        --header-fg: #ffffff;
+        --header-fg-2: rgb(255 255 255 / 0.9);
+        --header-line: rgb(255 255 255 / 0.34);
+        --header-wash: rgb(255 255 255 / 0.14);
+        /* The 1px lit edge along the top, kept in a property because the
+           elevation keyframe below has to repeat it: a `box-shadow` animation
+           replaces the whole list, not one layer of it. */
+        --header-lit-edge: inset 0 1px 0 rgb(255 255 255 / 0.18);
+
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: var(--space-4);
         /*
-         * 72, not the shared `--header-h`. That token is still 60 and the admin
-         * bar still uses it — this is the public header only.
-         *
-         * The extra 12px are for the mark. Stacked, it is near enough square, so
-         * at the old 48px it rendered 51px wide and three tiers of type had to
-         * share that: "Pokémon", "GO" and "TEXARKANA" were shapes rather than
-         * words. Nothing offsets content by the header height, so this is free
-         * to change — checked, there is no scroll-margin or sticky offset keyed
-         * to it anywhere.
+         * The public header's height, and the one number the `:target`
+         * scroll-margin in global.css is derived from, so the two can no longer
+         * drift. Deliberately NOT `--header-h`: that token is the admin bar's
+         * 60px and belongs to Admin.astro.
          */
-        height: 72px;
-        padding: 0 clamp(12px, 3vw, 24px);
-        color: #fff;
+        height: var(--header-public-h);
+        padding-inline: var(--gutter);
+        color: var(--header-fg);
         /*
          * Flat red read as a coloured strip rather than as part of the ball.
-         * The bar now darkens toward the black band, which is how a curved
-         * surface behaves above a shadow line, and takes a 1px lit edge along
-         * the top.
+         * The bar darkens toward the black band, which is how a curved surface
+         * behaves above a shadow line.
          *
-         * Only ever *darker* than `--accent-solid`, never lighter, and that is a
-         * contrast constraint rather than taste: the nav chips are 0.9 white on
-         * this, which measures 4.92:1 against the flat colour. Lifting the mid
-         * band even 7% takes it to 4.5:1 and a little further puts it under AA.
-         * The lit edge is 1px of inset shadow for that reason — no text can sit
-         * on it.
+         * Only ever *darker* than `--accent-solid`, never lighter, and that is
+         * a contrast constraint rather than taste: the nav labels are 0.9 white
+         * on this. Lifting the mid band even 7% takes them to 4.5:1 and a
+         * little further puts them under AA.
          */
         background: linear-gradient(
           180deg,
           var(--accent-solid) 0%,
           var(--accent-solid) 58%,
-          #b00518 100%
+          /* The band's shadow side. A measured end stop rather than a palette
+             step: it exists only as this gradient's foot and appears nowhere
+             else on the site. */ #b00518 100%
         );
-        box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+        box-shadow: var(--header-lit-edge);
         /*
          * The Poké Ball's band. Red above, white below, and this is the line
-         * between them — solid black and deliberately thick, because on the ball
+         * between them: solid black and deliberately thick, because on the ball
          * it is the heaviest part of the design, not a hairline.
          */
         border-bottom: 4px solid var(--ink-900);
         position: sticky;
         top: 0;
-        z-index: 900;
+        z-index: var(--z-sticky-header);
       }
 
       /*
        * Lifts off the page once it stops sitting on it. A sticky bar with no
        * elevation reads as painted onto the content it is covering.
        *
-       * Scroll-driven, so no listener and no class toggling — the same
-       * progressive enhancement the nav's edge fade already uses. Without
-       * support the header simply never gains the shadow, which is exactly the
-       * header we had. The inset highlight is repeated in the keyframe because a
-       * `box-shadow` animation replaces the whole list, not one layer of it.
+       * Scroll-driven, so no listener and no class toggling. Without support
+       * the header simply never gains the shadow, which is exactly the header
+       * we had.
        */
       @supports (animation-timeline: scroll()) {
         .site-header {
           animation: header-elevate linear both;
           animation-timeline: scroll();
-          animation-range: 0 72px;
+          animation-range: 0 var(--header-public-h);
         }
         @keyframes header-elevate {
           to {
             box-shadow:
-              inset 0 1px 0 rgb(255 255 255 / 0.18),
+              var(--header-lit-edge),
               0 8px 20px -6px rgb(0 0 0 / 0.45);
+          }
+        }
+        /*
+         * This one needs its own reduced-motion escape, and the escape has to
+         * land on the *resting* state.
+         *
+         * The blanket rule in global.css forces every animation to 0.01ms. For
+         * a normal animation that is the whole fix. For a scroll-timeline
+         * animation with `fill: both` it is the opposite of a fix: the
+         * animation is not driven by time at all, so flattening the duration
+         * only makes it jump straight to the keyframe's END state, and the
+         * header sits at the top of an unscrolled page wearing a drop shadow it
+         * has not earned. Cancelling the animation by name is what actually
+         * stops it, and the resting shadow is restored beside it.
+         */
+        @media (prefers-reduced-motion: reduce) {
+          .site-header {
+            animation: none;
+            box-shadow: var(--header-lit-edge);
           }
         }
       }
 
+      /* --------------------------------------------------------------- brand --
+       * The mark and the name, set rather than drawn. `1 1 0` makes this and
+       * `.header-right` split the leftover width evenly, so the nav lands on the
+       * bar's true centre rather than near it.
+       */
       .brand {
+        flex: 1 1 0;
+        min-width: 0;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: var(--space-2);
         color: inherit;
         text-decoration: none;
       }
-      /* Sized by height, never width — the bar is a fixed height and the logo
-         has to sit inside it with air above and below. `width: auto` lets the
-         intrinsic ratio decide the rest.
-
-         58 of the 68px content box. The stacked mark spends its height on three
-         tiers where the wide lockup spends it on two, so it needs every pixel
-         the bar will give it: this is what took the rendered mark from 51px
-         wide to 62px, which is the difference between reading "TEXARKANA" and
-         seeing a smudge under the GO. */
-      .brand-logo {
-        display: block;
-        height: 58px;
-        width: auto;
+      .brand-name {
+        font-family: var(--font-sign);
+        font-size: var(--text-xl);
+        font-weight: 800;
+        letter-spacing: var(--tracking-tight);
+        line-height: 1;
+        color: var(--header-fg);
+        white-space: nowrap;
+      }
+      /* `:global` on the ball, and it is required rather than stylistic: the
+         mark renders with PokeBall.astro's scope, so a scoped selector here
+         compiles to an attribute the SVG does not carry and silently matches
+         nothing. */
+      .brand :global(.brand-ball) {
+        flex: none;
       }
 
-      /*
+      /* ----------------------------------------------------------------- nav --
+       *
        * `min-width: 0` is what makes the `overflow-x: auto` below actually work.
        *
        * A flex item defaults to `min-width: auto`, which refuses to shrink below
-       * its content. Without this the nav stayed its full 433px, the header grew
-       * past the viewport, and every page scrolled sideways on a phone — 169px of
-       * overhang at 375px wide, on all twelve routes. The scrolling nav was
-       * written correctly from the start; this one property is all that was
-       * stopping it from ever engaging.
+       * its content. Without this the nav stayed its full width, the header grew
+       * past the viewport, and every page scrolled sideways on a phone: 169px of
+       * overhang at 375px, on all twelve routes. Do not remove it.
        */
       .site-header nav {
         min-width: 0;
         position: relative;
-        /*
-         * The nav takes exactly its own width and the two side zones split
-         * whatever is left, which is what centres it on the bar rather than
-         * near the middle. See `.brand` and `.header-socials` below — they are
-         * the `1fr` halves of that.
-         */
+        /* The nav takes exactly its own width and the two side zones split
+           whatever is left, which is what centres it on the bar. */
         flex: 0 0 auto;
-      }
-
-      /*
-       * The other half of the centring pair, and they moved to do it.
-       *
-       * These used to sit tucked against the brand behind a hairline, so that
-       * the left of the bar was "who we are and where to find us" and the right
-       * was purely navigation. That grouping was real, but it left both clusters
-       * on one side and 422px of nothing in the middle of a 1100px bar, which is
-       * most of why the header read as unfinished. Anchored to the far edge they
-       * balance the mark instead, and the marks are recognisable enough not to
-       * need the brand's company to be read as ours.
-       */
-      .header-right {
-        flex: 1 1 0;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 14px;
-        /* Never let the account name push the nav around; it truncates instead. */
-        min-width: 0;
-      }
-      .header-socials {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 10px;
-        flex: 0 0 auto;
-      }
-      .header-socials a {
-        display: block;
-        line-height: 0;
-        /* The marks are bare glyphs here, so this is what colours them —
-           `currentColor` inside the SVG resolves against it. Slightly under
-           white at rest so they read as secondary to the wordmark, which is the
-           only thing in the header allowed to be pure white. */
-        color: rgb(255 255 255 / 0.88);
-        border-radius: 5px;
-        transition:
-          transform 0.16s ease,
-          color 0.16s ease;
-      }
-      .header-socials a:hover {
-        color: #fff;
-        transform: translateY(-1px) scale(1.06);
-      }
-      .header-socials a:focus-visible {
-        outline: 2px solid #fff;
-        outline-offset: 3px;
-      }
-      .header-socials svg {
-        display: block;
-      }
-
-      /* Hidden until the panel breakpoint takes over below. 44px because it is
-         the only way to reach anything on a phone — the icon itself is 30. */
-      .nav-toggle {
-        display: none;
-        place-items: center;
-        width: 44px;
-        height: 44px;
-        padding: 0;
-        border: 0;
-        border-radius: 999px;
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-      }
-      .nav-toggle:focus-visible {
-        outline: 2px solid #fff;
-        outline-offset: 2px;
-      }
-      /*
-       * `:global` on the ball, and it is required rather than stylistic.
-       *
-       * The mark is its own component now, so it renders with PokeBall.astro's
-       * scope and not this file's. Scoped, these selectors compile to
-       * `.pokeball[data-astro-cid-hkbrpulz]`, the ball carries no such attribute,
-       * and every rule below silently stops matching — which is exactly what
-       * happened to this animation the moment the SVG moved out of this file.
-       * The `.nav-toggle` half stays scoped, so nothing leaks.
-       */
-      .nav-toggle :global(.pokeball) {
-        display: block;
-        /* Global reduced-motion already flattens these to 0.01ms. */
-        transition: transform 0.2s ease;
-      }
-      /* The centre button lights up when the menu is open, rather than the ball
-         rotating. A Poké Ball turned 180° just puts the red half underneath,
-         which reads as an upside-down ball rather than as an open menu; a lit
-         button reads as "active" and leaves the mark the right way up. */
-      .nav-toggle :global(.pokeball circle:last-of-type) {
-        transition: fill 0.2s ease;
-      }
-      .nav-toggle[aria-expanded='true'] :global(.pokeball) {
-        transform: scale(1.06);
-      }
-      .nav-toggle[aria-expanded='true'] :global(.pokeball circle:last-of-type) {
-        fill: #ffe14d;
       }
 
       nav ul {
         display: flex;
-        gap: 4px;
+        gap: var(--space-1);
         margin: 0;
         padding: 0;
         list-style: none;
@@ -730,7 +684,11 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
            where no amount of scrolling reaches them. The current item is brought
            into view by script instead, which degrades to "starts at Home". */
         overscroll-behavior-x: contain;
-        scroll-padding-inline: 12px;
+        scroll-padding-inline: var(--space-3);
+        /* Room for a focus ring. `overflow-x: auto` forces `overflow-y` to auto
+           as well, so a 3px ring at a 2px offset was being clipped top and
+           bottom by the scroll box itself. */
+        padding-block: var(--space-2);
       }
       nav ul::-webkit-scrollbar {
         display: none;
@@ -745,9 +703,6 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
        * `mask-image` rather than an overlaid gradient: the header is a solid
        * colour on some pages and sits over content on others, and a mask needs
        * no knowledge of what is behind it.
-       *
-       * animation-timeline is progressive enhancement — without support the nav
-       * simply scrolls unfaded, which is the behaviour we already had.
        */
       @supports (animation-timeline: scroll(self inline)) {
         nav ul {
@@ -755,6 +710,8 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           animation-timeline: scroll(self inline);
           animation-range: 0 24px;
         }
+        /* `#000` here is a mask's alpha, not a colour: opaque black means "keep
+           this pixel". It is never painted and cannot be tokenised. */
         @keyframes nav-fade-start {
           from {
             mask-image: linear-gradient(to right, #000 0, #000 100%);
@@ -763,189 +720,270 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
             mask-image: linear-gradient(to right, transparent 0, #000 22px, #000 100%);
           }
         }
+        /* Same escape as the header's, and for the same reason: flattening the
+           duration would leave the row permanently faded at its start edge. */
+        @media (prefers-reduced-motion: reduce) {
+          nav ul {
+            animation: none;
+            mask-image: none;
+          }
+        }
       }
 
-      /*
-       * One of the two zones the nav is centred between. `1 1 0` makes this and
-       * `.header-socials` split the leftover width evenly, so the nav lands on
-       * the bar's true centre — with a 62px mark on one side and 126px of marks
-       * on the other, anything simpler leaves it centred by eye and off by
-       * thirty-odd pixels.
-       *
-       * Growing is safe where shrinking would not be. A flex item's automatic
-       * minimum size is its content, so this can never squeeze the logo — the
-       * old `0 0 auto` was guarding against a *text* wordmark that truncated to
-       * "PoGo …", and that has been an image for some time. The breakpoint below
-       * still steps the height down rather than letting flex distort it.
-       */
-      .brand {
-        flex: 1 1 0;
-      }
       nav a {
-        display: block;
-        padding: 8px 14px;
-        border-radius: 999px;
-        /* 0.9, up from 0.82. Measured on the flat bar: 0.9 white is 4.92:1 and
-           0.82 is 4.34:1 — the old value was already under AA for body-sized
-           text, and it read as greyed-out besides. */
-        color: rgb(255 255 255 / 0.9);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 32px;
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-pill);
+        color: var(--header-fg-2);
         text-decoration: none;
-        font-size: 0.88rem;
-        font-weight: 600;
+        font-family: var(--font-sign);
+        font-size: var(--text-md);
+        font-weight: 700;
         white-space: nowrap;
         /* Transparent at rest so the chip's box never shifts when the border
            appears on hover. */
         border: 1px solid transparent;
         transition:
-          background-color 0.16s ease,
-          border-color 0.16s ease,
-          color 0.16s ease;
+          background-color var(--dur-2) var(--ease-out),
+          border-color var(--dur-2) var(--ease-out),
+          color var(--dur-2) var(--ease-out);
       }
       nav a:hover {
-        background: rgb(255 255 255 / 0.13);
-        border-color: rgb(255 255 255 / 0.28);
-        color: #fff;
+        background: var(--header-wash);
+        border-color: var(--header-line);
+        color: var(--header-fg);
       }
-      /* `--accent-solid`, not `--accent`: this is dark text on a white chip, and
-         in dark mode `--accent` is the *light* red meant for the opposite job —
-         it measured 3.0:1 here. */
+
+      /*
+       * The focus ring, for everything standing on the red field.
+       *
+       * The global ring is `outline: 3px solid var(--accent)`, and on this bar
+       * in light mode `--accent` *is* the bar: #c8071c on #c8071c, an invisible
+       * focus indicator on the brand and all seven nav items. White is the only
+       * value that holds against both stops of the gradient and against the
+       * white current-page chip, which the 2px offset separates it from.
+       */
+      .site-header a:focus-visible,
+      .nav-toggle:focus-visible {
+        outline: 3px solid var(--header-fg);
+        outline-offset: 2px;
+      }
+
+      /*
+       * You Are Here, translated for a red field.
+       *
+       * On the map the marker is a red disc ringed in ink. The bar is already
+       * red, so the plate inverts: a white sign with the same disc printed on
+       * it. Shape and position as well as hue, and `aria-current` carries the
+       * state for anything that can read neither.
+       *
+       * `--accent-solid`, not `--accent`: this is dark text on a white chip, and
+       * in dark mode `--accent` is the *light* red meant for the opposite job.
+       * It measured 3.0:1 here.
+       */
       nav a[aria-current='page'] {
-        background: #fff;
+        background: var(--header-fg);
         color: var(--accent-solid);
-        border-color: #fff;
+        border-color: var(--header-fg);
         /* The selected chip is the one thing on the bar that should look like it
            is sitting on top of it rather than in it. */
         box-shadow: 0 2px 6px rgb(0 0 0 / 0.28);
       }
+      nav a[aria-current='page']::before {
+        content: '';
+        flex: none;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent-solid);
+        /* The band's ink, as a ring. Drawn with a shadow rather than a border so
+           the disc keeps its 10px and the ring costs no layout. */
+        box-shadow: 0 0 0 2px var(--ink-900);
+      }
       nav a[aria-current='page']:hover {
-        background: #fff;
+        background: var(--header-fg);
         color: var(--accent-solid);
       }
+
       /*
-       * The quick-action screen is the point of the whole site on a phone; it
-       * earns a bit of visual weight in the nav.
+       * The quick-action screen is the point of the whole site on a phone, so it
+       * earns a bit of weight in the nav.
        *
-       * Black — the Poké Ball's band — rather than the orange it used to be.
-       * White on `--poi-gym` measured 3.18:1, under AA, and orange on a red bar
-       * was muddy besides. It also has to stay distinct from `[aria-current]`,
-       * which is a *white* chip: if Go were white too it would look permanently
-       * selected.
+       * Black, the Poké Ball's band, rather than a second colour. It also has to
+       * stay distinct from `[aria-current]`, which is a *white* chip: white here
+       * would look permanently selected.
+       *
+       * It is a word rather than a mark. As a bare Poké Ball it told a sighted
+       * visitor nothing, and it was the same mark as the menu button beside it.
        */
       nav a.nav-highlight {
         background: var(--ink-900);
-        color: #fff;
+        color: var(--header-fg); /* white on --ink-900: 18.4:1 */
         border-color: var(--ink-900);
         box-shadow: 0 2px 6px rgb(0 0 0 / 0.32);
       }
       nav a.nav-highlight:hover {
         background: var(--ink-900);
-        border-color: rgb(255 255 255 / 0.4);
-        color: #fff;
+        border-color: var(--header-line);
+        color: var(--header-fg);
       }
       nav a.nav-highlight[aria-current='page'] {
-        background: #fff;
+        background: var(--header-fg);
         color: var(--accent-solid);
-        border-color: #fff;
+        border-color: var(--header-fg);
       }
 
-      /* --- /go, as the ball ------------------------------------------------
-       *
-       * No chip behind it. The others earn their pill by being words that need
-       * a boundary; this one is already a shape, and a full-colour mark in a row
-       * of white text is louder than any pill would make it.
-       *
-       * Round, and sized to a 40px box rather than to the 26px art, so the
-       * target stays a comfortable one on a touch screen where this is the
-       * densest thing in the row.
+      /* ------------------------------------------------------------ the menu --
+       * Hidden until the panel breakpoint below takes over. The ball carries the
+       * brand, so on its own it could not also mean "menu"; the word is what
+       * separates them, and it is what a sighted visitor reads.
        */
-      nav a.nav-go {
-        display: grid;
-        place-items: center;
-        width: 40px;
-        height: 40px;
-        padding: 0;
-        border-radius: 999px;
-        line-height: 0;
+      .nav-toggle {
+        display: none;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 44px;
+        padding: var(--space-1) var(--space-3);
+        border: 1px solid var(--header-line);
+        border-radius: var(--radius-pill);
+        background: transparent;
+        color: inherit;
+        font-family: var(--font-sign);
+        font-size: var(--text-md);
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          background-color var(--dur-2) var(--ease-out),
+          border-color var(--dur-2) var(--ease-out);
       }
-      nav a.nav-go:hover {
-        background: rgb(255 255 255 / 0.13);
-        border-color: rgb(255 255 255 / 0.28);
+      .nav-toggle-label {
+        color: var(--header-fg);
+        line-height: 1;
       }
-      /* `:global` for the same reason as the toggle above — the ball is a child
-         component and carries none of this file's scope. */
-      nav a.nav-go :global(.pokeball) {
-        transition: transform 0.16s ease;
-      }
-      nav a.nav-go:hover :global(.pokeball) {
-        transform: scale(1.08);
+      .nav-toggle:hover {
+        background: var(--header-wash);
+        border-color: var(--header-fg);
       }
       /*
-       * The current-page state cannot be the white chip the other items use —
-       * filling the box white would leave a white-ringed ball on white and erase
-       * its own outline. A ring around it instead, which is the same "this one
-       * is selected" signal without touching the mark.
+       * Open reads as the chip lighting up, not as the ball turning over. A Poké
+       * Ball rotated 180° just puts the red half underneath, which reads as an
+       * upside-down ball rather than as an open menu.
        */
-      nav a.nav-go[aria-current='page'] {
-        background: rgb(255 255 255 / 0.16);
-        border-color: #fff;
+      .nav-toggle[aria-expanded='true'] {
+        background: var(--header-wash);
+        border-color: var(--header-fg);
       }
-      /* Clipped rather than removed: an icon whose label is `display: none` has
-         no accessible name left but the description, and reads as an empty link
-         to Lighthouse. The phone panel below un-clips it. */
-      .nav-go-label {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
+      /* `:global` for the same reason as the brand's ball above. */
+      .nav-toggle :global(.pokeball) {
+        display: block;
+        flex: none;
       }
 
+      /* ---------------------------------------------------------- right zone --
+       * The socials and the account control share the right-hand zone, and the
+       * wrapper is what carries the `flex: 1 1 0` that used to sit on the list
+       * itself. That matters: the nav is centred by the two side zones being
+       * equal, so hanging the account control off the end as a third sibling
+       * would have shifted the nav left by exactly its width.
+       */
+      .header-right {
+        flex: 1 1 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--space-3);
+        /* Never let the account name push the nav around; it truncates. */
+        min-width: 0;
+      }
+      .header-socials {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--space-1);
+        flex: 0 0 auto;
+      }
+      /*
+       * 28px boxes around 22px marks. The glyphs were their own hit area at
+       * 22px, one pixel under the 24px floor for a standalone control (WCAG 2.2
+       * SC 2.5.8); the box is what clears it, and it is drawn nowhere.
+       */
+      .header-socials a {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        /* The marks are bare glyphs here, so this is what colours them:
+           `currentColor` inside the SVG resolves against it. Under full white at
+           rest so they read as secondary to the brand plate. */
+        color: var(--header-fg-2);
+        border-radius: var(--radius-xs);
+        transition:
+          transform var(--dur-2) var(--ease-out),
+          color var(--dur-2) var(--ease-out);
+      }
+      .header-socials a:hover {
+        color: var(--header-fg);
+        transform: var(--lift);
+      }
+      .header-socials svg {
+        display: block;
+      }
+
+      /* ------------------------------------------------------------- footer --
+       * The board's foot: the same plate the header opens with, then the fine
+       * print, then the five standing links. Chrome only; the ask belongs to the
+       * page above it.
+       */
       .site-footer {
-        padding: 28px clamp(12px, 3vw, 24px);
+        padding: var(--space-8) var(--gutter);
         border-top: 1px solid var(--border);
         background: var(--bg-sunken);
         color: var(--text-muted);
-        font-size: 0.76rem;
       }
       .site-footer p {
-        max-width: 70ch;
-        margin: 0 auto 10px;
+        max-width: var(--measure);
+        margin: 0 auto var(--space-3);
       }
       .footer-brand {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 7px;
-        margin-bottom: 14px;
-        font-family: var(--font-display);
-        font-size: 1.05rem;
-        font-weight: 700;
+        gap: var(--space-2);
+        margin-bottom: var(--space-5);
+        font-family: var(--font-sign);
+        font-size: var(--text-lg);
+        font-weight: 800;
+        letter-spacing: var(--tracking-tight);
         color: var(--text);
+      }
+      .footer-legal {
+        font-size: var(--text-xs);
+        line-height: var(--lh-body);
       }
       .footer-links {
         text-align: center;
+        font-size: var(--text-sm);
       }
 
-      /* The logo is one indivisible image, so the old two-stage degrade (drop
-         the tagline at 820px, then the wordmark at 430px) has nothing to drop.
-         It steps down in height instead — still legible, and it hands ~30px
-         back to the seven nav items it is competing with. */
+      /* ------------------------------------------------------- breakpoints -- */
+
+      /* `--header-public-h` steps to 64px at this width in global.css, so the
+         bar follows on its own; only the name has to come down with it. */
       @media (max-width: 430px) {
-        .site-header {
-          height: 64px;
-        }
-        .brand-logo {
-          height: 50px;
+        .brand-name {
+          font-size: var(--text-lg);
         }
       }
 
       /* The marks are a desktop affordance and nothing more. They cost roughly
-         135px, and a squeezed nav does not overflow the header — it just scrolls
-         — so keeping them on a phone would quietly shrink the primary navigation
+         130px, and a squeezed nav does not overflow the header, it just scrolls,
+         so keeping them on a phone would quietly shrink the primary navigation
          to pay for a secondary one. The home page's "Find us" carries the same
          four links, from the same source, so nothing is lost by dropping them. */
       @media (max-width: 1024px) {
@@ -956,21 +994,21 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
 
       /*
        * Below 820px the nav stops being a scrolling row and becomes a panel
-       * behind the Poké Ball.
+       * behind the menu button.
        *
-       * 820 rather than the ~590 where the row actually starts to overflow:
-       * that is where the rest of the page already goes single-column, and a
-       * header that reflows on a different boundary from the content under it
-       * reads as a bug. It also means the row is never cramped — it is replaced
+       * 820 rather than the ~590 where the row actually starts to overflow: that
+       * is where the rest of the page already goes single-column, and a header
+       * that reflows on a different boundary from the content under it reads as
+       * a bug. It also means the row is never cramped, because it is replaced
        * before it has to scroll at all.
        *
-       * The panel is positioned against `.site-header`, which is `sticky` and
-       * therefore already a containing block. It inherits the header's
-       * `z-index: 900`, so it covers the map on the full-bleed pages too.
+       * The panel is positioned against `.site-header`, which is sticky and
+       * therefore already a containing block. It sits inside the header's
+       * stacking context, so it covers the map on the full-bleed pages too.
        */
       @media (max-width: 820px) {
         .nav-toggle {
-          display: grid;
+          display: inline-flex;
           margin-left: auto;
         }
 
@@ -984,7 +1022,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           margin-left: 0;
           background: var(--accent-solid);
           border-bottom: 4px solid var(--ink-900);
-          box-shadow: 0 12px 24px -12px rgb(0 0 0 / 0.55);
+          box-shadow: var(--shadow-lg);
           display: none;
         }
         .site-header nav[data-open] {
@@ -997,77 +1035,68 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           /* The row's horizontal scroll has nothing to do here, and leaving it
              on clips the chips' focus rings. */
           overflow: visible;
-          gap: 2px;
-          padding: 8px clamp(12px, 3vw, 24px) 14px;
+          gap: var(--space-1);
+          padding: var(--space-2) var(--gutter) var(--space-4);
         }
         .site-header nav li {
           width: 100%;
         }
         nav a {
-          padding: 11px 14px;
-          font-size: 0.95rem;
-        }
-
-        /*
-         * In the panel /go is a word again, and the ball goes away.
-         *
-         * The control that opened this panel is a Poké Ball sitting a few pixels
-         * above it. A second one in the list would be the same mark meaning two
-         * different things on one screen — and in a stacked list of words, a
-         * lone icon is the odd row out rather than the prominent one.
-         */
-        nav a.nav-go {
-          display: block;
-          width: auto;
-          height: auto;
-          padding: 11px 14px;
-          border-radius: 999px;
-          line-height: inherit;
-        }
-        nav a.nav-go :global(.pokeball) {
-          display: none;
-        }
-        /*
-         * And the current-page state goes back to the white chip the other rows
-         * use. The ring treatment above is built for a mark, which carries its
-         * own colour — a word does not, and it keeps `color: var(--accent-solid)`
-         * from the generic `[aria-current]` rule, so over a 16%-white wash it
-         * came out dark red on red. Unnoticeable in the row, where the label is
-         * clipped and there is nothing to read; plainly broken here, where it is
-         * the only visible thing in the chip.
-         */
-        nav a.nav-go[aria-current='page'] {
-          background: #fff;
-          border-color: #fff;
-        }
-        .nav-go-label {
-          position: static;
-          width: auto;
-          height: auto;
-          margin: 0;
-          overflow: visible;
-          clip: auto;
+          min-height: 44px;
+          padding: var(--space-3) var(--space-4);
+          font-size: var(--text-base);
         }
       }
     </style>
 
-    {/*
-      The account control's CSS, split out and `is:global` on purpose.
-
-      Every node under `.header-account` is built with `document.createElement`
-      in the script above, never by Astro — and Astro's scoped styles work by
-      compiling `.foo` to `.foo[data-astro-cid-hkbrpulz]`, then stamping that
-      attribute onto the elements it renders server-side. A `createElement`
-      node never gets stamped, so every one of these selectors was silently
-      matching nothing: the whole control has been rendering in raw browser
-      defaults — an unstyled `<details>`/`<summary>` with its native disclosure
-      triangle, and an unpositioned panel just flowing in normal document flow
-      — since the day it shipped. That triangle is almost certainly the "play
-      button" reported in prod, and the unpositioned panel is the "ugly text
-      overlay": neither is a design problem the rules below were ever wrong
-      about, they simply never ran.
-    */}
     <style is:global>
+      /* ---------------------------------------------------- browser surfaces --
+       *
+       * The parts of the page nobody draws still belong to the design. These
+       * four ship with defaults that belong to no design system: a blue
+       * selection, a black caret, a platform-blue form control, and an underline
+       * sitting on the baseline through every descender.
+       *
+       * Here rather than in global.css because they are chrome, and the chrome
+       * is this file's job.
+       */
+      ::selection {
+        background: var(--accent-solid);
+        color: #fff; /* white on --accent-solid: 5.99:1, both themes */
+      }
+      :root {
+        /* Checkboxes, radios and range thumbs. `--accent-solid` because the
+           browser paints white marks on this and it must not lift in dark. */
+        accent-color: var(--accent-solid);
+        /* The caret is a line on the page background, not a fill, so it takes
+           the theme-aware red. */
+        caret-color: var(--accent);
+      }
+      @layer reset {
+        a {
+          /* `from-font` where the face publishes a thickness, so the rule keeps
+             the weight the type designer drew rather than a browser's guess.
+             The offset lifts it clear of Atkinson's descenders, which are long
+             by design. */
+          text-underline-offset: 0.16em;
+          text-decoration-thickness: from-font;
+        }
+      }
+
+      /* ------------------------------------------------------------- account --
+       * Every node below is built by the inline script above with
+       * `document.createElement`, never by Astro. Scoped styles work by
+       * compiling `.foo` to `.foo[data-astro-cid-…]` and stamping that attribute
+       * onto server-rendered elements; a `createElement` node never gets
+       * stamped, so a scoped rule here matches nothing. That is how the control
+       * once shipped with a native `<details>` triangle and an unpositioned
+       * panel. Any new `.account-*` rule belongs in this block and nowhere else.
+       *
+       * The control adopts `.btn .btn--sm .btn--outline` from primitives.css and
+       * the panel adopts `.panel`. What is left here is only what the header
+       * adds on top: the pinned white on a known red bar, the pill radius, and
+       * the hit area.
+       */
       .header-account {
         flex: 0 0 auto;
         min-width: 0;
@@ -1076,46 +1105,38 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         display: none;
       }
 
-      .account-signin {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        height: 32px;
-        padding: 0 12px;
-        border-radius: 999px;
-        border: 1px solid rgb(255 255 255 / 0.34);
+      .account-signin,
+      .account-summary {
+        /* The bar is a known deep red in both themes, so this is pinned, not
+           themed. White on --accent-solid measures 5.99:1. */
         color: #fff;
-        font: 600 0.82rem/1 inherit;
-        text-decoration: none;
+        border-radius: var(--radius-pill);
         white-space: nowrap;
-        transition:
-          background-color 0.16s ease,
-          border-color 0.16s ease;
-        /* Anchors the hit-area expansion below — offsets nothing on its own. */
+        /* Anchors the hit-area expansion below; offsets nothing on its own. */
         position: relative;
       }
       /*
-       * The pill's visible box stays 32px tall — this only widens what
-       * counts as a tap, not what renders. `::before` is generated content
-       * owned by this element, so a click anywhere inside its (invisible)
-       * box still resolves to the anchor; nothing is drawn because there is
-       * no background/border/content here beyond the empty string. 6px top
-       * and bottom brings the 32px pill to a 44px target without touching
-       * width — height was the only dimension under the guideline, and the
-       * header (64–72px) has room to spare on both sides of a centered pill.
+       * The pill's visible box stays at the primitive's 32px: this only widens
+       * what counts as a tap. `::before` is generated content owned by the
+       * element, so a click anywhere inside its invisible box still resolves to
+       * it, and nothing is drawn because there is no background, border or
+       * content here. 6px top and bottom brings 32px to a 44px target without
+       * touching width, and the header has the room on both sides.
        */
-      .account-signin::before {
+      .account-signin::before,
+      .account-summary::before {
         content: '';
         position: absolute;
         inset: -6px 0;
       }
-      .account-signin:hover {
+      .account-signin:hover,
+      .account-summary:hover {
         background: rgb(255 255 255 / 0.14);
-        border-color: rgb(255 255 255 / 0.6);
+        border-color: #fff; /* on the red bar; see above */
       }
       .account-signin:focus-visible,
       .account-summary:focus-visible {
-        outline: 2px solid #fff;
+        outline: 2px solid #fff; /* the global ring is --accent, invisible here */
         outline-offset: 3px;
       }
 
@@ -1123,25 +1144,18 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         position: relative;
       }
       /*
-       * The marker is a disclosure triangle by default in every engine — the
-       * "play button". `list-style: none` is the standards-track way to kill
-       * it, `::-webkit-details-marker` is the legacy WebKit pseudo, and
-       * `::marker` is added as a third belt: Chromium has a known quirk where
-       * overriding `display` away from `list-item` on a `<summary>` (which
-       * this rule does, to `inline-flex`) does not reliably suppress the
-       * generated marker through `list-style` alone. All three are cheap
-       * insurance against one engine's quirk outliving this comment.
+       * The marker is a disclosure triangle by default in every engine, the
+       * "play button" reported in prod. `list-style: none` is the
+       * standards-track way to kill it, `::-webkit-details-marker` is the legacy
+       * WebKit pseudo, and `::marker` is a third belt: Chromium has a known
+       * quirk where overriding `display` away from `list-item` on a `<summary>`
+       * (which `.btn` does, to `inline-flex`) does not reliably suppress the
+       * generated marker through `list-style` alone.
        */
       .account-summary {
         list-style: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
         max-width: 190px;
-        height: 32px;
-        padding: 0 10px;
-        border-radius: 999px;
-        border: 1px solid rgb(255 255 255 / 0.28);
+        padding-inline: var(--space-2);
         cursor: pointer;
         user-select: none;
       }
@@ -1151,9 +1165,6 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       .account-summary::marker {
         display: none;
       }
-      .account-summary:hover {
-        background: rgb(255 255 255 / 0.14);
-      }
       .account-avatar {
         width: 22px;
         height: 22px;
@@ -1162,44 +1173,41 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         background: rgb(255 255 255 / 0.2);
       }
       .account-name {
-        font: 600 0.82rem/1 inherit;
-        color: #fff;
+        font-size: var(--text-sm);
+        font-weight: 700;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
+      /* A surface floating over the page, so it reads against whatever is under
+         it rather than against the bar it hangs from. `.panel` supplies the
+         ground, the radius and the shadow. */
       .account-panel {
         position: absolute;
-        top: calc(100% + 8px);
+        top: calc(100% + var(--space-2));
         right: 0;
-        z-index: 60;
-        /* Wide enough that "Use a different Discord account" — the longest
-           row — never wraps to a second line. */
+        z-index: var(--z-overlay);
+        /* Wide enough that "Use a different Discord account", the longest row,
+           never wraps to a second line. */
         min-width: 260px;
-        padding: 6px;
-        border-radius: 12px;
-        /* Not the header's red: this is a surface floating over the page, and
-           it has to read against whatever is under it rather than against the
-           bar it hangs from. */
-        background: #16212f;
-        border: 1px solid #2b3a51;
-        box-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.62);
-        color: #e8edf4;
+        --panel-pad: var(--space-1);
+        border: 1px solid var(--border);
       }
       .account-panel a {
         display: block;
-        padding: 9px 10px;
-        border-radius: 8px;
-        color: inherit;
-        font-size: 0.86rem;
+        min-height: 44px;
+        padding: var(--space-3);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        font-size: var(--text-md);
         text-decoration: none;
       }
       .account-panel a:hover {
-        background: #223047;
+        background: var(--bg-sunken);
       }
       .account-panel a:focus-visible {
-        outline: 2px solid #6ea8ff;
+        outline: 2px solid var(--accent);
         outline-offset: -2px;
       }
 
@@ -1210,7 +1218,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           display: none;
         }
         .account-summary {
-          padding: 0 6px;
+          padding-inline: var(--space-2);
         }
       }
     </style>

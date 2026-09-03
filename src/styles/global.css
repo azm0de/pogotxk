@@ -28,30 +28,9 @@
  */
 
 /*
- * Headings only. Self-hosted rather than a font CDN, per the project's own
- * constraint — one weight (700, the only one h1-h4 ever use), so one file.
- * SIL OFL 1.1, license text alongside it at /fonts/baloo-2-OFL.txt.
- *
- * Baloo 2, not Fredoka — rounded but confident, reads fast at a glance in
- * sunlight without tipping into a kids'-app tone the way Fredoka's extra
- * roundness did.
- *
- * `font-display: swap` over `optional`: a heading rendering in the system
- * font for a moment and then swapping is a smaller cost here than risking it
- * never swapping at all on a slow connection, since headings are what this
- * font exists to change.
- */
-@font-face {
-  font-family: 'Baloo 2';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/baloo-2-700.woff2') format('woff2');
-}
-
-/*
- * The kiosk world's two faces. Both SIL OFL 1.1, self-hosted, licence text
- * beside each file. Variable weight axes, latin subset, so one file per style.
+ * The kiosk world's two faces, and the only two the site loads. Both SIL OFL
+ * 1.1, self-hosted, licence text beside each file. Variable weight axes, latin
+ * subset, so one file per style.
  *
  * Overpass — descended from Highway Gothic, the face on every US road and park
  * sign, which is exactly the object this design is built from. Signage display
@@ -62,7 +41,14 @@
  * screen. Body and UI text. This is the accessibility floor chosen as a face,
  * not a costume.
  *
- * Baloo 2 above stays until the last wave has moved every heading off it.
+ * Baloo 2 was the incumbent display face and is gone as of the chrome wave: no
+ * rule referenced it once the reset below moved to Overpass, so the @font-face
+ * and both files (`/fonts/baloo-2-700.woff2`, `/fonts/baloo-2-OFL.txt`) were
+ * deleted rather than left to be served to nobody.
+ *
+ * `font-display: swap` over `optional`: text rendering in the system font for a
+ * moment and then swapping is a smaller cost here than risking it never
+ * swapping at all on a slow connection.
  */
 @font-face {
   font-family: 'Overpass';
@@ -230,14 +216,20 @@
   --radius-lg: 22px;
 
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-display: 'Baloo 2', var(--font);
 
-  /* The kiosk world's faces (see the @font-face notes). Waves adopt these; the
-     two tokens above keep their values until the chrome wave flips them so an
-     unmigrated page never half-changes. */
+  /* The kiosk world's two faces (see the @font-face notes above). */
   --font-sign: 'Overpass', var(--font);
   --font-read: 'Atkinson Hyperlegible Next', var(--font);
 
+  /* A compatibility alias, kept so nothing breaks mid-migration. `--font-display`
+     was Baloo 2 and is now just another name for the signage face. Write
+     `--font-sign` in new work; this exists only for rules that have not been
+     rewritten yet, and it can go once none are left. */
+  --font-display: var(--font-sign);
+
+  /* The admin bar's height, and only the admin bar's (Admin.astro). The public
+     header is `--header-public-h`, further down beside the `:target` rule that
+     has to track it. */
   --header-h: 60px;
 
   /*
@@ -415,26 +407,45 @@
  * underneath the header. That is the whole job of a skip link, done wrong, and
  * it predates the anchor that exposed it.
  *
- * The numbers track `.site-header`'s own height in Base.astro — 72px, stepping
- * to 64 below 430 — plus a little air. They are literals on both sides because
- * that height is a literal there too; if it moves, this moves with it.
+ * The offset tracks `.site-header`'s own height, which is no longer a literal
+ * on either side: `--header-public-h` is declared here and `Base.astro` sets
+ * the bar to exactly it, so the two cannot drift. Plus a little air.
+ *
+ * Not `--header-h`. That is the admin bar's 60px and it is a different bar on
+ * different pages; keying anchors to it would offset every public page by the
+ * wrong number.
  */
-:target {
-  scroll-margin-top: 86px;
+:root {
+  --header-public-h: 72px;
 }
 @media (max-width: 430px) {
-  :target {
-    scroll-margin-top: 78px;
+  :root {
+    --header-public-h: 64px;
   }
+}
+:target {
+  scroll-margin-top: calc(var(--header-public-h) + var(--space-3));
 }
 
 @layer reset {
+  /*
+   * The world's two faces, as the defaults.
+   *
+   * Body and UI in Atkinson Hyperlegible Next; headings, which on this site are
+   * signage, in Overpass at 800. Both were tokens waiting for the chrome wave so
+   * that no page ever half-changed: a page that set `--font-read` on its own
+   * wrapper already looked right, and one that had not been migrated kept the
+   * system stack. Flipping these is what finishes it.
+   *
+   * A page that sets its own faces locally is unaffected. Anything still asking
+   * for `--font-display` now gets Overpass through the alias above.
+   */
   body {
     margin: 0;
-    font-family: var(--font);
+    font-family: var(--font-read);
     background: var(--bg);
     color: var(--text);
-    line-height: 1.55;
+    line-height: var(--lh-body);
     -webkit-font-smoothing: antialiased;
   }
 
@@ -442,11 +453,11 @@
   h2,
   h3,
   h4 {
-    font-family: var(--font-display);
-    line-height: 1.2;
+    font-family: var(--font-sign);
+    font-weight: 800;
+    line-height: var(--lh-heading);
+    letter-spacing: var(--tracking-tight);
     margin: 0 0 0.5em;
-    font-weight: 700;
-    letter-spacing: -0.015em;
   }
 
   a {
