@@ -61,6 +61,13 @@
   .btn:active {
     transform: var(--press);
   }
+  /* A toggle button (RSVP, filters) inverts when pressed, the same move .chip
+     makes, so "I'm coming" looks different from "I could come". */
+  .btn[aria-pressed='true'] {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
   .btn:disabled,
   .btn[aria-disabled='true'] {
     opacity: 0.6;
