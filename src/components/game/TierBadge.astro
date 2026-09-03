@@ -41,7 +41,7 @@ const heavy =
 ---
 
 <div class="post g-tier" data-tier={slugifyLabel(tier)}>
-  <span class:list={['disc', heavy && 'is-heavy']} aria-hidden="true">{key}</span>
+  <span class:list={['disc', heavy && 'disc--strong']} aria-hidden="true">{key}</span>
   <div class="g-post-body">
     <h2 id={headingId}>{tier}</h2>
     {note && <p class="g-note">{note}</p>}

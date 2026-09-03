@@ -987,8 +987,29 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     markerLayer.clearLayers();
     markersRef.current.clear();
 
+    /*
+     * The preview draws a sample, not the survey.
+     *
+     * All 104 pins at the home page's zoom stack three and four deep and the
+     * park disappears under them — a blot, not a picture. The board already
+     * says "104 places surveyed" in words. The picture keeps every starred
+     * Campsite spot (the ones home tells people to look for) and an even
+     * scatter of the rest, so it reads as the park with places on it and the
+     * full map is one arrow away.
+     */
+    const PREVIEW_PINS = 30;
+    const pinsToDraw = compact
+      ? (() => {
+          const starred = visiblePois.filter((p) => p.isCampsite);
+          const rest = visiblePois.filter((p) => !p.isCampsite);
+          const room = Math.max(0, PREVIEW_PINS - starred.length);
+          const step = room > 0 ? Math.max(1, Math.floor(rest.length / room)) : Infinity;
+          return [...starred, ...rest.filter((_, i) => i % step === 0).slice(0, room)];
+        })()
+      : visiblePois;
+
     const layers: L.Marker[] = [];
-    for (const poi of visiblePois) {
+    for (const poi of pinsToDraw) {
       const flare = liveFlaresRef.current.get(poi.id) ?? null;
       const marker = L.marker([poi.lat, poi.lng], {
         icon: poiIcon({

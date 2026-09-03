@@ -239,6 +239,13 @@
     border-color: var(--live);
     color: #fff; /* white on --live: 5.00:1 light, 5.99:1 dark */
   }
+  /* The heavier rung of a ladder: ink-filled, inverted numeral. A ranked set
+     (raid tiers) uses it for the top of the order; a flat set never does. */
+  .disc--strong {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
 
   /* -------------------------------------------------------- you are here -- */
   /* The board's one animated thing. A red disc in a black ring with its label;
@@ -485,10 +492,16 @@
   .prose li + li {
     margin-block-start: var(--space-2);
   }
+  /* Prose links are ink like every other link: the finish review counted a
+     dozen red words in one phone screen of /about under the old carve-out,
+     which is red decorating a page — the thing the Rationed Red rule exists
+     to prevent. A thicker underline gives a link presence inside a paragraph;
+     colour does not. */
   .prose :where(a:not([class])) {
-    color: var(--accent);
+    color: inherit;
+    text-decoration-thickness: 1.5px;
+    text-decoration-color: var(--text-muted);
     text-underline-offset: 0.15em;
-    text-decoration-thickness: from-font;
   }
   .prose blockquote {
     margin: 0;

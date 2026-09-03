@@ -247,7 +247,7 @@ const nowZone = zoneLabel(new Date());
                       <p class="meet-badges">
                         {cancelled && <span class="badge badge--outline">Cancelled</span>}
                         {!isLive && meetupGroups.ongoing.includes(event) && (
-                          <span class="badge badge--live">Running now</span>
+                          <span class="badge badge--live">Live now</span>
                         )}
                         {recurrence && <span class="badge badge--outline">{recurrence}</span>}
                       </p>

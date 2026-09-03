@@ -183,17 +183,18 @@
   --disc-size: 40px;
   font-size: var(--text-lg);
 }
-.g-tier .disc.is-heavy {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg);
-}
+/* The top rungs (5-star, Mega, Shadow) wear the `.disc--strong` primitive —
+   ink-filled, inverted numeral — so the ladder reads as a ladder. Defined in
+   primitives.css; nothing local. */
 
 /* ---------------------------------------------------------------- grids -- */
 
 .g-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  /* auto-fit, not auto-fill: a tier with one boss (the 5-star rung, most weeks)
+     gets a card that fills its panel instead of a lone 180px card beside three
+     empty tracks, which read as an unfinished sign at desktop widths. */
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;

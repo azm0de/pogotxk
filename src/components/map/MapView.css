@@ -1212,7 +1212,14 @@
  * be settled by source order. Qualified to (0,3,0) so it cannot flip.
  */
 .leaflet-container .leaflet-control-attribution.leaflet-control a {
-  color: var(--accent); /* 5.99:1 on the light pill, 5.54:1 on the dark one */
+  /* Ink, like every other link. A licence credit is neither here, nor now,
+     nor active, and painted red it was the most-repeated red on the site. The
+     underline carries the affordance; the pill's own text colour carries the
+     contrast (16.83:1 light, 14.86:1 dark). */
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 0.16em;
 }
 
 /* Leaflet's default zoom control ships plain white/black and never picked up
