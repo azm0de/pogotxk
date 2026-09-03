@@ -448,6 +448,13 @@
     font-size: var(--text-base);
     line-height: var(--lh-body);
   }
+  /* The paragraph reset comes FIRST. It and the rhythm rule below are both
+     (0,1,0) once the reset is wrapped in :where(), so the tie goes to source
+     order — with the reset written after the rhythm, every direct-child
+     paragraph measured 0px of spacing and the prose ran together. */
+  .prose :where(p) {
+    margin-block: 0;
+  }
   .prose > * + * {
     margin-block-start: var(--space-4);
   }
@@ -469,12 +476,8 @@
   .prose h4 {
     font-size: var(--text-lg);
   }
-  /* :where() keeps these at zero specificity so the `> * + *` rhythm above
-     still wins (a plain `.prose p` out-ranked it and ran paragraphs together)
-     and so a `.btn` inside prose keeps its own colour. */
-  .prose :where(p) {
-    margin-block: 0;
-  }
+  /* :where() keeps this at (0,1,0) so a `.btn` inside prose keeps its own
+     colour. */
   .prose ul,
   .prose ol {
     padding-inline-start: var(--space-6);
