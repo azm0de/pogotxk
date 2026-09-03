@@ -324,9 +324,10 @@ const jsonLd = post
 
   /* --- the body ------------------------------------------------------------
    * `.prose` carries the typography now; the forty `:global()` rules that used
-   * to live here are gone. The one below stays because the global `h1–h4` rule
-   * is unlayered and pins `--font-display`, and `set:html` output carries no
-   * scope attribute for a plain selector to reach.
+   * to live here are gone. The one below stays because `set:html` output carries
+   * no scope attribute for a plain selector to reach, so the article's headings
+   * are named here explicitly (the global reset already sets them in the
+   * signage face; this keeps the page correct if that ever changes).
    */
   .post-body {
     margin-top: var(--space-8);

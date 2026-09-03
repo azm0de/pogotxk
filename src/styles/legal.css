@@ -54,9 +54,9 @@
   border-bottom: 2px solid var(--text);
 }
 
-/* The global reset points h1–h4 at `--font-display` (Baloo 2). The kiosk world
-   signs in Overpass, and inheritance cannot beat a rule that names the element,
-   so each heading level is pointed at the signage face here. */
+/* The global reset now sets h1–h4 in the signage face too (`--font-sign`), so
+   these are belt and braces: inheritance cannot beat a rule that names the
+   element, and naming the face here keeps this sheet honest on its own. */
 .legal h1,
 .legal h2,
 .legal h3,
