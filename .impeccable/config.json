@@ -1,1 +1,53 @@
-{ "buildPath": "code" }
+{
+  "buildPath": "code",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [
+      "src/pages/auth/login.ts",
+      "src/pages/api/admin/import-legacy.ts",
+      "src/lib/markdown.ts"
+    ],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#000",
+        "createdAt": "2026-09-03T18:28:58.546Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fff",
+        "createdAt": "2026-09-03T18:28:58.669Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 0.14)",
+        "createdAt": "2026-09-03T18:28:58.801Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 0.55)",
+        "createdAt": "2026-09-03T18:28:58.958Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 0.4)",
+        "createdAt": "2026-09-03T18:28:59.090Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 0.28)",
+        "createdAt": "2026-09-03T18:28:59.220Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 0.32)",
+        "createdAt": "2026-09-03T18:28:59.335Z"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "cascadia mono",
+        "createdAt": "2026-09-03T18:28:59.474Z"
+      }
+    ]
+  }
+}
