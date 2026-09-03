@@ -19,19 +19,30 @@ function pin(glyph: string): string {
   </svg>`;
 }
 
-/** PokéStop — the classic cube-on-a-post, reduced to a diamond. */
-const GLYPH_POKESTOP = `<path class="pin-glyph" d="M16 9.6l5.2 5.9-5.2 5.9-5.2-5.9z"/>`;
+/**
+ * The three silhouettes, as bare path data.
+ *
+ * Exported because the legend, the popup header and the pins have to be the
+ * same three shapes — a key drawn from different artwork than the thing it
+ * keys is not a key. Coordinates are in the pin's own 32x44 space; render them
+ * anywhere else through `GLYPH_VIEWBOX`, which crops to the glyph's own box.
+ */
+export const GLYPH_PATHS: Record<PoiType, string> = {
+  /** PokéStop — the classic cube-on-a-post, reduced to a diamond. */
+  pokestop: 'M16 9.6l5.2 5.9-5.2 5.9-5.2-5.9z',
+  /** Gym — a tower silhouette. */
+  gym: 'M11.4 20.6v-7.1l4.6-3.6 4.6 3.6v7.1h-3.1v-4.1h-3v4.1z',
+  /** Power Spot — a hexagon, echoing Max/Dynamax framing. */
+  powerspot: 'M16 9.4l5 2.9v5.8l-5 2.9-5-2.9v-5.8z',
+};
 
-/** Gym — a tower silhouette. */
-const GLYPH_GYM = `<path class="pin-glyph" d="M11.4 20.6v-7.1l4.6-3.6 4.6 3.6v7.1h-3.1v-4.1h-3v4.1z"/>`;
-
-/** Power Spot — a hexagon, echoing Max/Dynamax framing. */
-const GLYPH_POWERSPOT = `<path class="pin-glyph" d="M16 9.4l5 2.9v5.8l-5 2.9-5-2.9v-5.8z"/>`;
+/** The tightest box that holds all three glyphs, with a hair of air. */
+export const GLYPH_VIEWBOX = '10.4 9 11.2 12.6';
 
 const GLYPHS: Record<PoiType, string> = {
-  pokestop: GLYPH_POKESTOP,
-  gym: GLYPH_GYM,
-  powerspot: GLYPH_POWERSPOT,
+  pokestop: `<path class="pin-glyph" d="${GLYPH_PATHS.pokestop}"/>`,
+  gym: `<path class="pin-glyph" d="${GLYPH_PATHS.gym}"/>`,
+  powerspot: `<path class="pin-glyph" d="${GLYPH_PATHS.powerspot}"/>`,
 };
 
 /** Ambassador star, badged onto Campsite POIs. */

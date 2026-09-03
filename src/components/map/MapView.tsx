@@ -6,7 +6,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css';
 
 import type { MapData, MapPoi, PoiType } from '~/lib/db/map';
 import { basemapLayer } from './basemap';
-import { photoIcon, poiIcon, TYPE_LABEL, userIcon } from './markerIcons';
+import { GLYPH_PATHS, GLYPH_VIEWBOX, photoIcon, poiIcon, TYPE_LABEL, userIcon } from './markerIcons';
 import './MapView.css';
 
 const TYPES: PoiType[] = ['pokestop', 'gym', 'powerspot'];
@@ -28,6 +28,7 @@ interface Prefs {
   types: PoiType[];
   shapes: string[];
   campsiteOnly: boolean;
+  photos: boolean;
 }
 
 /**
@@ -47,6 +48,9 @@ function loadPrefs(): Prefs | null {
       types: types.length ? types : TYPES,
       shapes: Array.isArray(parsed.shapes) ? parsed.shapes.filter((s) => typeof s === 'string') : [],
       campsiteOnly: parsed.campsiteOnly === true,
+      // Photos are on unless the visitor turned them off, so a first visit shows
+      // the park's own pictures.
+      photos: parsed.photos !== false,
     };
   } catch {
     return null;
@@ -82,6 +86,9 @@ function formatDistance(m: number): string {
 /** Generous rather than tight — this is a phone on park wifi. */
 const FETCH_TIMEOUT_MS = 12000;
 
+/** How long the visible status row holds a message before it clears itself. */
+const FLASH_MS = 9000;
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -108,6 +115,24 @@ function add(parent: Node, ...children: (Node | string)[]): void {
 }
 
 /**
+ * The popup's header strip: the type's colour, its silhouette and its word.
+ *
+ * This replaced a 4px coloured border along the popup's top edge. The border
+ * tied the card to the pin you tapped by hue alone; the strip does the same job
+ * and names the type as well, which is the site's own rule about colour never
+ * being the only signal.
+ */
+function popupHead(modifier: string, label: string, glyph?: string): HTMLElement {
+  const head = el('div', `popup-head popup-head--${modifier}`);
+  if (glyph) {
+    // Our own constant path data, never user text.
+    head.innerHTML = `<svg class="popup-head-glyph" viewBox="${GLYPH_VIEWBOX}" width="13" height="15" aria-hidden="true" focusable="false"><path d="${glyph}"/></svg>`;
+  }
+  add(head, label);
+  return head;
+}
+
+/**
  * Popup contents are built as real DOM rather than an HTML string so that user
  * text (names, captions, credits) is set via textContent and cannot inject
  * markup.
@@ -118,11 +143,9 @@ function buildPoiPopup(
   flare: LiveFlare | null,
   canFlare: boolean,
 ): HTMLElement {
-  // The type modifier carries the spine colour — see `.popup--*` in the CSS.
-  // `--no-photo` lets a photograph-less card wear a faint wash of its own pin
-  // colour instead of reading as a flat panel; with a photo, the image is the
-  // colour and the wash would only muddy it.
-  const root = el('div', `popup popup--${poi.type}${poi.photo ? '' : ' popup--no-photo'}`);
+  const root = el('div', 'popup');
+
+  add(root, popupHead(poi.type, TYPE_LABEL[poi.type], GLYPH_PATHS[poi.type]));
 
   // Live activity goes above everything else — if something is happening here
   // right now, that is the only thing the reader cares about.
@@ -132,7 +155,7 @@ function buildPoiPopup(
     const headline = flare.boss
       ? `${flare.boss} raid`
       : flare.kind === 'remote_invites'
-        ? `Remote invites${flare.needed ? ` — needs ${flare.needed}` : ''}`
+        ? `Remote invites${flare.needed ? `, needs ${flare.needed}` : ''}`
         : 'Active now';
     add(banner, el('strong', undefined, `● ${headline}`));
     add(banner, el('span', undefined, `${minutes} min left`));
@@ -141,7 +164,7 @@ function buildPoiPopup(
   }
 
   if (poi.photo) {
-    const figure = el('figure', 'popup-figure');
+    const figure = el('figure', 'popup-figure figure');
     const img = el('img');
     img.src = `/media/${poi.photo.key}`;
     img.alt = poi.photo.alt ?? poi.name;
@@ -152,30 +175,29 @@ function buildPoiPopup(
     }
     add(figure, img);
 
+    // The credit rides on the image (a licensing obligation), on the shared
+    // five-stop `.credit` ramp rather than the two-stop scrim this used to use.
     if (poi.photo.credit) {
-      add(figure, el('figcaption', 'popup-credit', poi.photo.credit));
+      add(figure, el('figcaption', 'credit popup-credit', poi.photo.credit));
     }
     add(root, figure);
   }
 
   /*
-   * The type badge is filled; the attribute badges are outlined.
-   *
-   * "Gym" and "Campsite" are different kinds of fact — the first is what this
-   * place *is*, the second is something it happens to have. Rendered as two
-   * identical saturated pills, neither one leads and the pair reads as noise
-   * rather than as a heading. Only the type keeps its fill.
+   * Attribute badges only. "Gym" and "Campsite" are different kinds of fact —
+   * the first is what this place *is*, and it now leads in the header strip;
+   * the second is something the place happens to have.
    */
-  const badges = el('div', 'popup-badges');
-  const typeBadge = el('span', `popup-badge popup-badge--${poi.type}`, TYPE_LABEL[poi.type]);
-  add(badges, typeBadge);
-  if (poi.isCampsite) {
-    add(badges, el('span', 'popup-badge popup-badge--attr popup-badge--attr-campsite', '★ Campsite'));
+  if (poi.isCampsite || poi.isMeetupSpot) {
+    const badges = el('div', 'popup-badges');
+    if (poi.isCampsite) {
+      add(badges, el('span', 'popup-badge popup-badge--attr-campsite', '★ Campsite'));
+    }
+    if (poi.isMeetupSpot) {
+      add(badges, el('span', 'popup-badge popup-badge--attr-meetup', 'Meetup spot'));
+    }
+    add(root, badges);
   }
-  if (poi.isMeetupSpot) {
-    add(badges, el('span', 'popup-badge popup-badge--attr popup-badge--attr-meetup', 'Meetup spot'));
-  }
-  add(root, badges);
 
   /*
    * "Campsite - Welcoming", under a badge that already says ★ Campsite, spends
@@ -210,27 +232,26 @@ function buildPoiPopup(
    * unusable on a phone and would fork logic that has to stay in step with the
    * POST /api/flares contract.
    *
-   * First in the row, because it is the reason a signed-in member opened the
-   * pin; Directions and Copy link are what you do when nothing is happening.
+   * First in the row, and the popup's one hot surface, because it is the reason
+   * a signed-in member opened the pin.
    */
   if (canFlare) {
-    const raise = el('a', 'popup-action popup-action--flare');
+    const raise = el('a', 'btn btn--sm btn--arrow popup-action--flare');
     raise.href = `/go?poi=${encodeURIComponent(poi.slug)}`;
-    raise.textContent = flare ? '● Manage flare' : '🔥 Flare this';
+    raise.textContent = flare ? 'Manage the flare' : 'Flare this place';
     add(actions, raise);
   }
 
-  // Ghost, not filled: Flare is the one action this popup wants to be loud —
-  // a second saturated fill next to it was two competing reds of nearly the
-  // same hue, which is what actually read as harsh, not either colour alone.
-  const directions = el('a', 'popup-action popup-action--ghost');
+  // The two actions that leave for somewhere carry the signage arrow; Copy link
+  // stays put, so it does not.
+  const directions = el('a', 'btn btn--sm btn--primary btn--arrow');
   directions.href = `https://www.google.com/maps/dir/?api=1&destination=${poi.lat},${poi.lng}`;
   directions.target = '_blank';
   directions.rel = 'noopener noreferrer';
   directions.textContent = 'Directions';
   add(actions, directions);
 
-  const share = el('button', 'popup-action popup-action--ghost', 'Copy link');
+  const share = el('button', 'btn btn--sm btn--outline', 'Copy link');
   share.type = 'button';
   share.addEventListener('click', async () => {
     const url = new URL(window.location.href);
@@ -280,12 +301,16 @@ interface MapViewProps {
 }
 
 export default function MapView({ initialPoi, compact = false }: MapViewProps) {
+  const shellRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
   const markersRef = useRef(new Map<string, L.Marker>());
   const shapeLayersRef = useRef(new Map<string, L.Layer>());
   const userMarkerRef = useRef<L.Marker | null>(null);
+  /** Community photo pins, held together so the Photos chip can drop them. */
+  const photoLayerRef = useRef<L.LayerGroup | null>(null);
   /** Numbered badges shown along the raid route. */
   const routeOrderRef = useRef<L.LayerGroup | null>(null);
   /** Slug awaiting focus from a ?poi= deep link; cleared once opened. */
@@ -304,6 +329,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
   const [showCampsiteOnly, setShowCampsiteOnly] = useState(
     savedPrefs.current?.campsiteOnly ?? false,
   );
+  const [showPhotos, setShowPhotos] = useState(savedPrefs.current?.photos ?? true);
 
   /** poiId -> the active flare on it, for the pulsing pins. */
   const [liveFlares, setLiveFlares] = useState<Map<number, LiveFlare>>(new Map());
@@ -331,18 +357,48 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
   canFlareRef.current = canFlare;
   const [query, setQuery] = useState('');
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  /**
+   * The same position as a ref, for exactly the reason liveFlaresRef exists:
+   * the popup builder needs it, and having it in the marker-rebuild deps meant
+   * pressing Locate tore down every marker and closed whatever popup was open.
+   */
+  const userPosRef = useRef<[number, number] | null>(null);
+  userPosRef.current = userPos;
+  const [locating, setLocating] = useState(false);
+  /** Announced to assistive technology; the newest message stays put. */
   const [status, setStatus] = useState('');
+  /** The visible twin, which clears itself so the panel does not keep stale news. */
+  const [flash, setFlash] = useState('');
+  const flashTimerRef = useRef(0);
   // Collapsed on phones, where an open panel covers most of the park.
   const [panelOpen, setPanelOpen] = useState(
     () => typeof window === 'undefined' || window.innerWidth > 640,
   );
+  /** Stepped ellipsis for the loading state; see the note in MapView.css. */
+  const [loadingDots, setLoadingDots] = useState(1);
+
+  /**
+   * Says something to everyone, not only to a screen reader.
+   *
+   * `announce` writes both regions; `setStatus` alone is for the running
+   * filter count, which the panel already shows as a number and does not need
+   * to shout.
+   */
+  const announce = useCallback((message: string) => {
+    setStatus(message);
+    setFlash(message);
+    window.clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = window.setTimeout(() => setFlash(''), FLASH_MS);
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(flashTimerRef.current), []);
 
   useEffect(() => {
     let cancelled = false;
     // Without the timeout, a fetch that never settles (a captive portal or a
     // proxy that accepts the connection and never answers, not a clean
     // failure) left `data` null forever — the render below has no branch for
-    // that, so "Loading map…" just sat there with no error and no retry,
+    // that, so "Loading the park…" just sat there with no error and no retry,
     // indefinitely.
     fetch('/api/map.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
       .then((r) => {
@@ -364,6 +420,19 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       cancelled = true;
     };
   }, []);
+
+  /*
+   * The loading state's progress signal for anyone who has asked for reduced
+   * motion. global.css freezes every animation, which stops the Poké Ball dead
+   * and left the loader saying nothing at all. This ticks in React state rather
+   * than CSS, so the kill does not reach it, and it is rendered inside an
+   * `aria-hidden` span so the live region is not re-announced every second.
+   */
+  useEffect(() => {
+    if (data || error) return;
+    const id = window.setInterval(() => setLoadingDots((d) => (d % 3) + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [data, error]);
 
   // --- live flares -----------------------------------------------------------
   // Polled as the baseline, with a WebSocket on top for immediacy. The poll is
@@ -414,8 +483,15 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       types: [...activeTypes],
       shapes: [...activeShapes],
       campsiteOnly: showCampsiteOnly,
+      photos: showPhotos,
     });
-  }, [activeTypes, activeShapes, showCampsiteOnly]);
+  }, [activeTypes, activeShapes, showCampsiteOnly, showPhotos]);
+
+  /** Slug -> POI, so the list, the deep link and the flare sync stop scanning. */
+  const poiBySlug = useMemo(
+    () => new Map((data?.pois ?? []).map((p) => [p.slug, p] as const)),
+    [data],
+  );
 
   const visiblePois = useMemo(() => {
     if (!data) return [];
@@ -464,7 +540,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
    */
   const focusPoi = useCallback(
     (slug: string) => {
-      const poi = data?.pois.find((p) => p.slug === slug);
+      const poi = poiBySlug.get(slug);
       if (!poi) return;
 
       setActiveTypes((prev) => (prev.has(poi.type) ? prev : new Set(prev).add(poi.type)));
@@ -483,10 +559,10 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       cluster.zoomToShowLayer(marker, () => {
         marker.openPopup();
         map.setView([poi.lat, poi.lng], Math.max(map.getZoom(), 18));
-        setStatus(`Showing ${poi.name}.`);
+        announce(`Showing ${poi.name}.`);
       });
     },
-    [data],
+    [poiBySlug, announce],
   );
 
   // --- initialise the map once data lands ---------------------------------
@@ -519,14 +595,13 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
      * people match it against every other street map they have ever seen.
      *
      * The tiles are our own now — Protomaps vector tiles over OpenStreetMap
-     * data, rendered in the browser with the `light` theme (the closest match to
-     * the CARTO Voyager look this map carried before). This replaced keyless
-     * CARTO once CARTO began watermarking it. The layer is built in `basemap.ts`
-     * and MapEditor.tsx builds the same one, so the admin map cannot drift.
+     * data, rendered in the browser with the `light` theme. The layer is built
+     * in `basemap.ts` and MapEditor.tsx builds the same one, so the admin map
+     * cannot drift.
      *
-     * The controls (attribution pill, zoom bar) still theme off `--bg-panel` /
-     * `--text` and so stay dark in dark mode. That is intended: they are chrome
-     * sitting *on* the map, self-contained, and legible either way.
+     * The one control that does NOT theme with the site is the attribution
+     * pill: see MapView.css for why an 88%-opaque panel over a permanently
+     * light map is not a colour.
      */
     basemapLayer().addTo(map);
 
@@ -548,8 +623,12 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       disableClusteringAtZoom: 18,
       iconCreateFunction: (c) =>
         L.divIcon({
-          className: 'cluster-wrap',
-          html: `<span class="cluster">${c.getChildCount()}</span>`,
+          // `.map-cluster`, not `.cluster` — the latter is a layout primitive,
+          // and this unlayered file was overriding it site-wide.
+          className: 'map-cluster-wrap',
+          // The count alone announced as a bare number, which tells a screen
+          // reader nothing about what it is or what pressing it does.
+          html: `<span class="map-cluster" aria-hidden="true">${c.getChildCount()}</span><span class="sr-only">${c.getChildCount()} places, zoom in</span>`,
           iconSize: [38, 38],
         }),
     });
@@ -559,20 +638,24 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     routeOrderRef.current = L.layerGroup();
 
     // Community photo pins sit outside the cluster — there are only nine and
-    // they are a different kind of thing.
+    // they are a different kind of thing. Held in their own layer group so the
+    // Photos chip can take them off the map; they used to be unfilterable.
+    const photoLayer = L.layerGroup();
+    photoLayerRef.current = photoLayer;
     for (const photo of data.communityPhotos) {
       const marker = L.marker([photo.lat, photo.lng], {
-        icon: photoIcon(photo.alt ?? 'Community photo'),
+        icon: photoIcon(`${photo.alt ?? 'Community photo'} — community photo`),
         alt: photo.alt ?? 'Community photo',
       });
       const popup = el('div', 'popup');
-      const fig = el('figure', 'popup-figure');
+      add(popup, popupHead('photo', 'Community photo'));
+      const fig = el('figure', 'popup-figure figure');
       const img = el('img');
       img.src = `/media/${photo.key}`;
       img.alt = photo.alt ?? 'Community photo';
       img.loading = 'lazy';
       add(fig, img);
-      if (photo.credit) add(fig, el('figcaption', 'popup-credit', photo.credit));
+      if (photo.credit) add(fig, el('figcaption', 'credit popup-credit', photo.credit));
       add(popup, fig);
       if (photo.caption) add(popup, el('p', 'popup-desc', photo.caption));
       if (photo.sourceUrl && photo.sourceTitle) {
@@ -587,7 +670,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
         add(popup, src);
       }
       marker.bindPopup(popup, { maxWidth: 320 });
-      marker.addTo(map);
+      marker.addTo(photoLayer);
     }
 
     // Overlay shapes (raid route, hotspot) — built now, added on toggle.
@@ -613,11 +696,67 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       mapRef.current = null;
       clusterRef.current = null;
       routeOrderRef.current = null;
+      photoLayerRef.current = null;
       markersRef.current.clear();
       shapeLayersRef.current.clear();
     };
     // `compact` is a static prop in practice; listed because the effect reads it.
   }, [data, compact]);
+
+  /*
+   * Keep Leaflet's idea of the viewport in step with the element's.
+   *
+   * A map whose container is resized without `invalidateSize()` renders grey
+   * bands where it thinks there is nothing — which happens on every device
+   * rotation, on the home page when the board reflows around the preview, and
+   * whenever the browser's URL bar collapses.
+   *
+   * The same observer measures the two strips the chrome has to reserve. The
+   * attribution's height is a licence obligation expressed in pixels: the
+   * filter panel is pinned above it, and the credit wraps to a second line on a
+   * narrow phone, so this is measured rather than assumed.
+   */
+  useEffect(() => {
+    const shell = shellRef.current;
+    const container = containerRef.current;
+    const map = mapRef.current;
+    if (!shell || !container || !map) return;
+
+    const attribution = container.querySelector<HTMLElement>('.leaflet-control-attribution');
+    const panel = panelRef.current;
+
+    const sync = () => {
+      map.invalidateSize();
+      if (attribution) {
+        const h = Math.ceil(attribution.getBoundingClientRect().height);
+        if (h > 0) shell.style.setProperty('--map-attrib-h', `${h}px`);
+      }
+      shell.style.setProperty(
+        '--map-panel-h',
+        panel ? `${Math.ceil(panel.getBoundingClientRect().height)}px` : '0px',
+      );
+    };
+
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(container);
+    if (attribution) observer.observe(attribution);
+    if (panel) observer.observe(panel);
+    return () => observer.disconnect();
+  }, [data, panelOpen]);
+
+  // --- community photo pins on or off ---------------------------------------
+  // Dropped while a text search is running: the search filters places by name,
+  // and photo pins carry no name to match, so leaving them up makes a filtered
+  // map look unfiltered.
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = photoLayerRef.current;
+    if (!map || !layer) return;
+    const wanted = showPhotos && query.trim() === '';
+    if (wanted) layer.addTo(map);
+    else map.removeLayer(layer);
+  }, [showPhotos, query, data]);
 
   // --- sync markers to the current filter ---------------------------------
   useEffect(() => {
@@ -639,22 +778,22 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
           // The name has to go *inside* the icon markup. `alt` below only lands
           // on an <img> icon, and these are divIcons — so every pin was a
           // focusable role="button" with no accessible name at all.
-          label: `${poi.name} — ${TYPE_LABEL[poi.type]}`,
+          label: pinLabel(poi, flare !== null),
         }),
         // Kept for the non-divIcon path and as documentation of intent.
-        alt: `${poi.name} — ${TYPE_LABEL[poi.type]}`,
+        alt: pinLabel(poi, flare !== null),
         keyboard: true,
         riseOnHover: true,
         // A gym with something happening on it should sit above its neighbours.
         zIndexOffset: flare ? 1000 : 0,
       });
-      // Reads the ref, so the popup is current without re-binding on every
-      // flare refresh.
+      // Reads the refs, so the popup is current without re-binding on every
+      // flare refresh or location fix.
       marker.bindPopup(
         () =>
           buildPoiPopup(
             poi,
-            userPos,
+            userPosRef.current,
             liveFlaresRef.current.get(poi.id) ?? null,
             canFlareRef.current,
           ),
@@ -688,22 +827,23 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     const map = mapRef.current;
     cluster.zoomToShowLayer(marker, () => {
       marker.openPopup();
-      const poi = data.pois.find((p) => p.slug === wanted);
+      const poi = poiBySlug.get(wanted);
       if (poi) map?.setView([poi.lat, poi.lng], Math.max(map.getZoom(), 18));
       setStatus(`Showing ${poi?.name ?? wanted}.`);
     });
-    // Deliberately NOT depending on liveFlares: rebuilding markers destroys any
-    // popup open on them, and flares refresh on a timer. Icon updates are
-    // handled by the effect below instead.
-  }, [visiblePois, data, userPos]);
+    // Deliberately NOT depending on liveFlares or userPos: rebuilding markers
+    // destroys any popup open on them, flares refresh on a timer and pressing
+    // Locate would otherwise close the popup the reader was standing in front
+    // of. Both are read from refs above; the effects below refresh open popups
+    // in place instead.
+  }, [visiblePois, data, poiBySlug]);
 
   // --- reflect flare changes without rebuilding markers ----------------------
   useEffect(() => {
     if (!data) return;
-    const poiById = new Map(data.pois.map((p) => [p.id, p]));
 
     for (const [slug, marker] of markersRef.current) {
-      const poi = data.pois.find((p) => p.slug === slug);
+      const poi = poiBySlug.get(slug);
       if (!poi) continue;
 
       const isLive = liveFlares.has(poi.id);
@@ -714,17 +854,16 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       if (marked._pogoLive === isLive) continue;
 
       marked._pogoLive = isLive;
-      const source = poiById.get(poi.id) ?? poi;
       marker.setIcon(
         poiIcon({
-          type: source.type,
-          isCampsite: source.isCampsite,
-          isMeetupSpot: source.isMeetupSpot,
+          type: poi.type,
+          isCampsite: poi.isCampsite,
+          isMeetupSpot: poi.isMeetupSpot,
           isLive,
           // `setIcon` replaces the icon's whole DOM, so omitting the label here
           // would silently strip the accessible name off any pin the moment a
           // flare went up or came down — the pins most worth reaching.
-          label: `${source.name} — ${TYPE_LABEL[source.type]}`,
+          label: pinLabel(poi, isLive),
         }),
       );
       marker.setZIndexOffset(isLive ? 1000 : 0);
@@ -734,7 +873,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       // function so the banner appears rather than requiring a close/reopen.
       if (marker.isPopupOpen()) marker.getPopup()?.update();
     }
-  }, [liveFlares, data, visiblePois]);
+  }, [liveFlares, data, poiBySlug, visiblePois]);
 
   // --- who is looking, for the "Flare this" action ---------------------------
   // Guests and signed-out visitors never see it: the POST would be refused by
@@ -762,14 +901,15 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     };
   }, [compact]);
 
-  // A popup opened before /api/me.json resolved was built without the action.
-  // Same fix as the flare banner above: re-run its content function in place
-  // rather than making the trainer close and reopen the pin.
+  // A popup opened before /api/me.json resolved was built without the action,
+  // and one opened before Locate ran was built without the distance line. Same
+  // fix for both: re-run the content function in place rather than making the
+  // trainer close and reopen the pin.
   useEffect(() => {
     for (const marker of markersRef.current.values()) {
       if (marker.isPopupOpen()) marker.getPopup()?.update();
     }
-  }, [canFlare]);
+  }, [canFlare, userPos]);
 
   // --- numbered walking order along the raid route --------------------------
   // The route is a bare polyline: it shows you the shape of the walk but not
@@ -839,12 +979,12 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
   // Only clears a filter that would hide the target; the focus itself happens
   // in the marker-sync effect above once the marker actually exists.
   useEffect(() => {
-    if (!initialPoi || !data) return;
-    const poi = data.pois.find((p) => p.slug === initialPoi);
+    if (!initialPoi) return;
+    const poi = poiBySlug.get(initialPoi);
     if (!poi) return;
     setActiveTypes((prev) => (prev.has(poi.type) ? prev : new Set(prev).add(poi.type)));
     setShowCampsiteOnly((prev) => (prev && !poi.isCampsite ? false : prev));
-  }, [initialPoi, data]);
+  }, [initialPoi, poiBySlug]);
 
   const toggleType = useCallback((type: PoiType) => {
     setActiveTypes((prev) => {
@@ -876,12 +1016,14 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
 
   const locate = useCallback(() => {
     if (!navigator.geolocation) {
-      setStatus('Location is not available in this browser.');
+      announce('This browser cannot share your location. Pick a place from the list instead.');
       return;
     }
-    setStatus('Finding your location…');
+    setLocating(true);
+    announce('Finding your location…');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        setLocating(false);
         const here: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         setUserPos(here);
         const map = mapRef.current;
@@ -898,19 +1040,30 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
               ? p
               : best,
           );
-          setStatus(
+          announce(
             `You are here. Nearest gym: ${nearest.name}, ${formatDistance(
               distanceMeters(here, [nearest.lat, nearest.lng]),
             )} away.`,
           );
         } else {
-          setStatus('You are here.');
+          announce('You are here.');
         }
       },
-      (err) => setStatus(`Could not get your location: ${err.message}`),
+      (err) => {
+        setLocating(false);
+        // Name the problem and the way out of it, rather than repeating the
+        // browser's own string.
+        const message =
+          err.code === err.PERMISSION_DENIED
+            ? 'Location is blocked for this site. Turn it on in your browser settings, or pick a place from the list.'
+            : err.code === err.TIMEOUT
+              ? 'Finding your location took too long. Try again, or pick a place from the list.'
+              : 'Could not get your location. Move somewhere with a clearer view of the sky and try again.';
+        announce(message);
+      },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     );
-  }, [data]);
+  }, [data, announce]);
 
   if (error) {
     return (
@@ -924,15 +1077,25 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
   }
 
   return (
-    <div className={`map-shell${compact ? ' map-shell--compact' : ''}`}>
-      <div ref={containerRef} className="map-canvas" aria-label="Map of Spring Lake Park Pokémon GO locations" role="application" />
+    <div
+      ref={shellRef}
+      className={`map-shell${compact ? ' map-shell--compact' : ''}`}
+      aria-busy={!data}
+    >
+      <div
+        ref={containerRef}
+        className="map-canvas"
+        aria-label="Map of Spring Lake Park Pokémon GO locations"
+        role="application"
+      />
 
       {!data && (
         <div className="map-loading" role="status">
           <span className="map-loading-ball" aria-hidden="true">
             {/* A Poké Ball, turning. Fixed brand colours rather than tokens so it
                 reads the same on the always-light map ground in either theme;
-                global reduced-motion freezes the spin to a resting ball. */}
+                global reduced-motion freezes the spin to a resting ball, which
+                is why the words carry a stepped ellipsis of their own. */}
             <svg viewBox="0 0 44 44" width="40" height="40" aria-hidden="true" focusable="false">
               <circle cx="22" cy="22" r="20" fill="#fff" stroke="#0f0f11" strokeWidth="2.5" />
               <path d="M2 22a20 20 0 0 1 40 0Z" fill="#c8071c" />
@@ -940,7 +1103,12 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
               <circle cx="22" cy="22" r="6" fill="#fff" stroke="#0f0f11" strokeWidth="2.5" />
             </svg>
           </span>
-          Loading the park…
+          <span>
+            Loading the park
+            <span className="map-loading-dots" aria-hidden="true">
+              {'.'.repeat(loadingDots)}
+            </span>
+          </span>
         </div>
       )}
 
@@ -949,10 +1117,11 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
           type="button"
           className="map-locate"
           onClick={locate}
+          aria-busy={locating}
           title="Show my location"
           aria-label="Show my location"
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
             <path
               fill="currentColor"
               d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8m8.94 3A9 9 0 0 0 13 3.06V1h-2v2.06A9 9 0 0 0 3.06 11H1v2h2.06A9 9 0 0 0 11 20.94V23h2v-2.06A9 9 0 0 0 20.94 13H23v-2ZM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14"
@@ -962,110 +1131,150 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       )}
 
       {!compact && (
-      <section className={`map-panel${panelOpen ? '' : ' map-panel--closed'}`} aria-label="Map filters">
-        <button
-          type="button"
-          className="panel-handle"
-          aria-expanded={panelOpen}
-          onClick={() => setPanelOpen((v) => !v)}
+        <section
+          ref={panelRef}
+          className="map-panel panel panel--flush"
+          aria-label="Map legend and filters"
         >
-          <span className="panel-grip" aria-hidden="true" />
-          <strong>Map Filters</strong>
-          <span className="panel-chevron" aria-hidden="true">▾</span>
-        </button>
+          {flash && <p className="map-status">{flash}</p>}
 
-        <div className="panel-body" hidden={!panelOpen}>
-          <label className="map-search">
-            <span className="sr-only">Search locations by name</span>
-            <input
-              type="search"
-              placeholder="Search locations…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </label>
-
-          <div className="filter-row" role="group" aria-label="Filter by location type">
-            {TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                className={`chip chip--${type}`}
-                aria-pressed={activeTypes.has(type)}
-                onClick={() => toggleType(type)}
-              >
-                <span className={`chip-dot chip-dot--${type}`} aria-hidden="true" />
-                {TYPE_LABEL[type]}
-                {data && <span className="chip-count">{data.counts[type]}</span>}
-              </button>
-            ))}
-          </div>
-
-          <div className="filter-row" role="group" aria-label="Map overlays">
-            <button
-              type="button"
-              className="chip chip--campsite"
-              aria-pressed={showCampsiteOnly}
-              onClick={() => setShowCampsiteOnly((v) => !v)}
-            >
-              <span aria-hidden="true">★</span> Campsite only
-            </button>
-            {(data?.shapes ?? []).map((shape) => (
-              <button
-                key={shape.slug}
-                type="button"
-                className={`chip chip--${shape.slug}`}
-                aria-pressed={activeShapes.has(shape.slug)}
-                onClick={() => toggleShape(shape.slug)}
-              >
-                {shape.name}
-              </button>
-            ))}
-          </div>
-
-          {/*
-            Every location, listed. At 104 there is no reason to make anyone hunt
-            for a pin — the list is short enough to read end to end, and it is
-            the only way to find a place by name without knowing where it sits.
-
-            It shows what the map shows: the search box and the type chips above
-            filter both, so the count below is always the answer to "how many am
-            I looking at".
-          */}
-          <div className="poi-list-head">
-            <h3>Locations</h3>
-            <span className="poi-count">
-              {data && visiblePois.length === data.pois.length
-                ? `all ${data.pois.length}`
-                : `${visiblePois.length} of ${data?.pois.length ?? 0}`}
+          <button
+            type="button"
+            className="panel-handle"
+            aria-expanded={panelOpen}
+            onClick={() => setPanelOpen((v) => !v)}
+          >
+            Legend
+            <span className="sr-only"> and filters</span>
+            <span className="panel-chevron" aria-hidden="true">
+              ▾
             </span>
-          </div>
+          </button>
 
-          {listedPois.length === 0 ? (
-            <p className="poi-empty">No locations match that search.</p>
-          ) : (
-            <ul className="poi-list">
-              {listedPois.map((poi) => (
-                <li key={poi.slug}>
-                  <button type="button" className="poi-row" onClick={() => focusPoi(poi.slug)}>
-                    <span className={`chip-dot chip-dot--${poi.type}`} aria-hidden="true" />
-                    <span className="poi-row-name">{poi.name}</span>
-                    {poi.isMeetupSpot && <span className="poi-row-tag">Meetup spot</span>}
-                    {poi.isCampsite && !poi.isMeetupSpot && (
-                      <span className="poi-row-star" aria-label="Campsite">
-                        ★
-                      </span>
-                    )}
-                  </button>
-                </li>
+          {/* The key stays out of the fold: a legend you have to open is not a
+              legend. Hue, silhouette and word on every row. */}
+          <ul className="map-legend">
+            {TYPES.map((type) => (
+              <li key={type} className="legend-item">
+                <span className={`chip-dot chip-dot--${type}`} aria-hidden="true" />
+                <svg
+                  className="legend-glyph"
+                  viewBox={GLYPH_VIEWBOX}
+                  width="12"
+                  height="14"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path d={GLYPH_PATHS[type]} />
+                </svg>
+                {TYPE_LABEL[type]}
+              </li>
+            ))}
+          </ul>
+
+          <div className="panel-body" hidden={!panelOpen}>
+            <label className="map-search">
+              <span className="sr-only">Search locations by name</span>
+              <input
+                type="search"
+                placeholder="Search locations…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+
+            <div className="filter-row" role="group" aria-label="Filter by location type">
+              {TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  className={`chip chip--${type}`}
+                  aria-pressed={activeTypes.has(type)}
+                  onClick={() => toggleType(type)}
+                >
+                  <span className={`chip-dot chip-dot--${type}`} aria-hidden="true" />
+                  {TYPE_LABEL[type]}
+                  {data && <span className="chip-count">{data.counts[type]}</span>}
+                </button>
               ))}
-            </ul>
-          )}
+            </div>
 
-          {/* Tile attribution deliberately lives in Leaflet's own control, not
-              here — it has to stay visible whether or not this panel is open. */}
-        </div>
-      </section>
+            <div className="filter-row" role="group" aria-label="Map overlays">
+              <button
+                type="button"
+                className="chip chip--campsite"
+                aria-pressed={showCampsiteOnly}
+                onClick={() => setShowCampsiteOnly((v) => !v)}
+              >
+                <span aria-hidden="true">★</span> Campsite only
+              </button>
+              <button
+                type="button"
+                className="chip chip--photos"
+                aria-pressed={showPhotos}
+                onClick={() => setShowPhotos((v) => !v)}
+              >
+                Photos
+                {data && <span className="chip-count">{data.communityPhotos.length}</span>}
+              </button>
+              {(data?.shapes ?? []).map((shape) => (
+                <button
+                  key={shape.slug}
+                  type="button"
+                  className={`chip chip--${shape.slug}`}
+                  aria-pressed={activeShapes.has(shape.slug)}
+                  onClick={() => toggleShape(shape.slug)}
+                >
+                  {shape.name}
+                </button>
+              ))}
+            </div>
+
+            {/*
+              Every location, listed. At 104 there is no reason to make anyone hunt
+              for a pin — the list is short enough to read end to end, and it is
+              the only way to find a place by name without knowing where it sits.
+
+              It shows what the map shows: the search box and the type chips above
+              filter both, so the count below is always the answer to "how many am
+              I looking at".
+            */}
+            <div className="poi-list-head">
+              <h2>Locations</h2>
+              <span className="poi-count">
+                {data && visiblePois.length === data.pois.length
+                  ? `all ${data.pois.length}`
+                  : `${visiblePois.length} of ${data?.pois.length ?? 0}`}
+              </span>
+            </div>
+
+            {listedPois.length === 0 ? (
+              <p className="poi-empty">No locations match that search.</p>
+            ) : (
+              <ul className="poi-list">
+                {listedPois.map((poi) => (
+                  <li key={poi.slug}>
+                    <button type="button" className="poi-row" onClick={() => focusPoi(poi.slug)}>
+                      <span className={`chip-dot chip-dot--${poi.type}`} aria-hidden="true" />
+                      <span className="poi-row-name">{poi.name}</span>
+                      {poi.isMeetupSpot && <span className="poi-row-tag">Meetup spot</span>}
+                      <span className="poi-row-type">{TYPE_LABEL[poi.type]}</span>
+                      {poi.isCampsite && (
+                        <span className="poi-row-star" aria-label="Campsite">
+                          ★
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Tile attribution deliberately lives in Leaflet's own control, not
+                here — it has to stay visible whether or not this panel is open,
+                and the panel reserves its height so it is never covered. */}
+          </div>
+        </section>
       )}
 
       <p className="sr-only" role="status" aria-live="polite">
@@ -1073,4 +1282,16 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       </p>
     </div>
   );
+}
+
+/**
+ * A pin's accessible name.
+ *
+ * The flare is part of it: a pulsing red ring is the only thing that marks a
+ * live pin on screen, and neither the pulse nor the ring reaches a screen
+ * reader.
+ */
+function pinLabel(poi: MapPoi, isLive: boolean): string {
+  const base = `${poi.name} — ${TYPE_LABEL[poi.type]}`;
+  return isLive ? `${base}, active flare` : base;
 }

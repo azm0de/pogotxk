@@ -23,7 +23,14 @@ const initialPoi = Astro.url.searchParams.get('poi') ?? undefined;
   */}
   <h1 class="sr-only">Spring Lake Park map</h1>
 
-  <MapView client:only="react" initialPoi={initialPoi} />
+  {/*
+    The page sets the reading face and nothing else: the island owns the whole
+    surface, and a wrapper that took any layout of its own would fight the
+    map's `height: 100%`.
+  */}
+  <div class="map-page">
+    <MapView client:only="react" initialPoi={initialPoi} />
+  </div>
 
   <script>
     // The service worker caches map tiles, which is what makes this usable in
@@ -54,8 +61,15 @@ const initialPoi = Astro.url.searchParams.get('poi') ?? undefined;
 </Base>
 
 <style>
+  /* The island fills whatever box it is given; this only passes the font down
+     and keeps the full-bleed height intact. */
+  .map-page {
+    height: 100%;
+    font-family: var(--font-read);
+  }
   .noscript-note {
-    padding: 32px clamp(16px, 4vw, 40px);
-    max-width: 60ch;
+    padding: var(--space-8) var(--gutter-lg);
+    max-width: var(--measure);
+    font-family: var(--font-read);
   }
 </style>

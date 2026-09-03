@@ -135,8 +135,8 @@
   --poi-powerspot-badge: var(--poi-powerspot); /* white on it: 4.87 */
   /* Campsite had no badge form, which is why the shiny mark sat at 1.81:1 on
      the sunken panel. Same derivation as the others: scaled in sRGB until white
-     clears 4.5, hue held at ~34°. Calculated 4.58; re-measure in the browser
-     the first time it ships as text or an icon. */
+     clears 4.5, hue held at ~34°. Measured in the browser on the live board's
+     "Meet me here" badge: white on it is 4.62, both themes. */
   --poi-campsite-badge: #9e6a27;
   /* The same idea as *text or an icon on the page*, which needs the opposite
      move in dark mode (the badge value is 3.60:1 on the dark panel). */
