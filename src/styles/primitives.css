@@ -1,0 +1,498 @@
+/*
+ * Primitives — the shared vocabulary of the trail-map kiosk world.
+ *
+ * Imported by Base.astro only. Never by Admin.astro: that single fact is what
+ * keeps the admin editors out of the redesign while `.btn`, `.card` and the rest
+ * become global names.
+ *
+ * Everything here sits in `@layer primitives`, which is declared *below* the
+ * unlayered cascade in global.css. Astro scoped styles are unlayered, so a page
+ * that still carries its own `.btn` keeps winning until its wave migrates it —
+ * that is the transition safety net, and it is also why "my primitive is not
+ * applying" will be the first bug anyone hits. To adjust a primitive from a
+ * page, set a custom property on a scoped wrapper (`--btn-pad-inline`,
+ * `--card-pad`, `--panel-pad`) rather than reaching for `:global(.btn)`.
+ *
+ * React islands have no scoping. They get exactly what is written here.
+ *
+ * Nobody edits this file after Wave 0. A missing primitive is written locally
+ * with a `PROMOTE:` comment and batched into here at the end.
+ *
+ * Every colour is a token from global.css. Filled surfaces with white text use
+ * `--accent-solid`, never `--accent`, because `--accent` inverts in dark mode.
+ */
+
+@layer primitives {
+  /* ------------------------------------------------------------ container -- */
+  .container {
+    width: 100%;
+    max-width: var(--container);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  /* ------------------------------------------------------------- buttons -- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: 44px;
+    padding: var(--btn-pad-block, var(--space-3)) var(--btn-pad-inline, var(--space-5));
+    border: 2px solid transparent;
+    border-radius: var(--btn-radius, var(--radius-sm));
+    font-family: var(--font);
+    font-size: var(--text-base);
+    font-weight: 700;
+    line-height: var(--lh-ui);
+    color: var(--text);
+    background: var(--bg-panel);
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      transform var(--dur-1) var(--ease-out),
+      background-color var(--dur-1) var(--ease-out),
+      border-color var(--dur-1) var(--ease-out),
+      color var(--dur-1) var(--ease-out);
+  }
+  .btn:hover {
+    transform: var(--lift);
+  }
+  .btn:active {
+    transform: var(--press);
+  }
+  .btn:disabled,
+  .btn[aria-disabled='true'] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn--primary {
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: #fff; /* white on --accent-solid: 5.99:1, both themes */
+  }
+  .btn--primary:hover {
+    background: var(--red-800);
+    border-color: var(--red-800);
+  }
+  .btn--outline {
+    background: transparent;
+    border-color: currentColor;
+  }
+  .btn--ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--accent);
+  }
+  .btn--discord {
+    background: var(--discord);
+    border-color: var(--discord);
+    color: #fff; /* white on --discord: 4.61:1 measured */
+  }
+  .btn--block {
+    display: flex;
+    width: 100%;
+  }
+  .btn--sm {
+    min-height: 32px;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  /* The signage arrow: every action on the board points somewhere. Drawn, not
+     a glyph, so it sits on the text's own baseline at the text's own weight. */
+  .btn--arrow::after {
+    content: '';
+    flex: none;
+    width: 1em;
+    height: 1em;
+    background: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12h15'/%3E%3Cpath d='M13 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform var(--dur-1) var(--ease-out);
+  }
+  .btn--arrow:hover::after {
+    transform: translateX(2px);
+  }
+
+  /* ------------------------------------------------------- 24px targets -- */
+  /* The documented fix for standalone links inside running text: the visual
+     stays the same, the hit area grows to the floor. Apply to the <a>, not
+     its wrapper. */
+  .target {
+    display: inline-block;
+    padding-block: 5px;
+    margin-block: -5px;
+  }
+
+  /* -------------------------------------------------------------- panels -- */
+  /* A sign bolted over the board. White, a soft real shadow, a rule under its
+     head. This is the world's container; cards are for lists inside it. */
+  .panel {
+    background: var(--bg-panel);
+    color: var(--text);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    padding: var(--panel-pad, var(--space-5));
+  }
+  .panel--flush {
+    --panel-pad: 0;
+  }
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    padding-bottom: var(--space-2);
+    margin-bottom: var(--space-4);
+    border-bottom: 2px solid var(--text);
+  }
+  .panel-head h1,
+  .panel-head h2 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-weight: 800;
+    font-size: var(--display-sm);
+    line-height: var(--lh-heading);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  /* ---------------------------------------------------------------- cards -- */
+  /* Surface only. Layout belongs to the consumer. `--card-pad` is a token so
+     a bleeding image can cancel it with `calc(var(--card-pad) * -1)` on every
+     side at once. */
+  .card {
+    background: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--card-pad, var(--space-4));
+  }
+
+  /* ------------------------------------------------------ numbered posts -- */
+  /* Waypoint posts keyed to a legend: the number is a lookup key, so it earns
+     its place. Never use for decoration. */
+  .post {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--space-3);
+    align-items: start;
+  }
+  .disc {
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid var(--text);
+    background: var(--bg-panel);
+    color: var(--text);
+    font-family: var(--font-sign);
+    font-weight: 800;
+    font-size: var(--text-md);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .disc--live {
+    background: var(--live);
+    border-color: var(--live);
+    color: #fff; /* white on --live: 5.00:1 light, 5.99:1 dark */
+  }
+
+  /* -------------------------------------------------------- you are here -- */
+  /* The board's one animated thing. A red disc in a black ring with its label;
+     marks the user on the map, the current page in the nav, and anything
+     happening now. */
+  .here {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-family: var(--font-sign);
+    font-weight: 800;
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .here::before {
+    content: '';
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-solid);
+    box-shadow:
+      0 0 0 2px var(--bg-panel),
+      0 0 0 4px var(--text);
+    animation: here-pulse 1.6s var(--ease-out) infinite;
+  }
+  @keyframes here-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.18);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .here::before {
+      animation: none;
+    }
+  }
+
+  /* ---------------------------------------------------------------- badge -- */
+  /* A small printed label. Static, never interactive; use .chip for controls. */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-xs);
+    background: var(--badge-bg, var(--bg-sunken));
+    color: var(--badge-fg, var(--text));
+    font-family: var(--font-sign);
+    font-weight: 700;
+    font-size: var(--text-2xs);
+    line-height: 1.3;
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .badge--outline {
+    background: transparent;
+    border: 1.5px solid currentColor;
+  }
+  .badge--live {
+    --badge-bg: var(--live);
+    --badge-fg: #fff;
+  }
+
+  /* ----------------------------------------------------------------- chip -- */
+  /* An interactive pill with aria-pressed. The pressed state uses text-on-bg
+     inverted so it holds in both themes without a second token. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 36px;
+    padding: var(--space-2) var(--space-3);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    background: var(--bg-panel);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-1) var(--ease-out),
+      border-color var(--dur-1) var(--ease-out),
+      color var(--dur-1) var(--ease-out);
+  }
+  .chip:hover {
+    border-color: var(--text);
+  }
+  .chip[aria-pressed='true'] {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
+
+  /* --------------------------------------------------------- section head -- */
+  /* A heading row with an optional trailing link or count, ruled beneath like
+     a panel title. No label above it; the heading carries its own weight. */
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-block: var(--space-8) var(--space-4);
+    padding-bottom: var(--space-2);
+    border-bottom: 2px solid var(--text);
+  }
+  .section-head h2 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-weight: 800;
+    font-size: var(--display-sm);
+    line-height: var(--lh-heading);
+    letter-spacing: var(--tracking-tight);
+  }
+  .section-head .count {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-sm);
+  }
+
+  /* ------------------------------------------------------------ empty state -- */
+  /* A status, not an invitation: dashed and quiet. Put the invitation in a
+     solid panel with a real button. */
+  .empty-state {
+    min-height: 108px;
+    display: grid;
+    align-content: center;
+    padding: var(--space-6);
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+  }
+
+  /* ---------------------------------------------------------- on-image credit -- */
+  /* A press credit that rides on its photograph. The five-stop ramp is the one
+     measured on /blog (4.50–19.38:1 with 0% of text area under 4.5); the two-stop
+     version it replaces sat at 2.50:1 where the glyphs actually are. The parent
+     figure must be `position: relative`. */
+  .figure {
+    position: relative;
+    overflow: hidden;
+  }
+  .credit {
+    position: absolute;
+    inset: auto 0 0 0;
+    margin: 0;
+    padding: var(--space-6) var(--space-3) var(--space-2);
+    color: #fff;
+    font-size: var(--text-xs);
+    line-height: 1.3;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+    background: linear-gradient(
+      to top,
+      rgb(0 0 0 / 0.93) 0%,
+      rgb(0 0 0 / 0.89) 38%,
+      rgb(0 0 0 / 0.74) 62%,
+      rgb(0 0 0 / 0.36) 84%,
+      transparent 100%
+    );
+  }
+  .credit a {
+    color: inherit;
+  }
+
+  /* ---------------------------------------------------------------- prose -- */
+  /* Markdown output and long-form legal text share one typography. The pipeline
+     emits bare elements, so no :global() is needed here. */
+  .prose {
+    max-width: var(--prose-measure, var(--measure));
+    font-size: var(--text-base);
+    line-height: var(--lh-body);
+  }
+  .prose > * + * {
+    margin-block-start: var(--space-4);
+  }
+  .prose h2,
+  .prose h3,
+  .prose h4 {
+    margin-block: var(--space-8) var(--space-3);
+    line-height: var(--lh-heading);
+    letter-spacing: var(--tracking-tight);
+  }
+  .prose h2 {
+    font-size: var(--display-sm);
+    padding-bottom: var(--space-2);
+    border-bottom: var(--prose-rule, 2px solid var(--text));
+  }
+  .prose h3 {
+    font-size: var(--text-xl);
+  }
+  .prose h4 {
+    font-size: var(--text-lg);
+  }
+  .prose p {
+    margin-block: 0;
+  }
+  .prose ul,
+  .prose ol {
+    padding-inline-start: var(--space-6);
+  }
+  .prose li + li {
+    margin-block-start: var(--space-2);
+  }
+  .prose a {
+    color: var(--accent);
+    text-underline-offset: 0.15em;
+    text-decoration-thickness: from-font;
+  }
+  .prose blockquote {
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-sunken);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+  }
+  .prose code {
+    font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, monospace;
+    font-size: 0.92em;
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-xs);
+    background: var(--bg-sunken);
+  }
+  .prose pre {
+    padding: var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--bg-sunken);
+    overflow-x: auto;
+    min-width: 0;
+  }
+  .prose pre code {
+    padding: 0;
+    background: none;
+  }
+  .prose hr {
+    border: 0;
+    border-top: 1px solid var(--border-strong);
+    margin-block: var(--space-8);
+  }
+  .prose figure {
+    margin: 0;
+  }
+  .prose figcaption {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+  }
+  .prose img {
+    border-radius: var(--radius-sm);
+  }
+  /* Tables stay tables (display: block on <table> strips their semantics).
+     Wrap wide ones in .table-scroll, which is keyboard-reachable. */
+  .prose table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+  .prose th,
+  .prose td {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .prose th {
+    font-weight: 700;
+    border-bottom: 2px solid var(--text);
+  }
+  .table-scroll {
+    overflow-x: auto;
+    min-width: 0;
+  }
+  .prose del {
+    color: var(--text-muted);
+  }
+
+  /* -------------------------------------------------------------- layout -- */
+  .stack > * + * {
+    margin-block-start: var(--stack-gap, var(--space-4));
+  }
+  .cluster {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--cluster-gap, var(--space-2));
+  }
+}

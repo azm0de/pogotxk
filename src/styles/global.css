@@ -1,4 +1,19 @@
 /*
+ * Cascade layers, declared first so the order is fixed before any rule lands.
+ *
+ *   reset       element defaults (body, headings, links, images, buttons)
+ *   primitives  src/styles/primitives.css — the shared component vocabulary
+ *
+ * Everything else in this file stays *unlayered* on purpose: the tokens, the
+ * a11y floor (:focus-visible, .skip-link, .sr-only, [hidden], the reduced-motion
+ * rule) and the art utilities. Unlayered CSS beats any layer regardless of
+ * specificity, and Astro's scoped <style> blocks are unlayered too — so a page
+ * that still carries its own `.btn` keeps winning over the primitive until its
+ * wave migrates it, and no primitive can ever out-rank the focus ring.
+ */
+@layer reset, primitives;
+
+/*
  * Design tokens.
  *
  * A Poké Ball: red top, white bottom, black band. Replaces the deep navy and
@@ -32,6 +47,43 @@
   font-weight: 700;
   font-display: swap;
   src: url('/fonts/baloo-2-700.woff2') format('woff2');
+}
+
+/*
+ * The kiosk world's two faces. Both SIL OFL 1.1, self-hosted, licence text
+ * beside each file. Variable weight axes, latin subset, so one file per style.
+ *
+ * Overpass — descended from Highway Gothic, the face on every US road and park
+ * sign, which is exactly the object this design is built from. Signage display
+ * only: headings, numerals, labels, the running head.
+ *
+ * Atkinson Hyperlegible Next — designed by the Braille Institute for low-vision
+ * reading; wide, unambiguous letterforms that survive sunlight and a cracked
+ * screen. Body and UI text. This is the accessibility floor chosen as a face,
+ * not a costume.
+ *
+ * Baloo 2 above stays until the last wave has moved every heading off it.
+ */
+@font-face {
+  font-family: 'Overpass';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/overpass-wght.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/atkinson-hyperlegible-next-wght.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-style: italic;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/atkinson-hyperlegible-next-italic-wght.woff2') format('woff2');
 }
 
 :root {
@@ -95,6 +147,11 @@
   --poi-pokestop-badge: #2c76c5; /* white on it: 4.66 */
   --poi-gym-badge: #b75b2f; /* white on it: 4.62 */
   --poi-powerspot-badge: var(--poi-powerspot); /* white on it: 4.87 */
+  /* Campsite had no badge form, which is why the shiny mark sat at 1.81:1 on
+     the sunken panel. Same derivation as the others: scaled in sRGB until white
+     clears 4.5, hue held at ~34°. Calculated 4.58; re-measure in the browser
+     the first time it ships as text or an icon. */
+  --poi-campsite-badge: #9e6a27;
 
   /* Teams */
   --team-valor: #e8453c;
@@ -172,7 +229,111 @@
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-display: 'Baloo 2', var(--font);
 
+  /* The kiosk world's faces (see the @font-face notes). Waves adopt these; the
+     two tokens above keep their values until the chrome wave flips them so an
+     unmigrated page never half-changes. */
+  --font-sign: 'Overpass', var(--font);
+  --font-read: 'Atkinson Hyperlegible Next', var(--font);
+
   --header-h: 60px;
+
+  /*
+   * Discord's brand blue, for the one button that literally means "go to
+   * Discord". A brand colour, not a palette colour: it appears nowhere else.
+   * White on it measured 4.61:1. It was a raw hex in three files; now it is one
+   * token with its ratio beside it.
+   */
+  --discord: #5865f2;
+
+  /* ------------------------------------------------------------- type ramp --
+   * Two ramps, because they have different jobs.
+   *
+   * The UI ramp is fixed rem. These are chips, labels and meta read at arm's
+   * length in sunlight; a fluid size here only ever makes small text smaller on
+   * the device where it is hardest to read. The steps come from a census of the
+   * 299 font-size declarations that existed before this scale did.
+   */
+  --text-2xs: 0.6875rem; /* 11px — uppercase micro-labels only, never a sentence */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.8125rem; /* 13px */
+  --text-md: 0.875rem; /* 14px */
+  --text-base: 1rem; /* 16px — body */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.3125rem; /* 21px */
+
+  /*
+   * The display ramp is fluid, and every middle term is rem + vw rather than a
+   * bare vw: a bare-vw clamp ignores the reader's root font size, which is a
+   * WCAG 1.4.4 exposure the old per-page H1 clamps all carried.
+   */
+  --display-sm: clamp(1.35rem, 1.15rem + 1vw, 1.75rem);
+  --display-md: clamp(1.6rem, 1.25rem + 1.75vw, 2.25rem);
+  --display-lg: clamp(1.9rem, 1.35rem + 2.75vw, 2.9rem);
+  --display-xl: clamp(2.2rem, 1.4rem + 4vw, 3.6rem); /* reserved for the hero */
+
+  --lh-display: 1.08;
+  --lh-heading: 1.2;
+  --lh-ui: 1.35;
+  --lh-body: 1.55;
+  --tracking-display: -0.02em;
+  --tracking-tight: -0.015em;
+  --tracking-caps: 0.06em;
+
+  /* ---------------------------------------------------------------- space -- */
+  --space-1: 0.25rem; /*  4 */
+  --space-2: 0.5rem; /*  8 */
+  --space-3: 0.75rem; /* 12 */
+  --space-4: 1rem; /* 16 */
+  --space-5: 1.25rem; /* 20 */
+  --space-6: 1.5rem; /* 24 */
+  --space-8: 2rem; /* 32 */
+  --space-10: 2.5rem; /* 40 */
+  --space-12: 3rem; /* 48 */
+  --space-16: 4rem; /* 64 */
+  --space-20: 5rem; /* 80 */
+
+  /* Fluid rhythm. These replace the hand-rolled clamps value-for-value. */
+  --space-section: clamp(2rem, 1.25rem + 3.75vw, 5rem);
+  --space-band: clamp(1.25rem, 0.85rem + 2vw, 2.5rem);
+  --gutter: clamp(0.75rem, 0.4rem + 1.75vw, 1.5rem);
+  --gutter-lg: clamp(1rem, 0.5rem + 2.5vw, 2rem);
+
+  --container: 1100px;
+  --container-wide: 1180px;
+  --container-narrow: 900px;
+  --measure: 68ch;
+
+  /* --------------------------------------------------------------- motion --
+   * Durations and one exponential ease-out. The transforms are *values*, not
+   * rules: every hover lift is written `transform: var(--lift)`, and the
+   * reduced-motion block below sets both to `none`. The blanket rule further
+   * down only zeroes durations, so a scoped `:hover { transform }` would
+   * otherwise survive it and merely stop animating — the element still jumps.
+   * With the token, the escape is structural and nobody can forget it.
+   */
+  --dur-1: 120ms;
+  --dur-2: 160ms;
+  --dur-3: 220ms;
+  --dur-4: 320ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --lift: translateY(-2px);
+  --press: scale(0.97);
+
+  /* -------------------------------------------------------------- z-index --
+   * MapView.css is exempt from this scale: its 400–1000 values interleave with
+   * Leaflet's own pane order, and renumbering them silently reorders markers
+   * under popups.
+   */
+  --z-art: -1;
+  --z-content: 1;
+  --z-sticky-header: 900;
+  --z-overlay: 1000;
+  --z-sheet: 1100;
+  --z-skip-link: 2000;
+
+  --radius-xs: 4px;
+  --radius-pill: 999px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -224,14 +385,16 @@
   }
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 
-html {
-  -webkit-text-size-adjust: 100%;
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
 }
 
 /*
@@ -256,38 +419,40 @@ html {
   }
 }
 
-body {
-  margin: 0;
-  font-family: var(--font);
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
-}
+@layer reset {
+  body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
 
-h1,
-h2,
-h3,
-h4 {
-  font-family: var(--font-display);
-  line-height: 1.2;
-  margin: 0 0 0.5em;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-}
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    line-height: 1.2;
+    margin: 0 0 0.5em;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
 
-a {
-  color: var(--accent);
-}
+  a {
+    color: var(--accent);
+  }
 
-img {
-  max-width: 100%;
-  height: auto;
-}
+  img {
+    max-width: 100%;
+    height: auto;
+  }
 
-button {
-  font: inherit;
-  color: inherit;
+  button {
+    font: inherit;
+    color: inherit;
+  }
 }
 
 /* Visible focus for keyboard users, suppressed for pointer input. */
@@ -309,6 +474,17 @@ button {
   border: 0;
 }
 
+/*
+ * The `hidden` attribute must win. The UA rule is `display: none` at (0,1,0),
+ * and any class that sets `display: grid` or `inline-flex` on the same element
+ * out-ranks it — which is how /auth/device shipped a focusable "Get a new code"
+ * button that the script believed it had hidden. Unlayered and !important so
+ * nothing can beat it by accident.
+ */
+[hidden] {
+  display: none !important;
+}
+
 /* Skip link — first tab stop on every page. */
 .skip-link {
   position: absolute;
@@ -328,6 +504,10 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --lift: none;
+    --press: none;
+  }
   *,
   *::before,
   *::after {
@@ -472,7 +652,8 @@ button {
 /* Enough room for the motif to be visible behind the text. Without this the
    pins are clipped to a two-line paragraph and read as stray marks. */
 .live-empty.empty-art-bg,
-.go-empty.empty-art-bg {
+.go-empty.empty-art-bg,
+.empty-state.empty-art-bg {
   min-height: 108px;
   display: grid;
   align-content: center;
