@@ -45,6 +45,13 @@ Owner: main thread. **Applied 2026-09-02 (during W2, files disjoint from W2 owne
 - Leek Duck weather/type icons: **words are fine**; the proxy stays narrow.
 - Recurring-meetup grouping bug: **fix now** in this branch, with a test.
 
+## Finish reviewer's open items — resolved 2026-09-03
+- `/map` locate placement on wide screens: **fixed** (`b38382f`) — sits beside the legend's bottom corner at ≥641px, measured clear of zoom and attribution at 1280.
+- `/go` Raid vs Gym takedown icons: **kept**. Raid is the red full-width tile, Gym takedown an outlined tile with the strike arrow; the label is always present, so the icon pair never carries the distinction alone.
+- `/live` empty-state pin motif below 640px: **kept off**. At 390 the copy fills the dashed panel; the two arrow buttons are the next step, and no decoration beats a colliding one.
+- Signed-in paths (`/go` sheets, populated `/live`, delete success, device approval): **still need Justin's Discord session** — verified with fixtures only.
+- Branch policy (Justin, 2026-09-03): `impeccable-redesign` stays a separate design branch; **no push, PR or merge** until he says so.
+
 ## Fonts
 - [x] Atkinson regular/italic files were swapped at download; swapped back on disk 2026-09-02 (regular = 33,996 B, italic = 37,644 B). Any wave that screenshotted "oblique body text" before the swap should be re-checked.
 
