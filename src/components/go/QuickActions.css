@@ -1,228 +1,334 @@
 /*
- * One-handed layout. The action grid is pinned to the bottom because that is
- * where a thumb reaches on a phone held normally; the board above it is
- * glanceable but not something you need to touch.
+ * The action panel: the board's controls, bolted over the map like every other
+ * panel on this site.
+ *
+ * The grid used to be pinned to the bottom of the screen under ~400px of empty
+ * board. That put the only thing this page exists for below a void, and the
+ * void was the first thing anyone saw. Now the panel head, the gate and the
+ * grid come first, in that order, and the reading — what this is, and what is
+ * live — sits under them. The whole panel scrolls as one, so nothing can be
+ * clipped off the bottom of a short phone.
+ *
+ * Every colour is a token; the only raw values left are `#fff` on a filled
+ * surface, each with its measured ratio beside it.
  */
 
 .go {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* Takes whatever `.go-page` has left after the (usually absent) bubble
+     control, and scrolls inside it rather than growing the document. */
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   /* Respect the home indicator / notch on phones. */
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding: var(--space-4) var(--gutter) calc(var(--space-8) + env(safe-area-inset-bottom, 0));
 }
 
+/* ------------------------------------------------------------------- head -- */
+
+/* `.panel-head` supplies the type and the black rule. Baseline alignment is
+   wrong once a 48px round button shares the row. */
 .go-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px 8px;
   flex: none;
+  align-items: center;
 }
-.go-head h1 {
+.go-head-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+/* The location line rides beside the heading rather than under it: it is a
+   status, not a subtitle, and it is the only thing on this screen that is ever
+   in the middle of changing. */
+.go-status {
   margin: 0;
-  font-size: 1.25rem;
-}
-.go-sub {
-  margin: 2px 0 0;
-  font-size: 0.78rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
+
 .go-head-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
+  flex: none;
 }
 
 .go-bell {
-  width: 44px;
-  height: 44px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--bg-sunken);
-  font-size: 1.1rem;
-  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
   flex: none;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg-panel);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
 }
-.go-bell.is-on {
-  border-color: var(--poi-campsite);
-  background: color-mix(in srgb, var(--poi-campsite) 18%, transparent);
+/* On is a *now* state, so it takes the red — and the icon loses its slash and
+   the label changes with it, because colour is never the only signal here. */
+.go-bell[aria-pressed='true'] {
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+  color: #fff; /* white on --accent-solid: 5.99:1, both themes */
 }
 .go-bell:disabled {
-  opacity: 0.5;
-}
-
-.go-note {
-  flex: none;
-  margin: 0 12px 8px;
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
-  border-left: 3px solid var(--poi-gym);
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .go-user {
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-family: var(--font-sign);
+  font-size: var(--text-sm);
+  font-weight: 700;
   color: var(--text-muted);
 }
-.go-signin {
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: #5865f2;
-  color: #fff;
-  font-size: 0.82rem;
-  font-weight: 700;
+
+/* A quiet note, not a coloured side-tab. The 3px `border-left` this used to
+   carry was the detector's `side-tab` finding, and the hue it borrowed
+   (`--poi-gym`) belongs to the map. */
+.go-note {
+  flex: none;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------- gate -- */
+
+/*
+ * One line and one button, directly above the grid it explains. The border was
+ * `--poi-campsite` (#f2a33c) — a map hue doing duty as a page border, and the
+ * only orange on the screen.
+ */
+.go-gate {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+.go-gate-note {
+  flex: 1 1 15rem;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--lh-ui);
+  color: var(--text);
+}
+.go-gate .btn {
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- actions -- */
+
+.go-actions {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+@media (min-width: 520px) {
+  .go-actions {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/*
+ * Bespoke rather than `.btn`: these are the walking targets, sized for a thumb
+ * at a gym rather than for a page. Built on the same tokens, and the hover and
+ * press go through `--lift` / `--press`, so reduced motion cancels them.
+ */
+.go-action {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: center;
+  align-content: center;
+  /* Well past the 48px floor: this is pressed one-handed, often while walking. */
+  min-height: 76px;
+  padding: var(--space-3) var(--space-2);
+  border: 2px solid var(--text);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+  text-align: center;
   text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform var(--dur-1) var(--ease-out),
+    background-color var(--dur-1) var(--ease-out);
+}
+.go-action:hover {
+  transform: var(--lift);
+  background: var(--bg-sunken);
+}
+.go-action:active {
+  transform: var(--press);
+}
+.go-action-label {
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: var(--text-md);
+  line-height: var(--lh-ui);
+  letter-spacing: var(--tracking-tight);
+}
+
+/*
+ * Raid, full width and first. It is why anyone opens this screen, and the one
+ * tile allowed the red — the world's rule is here / now / active plus the
+ * primary action, and this is the primary action.
+ */
+.go-action--primary {
+  grid-column: 1 / -1;
+  grid-template-columns: auto 1fr;
+  justify-items: start;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  min-height: 88px;
+  padding: var(--space-4) var(--space-5);
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+  color: #fff; /* white on --accent-solid: 5.99:1, both themes */
+  text-align: left;
+}
+.go-action--primary > svg {
+  grid-row: 1 / span 2;
+}
+.go-action--primary:hover {
+  background: var(--red-800);
+  border-color: var(--red-800);
+}
+.go-action--primary .go-action-label {
+  font-size: var(--text-xl);
+}
+.go-action-hint {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: var(--lh-ui);
+}
+
+/* The last tile fills the short row rather than leaving a hole beside it. */
+.go-action:last-child {
+  grid-column: span 2;
+}
+
+/* ------------------------------------------------------------------- lede -- */
+
+/*
+ * What this screen is, for someone who has just installed it and never seen a
+ * flare. Two lines, under the grid, because it explains the offer rather than
+ * being it.
+ */
+.go-lede {
+  --panel-pad: var(--space-4);
+  flex: none;
+  margin-bottom: var(--space-4);
+}
+.go-lede-line {
+  margin: 0;
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: var(--text-lg);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-tight);
+}
+.go-lede-sub {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
 }
 
 /* ------------------------------------------------------------------ board -- */
 
 .go-board {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px 12px 8px;
-  -webkit-overflow-scrolling: touch;
+  flex: none;
+}
+.go-board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
+  border-bottom: 2px solid var(--text);
+}
+.go-board-head h2 {
+  margin: 0;
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: var(--text-lg);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-tight);
 }
 
-/*
- * With no flares the board is still the tallest thing on the screen — it takes
- * whatever the head and the action grid leave, around 430px on a phone. A
- * single top-aligned sentence in that space reads as a page that failed to
- * load rather than a board with nothing on it, so the empty state is centred
- * in the space it has.
- *
- * Scoped with :has so it applies only while empty; once flares arrive the
- * board must stay top-aligned and scroll from the top.
- *
- * `.go-intro` is the same case wearing different copy — it is what fills that
- * space for someone who cannot post — so it centres on the same terms.
- */
-.go-board:has(.go-empty),
-.go-board:has(.go-intro) {
-  display: grid;
-  align-content: center;
-}
 .go-board ul {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
-.go-empty,
-.go-gate {
-  margin: 8px 4px;
-  padding: 14px 16px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  font-size: 0.88rem;
-  color: var(--text-muted);
-  text-align: center;
-}
-.go-gate {
-  border-style: solid;
-  border-color: var(--poi-campsite);
-  color: var(--text);
-  flex: none;
-}
-/*
- * The link is the only way out of the gate, so it carries weight the
- * surrounding sentence does not. Colour is left to the base `a` rule —
- * `--accent` is the one red measured against this background.
- */
-.go-gate a {
-  font-weight: 700;
-  text-underline-offset: 2px;
-}
-
-/* ------------------------------------------------------------ what this is -- */
-
-/*
- * Shown instead of the empty-board sentence when the viewer cannot post. It
- * replaces that line rather than sitting alongside it, so it inherits the
- * centring above and adds no height to a screen whose action grid has to stay
- * within thumb reach.
- */
-.go-intro {
-  margin: 8px 4px;
-  padding: 18px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-sunken);
-  text-align: center;
-}
-
-.go-intro-lede {
+/* `.empty-state` carries the dashed box and the muted ink; this only tightens
+   the copy and centres it over the pin motif. */
+.go-empty {
   margin: 0;
-  font-size: 1.02rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-/*
- * Left-aligned inside a centred box. Centring each line individually leaves
- * three ragged axes, and the emoji column is the thing that makes them scan as
- * a list at all — which only works if they share a left edge.
- */
-.go-intro-list {
-  list-style: none;
-  margin: 14px auto 0;
-  padding: 0;
-  display: grid;
-  gap: 9px;
-  width: fit-content;
-  max-width: 100%;
-  text-align: left;
-  font-size: 0.86rem;
-  color: var(--text-muted);
-}
-.go-intro-list li {
-  display: grid;
-  grid-template-columns: 1.5em 1fr;
-  gap: 8px;
-  align-items: start;
-}
-
-.go-intro-foot {
-  margin: 14px 0 0;
-  font-size: 0.78rem;
-  color: var(--text-muted);
+  padding: var(--space-5);
+  font-size: var(--text-sm);
+  text-align: center;
 }
 
 .go-flare {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: var(--space-3);
+  padding: var(--space-3);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.go-flare-emoji {
-  font-size: 1.5rem;
+.go-flare-icon {
   flex: none;
+  display: inline-grid;
+  place-items: center;
+  color: var(--text);
 }
 .go-flare-body {
   display: grid;
+  gap: 2px; /* a hairline between two lines of one label; no token is this small */
   min-width: 0;
   flex: 1;
 }
 .go-flare-body strong {
-  font-size: 0.95rem;
+  font-size: var(--text-base);
+  line-height: var(--lh-ui);
 }
 .go-flare-body span {
-  font-size: 0.76rem;
+  font-size: var(--text-sm);
+  line-height: var(--lh-ui);
   color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Wraps rather than truncating: the place name and the minutes left are the
+     two facts a glance is here for, and an ellipsis eats whichever is longer. */
+  overflow-wrap: anywhere;
 }
 .go-flare-note {
   color: var(--text) !important;
@@ -231,26 +337,31 @@
 
 .go-join {
   flex: none;
-  min-width: 62px;
-  min-height: 44px;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--accent);
-  font-weight: 700;
-  font-size: 0.85rem;
+  min-width: 64px;
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  border: 2px solid var(--text);
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
+/* In is a *now* state, so this is where the red belongs on a flare row — not
+   on the invitation to join. The word changes too. */
 .go-join.is-in {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+  color: #fff; /* white on --accent-solid: 5.99:1, both themes */
 }
 
 .go-flare-actions {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /*
@@ -262,14 +373,14 @@
 .go-standdown {
   flex: none;
   min-width: 52px;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-muted);
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 /* --live/--live-text, not a new --danger token: this is the same pair the admin
@@ -281,126 +392,101 @@
   color: var(--live-text);
 }
 
-/* ---------------------------------------------------------------- actions -- */
-
-.go-actions {
-  flex: none;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 10px 12px 14px;
-  background: var(--bg-panel);
-  border-top: 1px solid var(--border);
-}
-
-.go-action {
-  display: grid;
-  gap: 4px;
-  justify-items: center;
-  /* Comfortably above the 44px minimum touch target, for use while walking. */
-  min-height: 76px;
-  padding: 10px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-sunken);
-  cursor: pointer;
-}
-.go-action:active {
-  transform: scale(0.97);
-}
-/*
- * 0.62, not 0.4. Disabled controls are exempt from the contrast minimum, so
- * 0.4 was not a violation — but this grid is the only thing on screen that
- * says what the app actually does, and to a signed-out first-time visitor it
- * was barely legible. The gate message above already explains why they are
- * inactive; the buttons themselves should still read as an offer.
- */
-.go-action:disabled {
-  opacity: 0.62;
-  cursor: not-allowed;
-}
-.go-action-emoji {
-  font-size: 1.6rem;
-  line-height: 1;
-}
-.go-action-label {
-  font-size: 0.76rem;
-  font-weight: 700;
-}
-
 /* ------------------------------------------------------------------ sheet -- */
 
 .go-sheet-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--z-overlay);
   background: rgb(0 0 0 / 0.55);
   display: flex;
   align-items: flex-end;
 }
 
 .go-sheet {
+  position: relative;
+  z-index: var(--z-sheet);
   width: 100%;
   max-height: 88vh;
   overflow-y: auto;
-  padding: 16px 16px calc(20px + env(safe-area-inset-bottom, 0));
+  padding: var(--space-4) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom, 0));
   background: var(--bg-panel);
+  color: var(--text);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   display: grid;
-  gap: 14px;
-  animation: sheet-in 0.18s ease-out;
+  gap: var(--space-4);
+  animation: sheet-in var(--dur-4) var(--ease-out);
 }
 @keyframes sheet-in {
   from {
     transform: translateY(14%);
   }
 }
+/* The blanket rule in global.css only shortens durations; a sheet that still
+   starts 14% down and snaps up in 0.01ms is a jump, not a stilled animation. */
+@media (prefers-reduced-motion: reduce) {
+  .go-sheet {
+    animation: none;
+  }
+}
 
-.go-sheet header {
+.go-sheet-head {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--space-3);
 }
-.go-sheet header > span {
-  font-size: 1.9rem;
-  line-height: 1;
+.go-sheet-head > svg {
+  flex: none;
+  margin-top: 2px; /* optical: drops the 30px glyph onto the heading's cap line */
+  color: var(--text);
 }
-.go-sheet h2 {
+.go-sheet-head > div {
+  min-width: 0;
+}
+.go-sheet-head h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: var(--text-xl);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-tight);
 }
-.go-sheet header p {
+.go-sheet-head p {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .go-close {
+  display: inline-grid;
+  place-items: center;
   margin-left: auto;
-  width: 40px;
-  height: 40px;
-  border: 0;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--border-strong);
   border-radius: 50%;
   background: var(--bg-sunken);
-  font-size: 1.4rem;
-  line-height: 1;
+  color: var(--text);
   cursor: pointer;
 }
 
 .go-field {
   display: grid;
-  gap: 5px;
-  font-size: 0.78rem;
+  gap: var(--space-1);
+  font-family: var(--font-sign);
+  font-size: var(--text-sm);
   font-weight: 700;
   color: var(--text-muted);
 }
 .go-field select,
 .go-field input {
   width: 100%;
-  /* 16px minimum stops iOS Safari zooming the viewport on focus. */
-  font-size: 16px;
+  min-height: 48px;
+  font-size: 16px; /* raw on purpose: under 16px iOS Safari zooms the viewport on focus */
+  font-family: var(--font-read);
   font-weight: 400;
-  padding: 12px 12px;
-  border: 1px solid var(--border);
+  padding: var(--space-3);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
   color: var(--text);
@@ -409,20 +495,23 @@
 .go-stepper {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .go-stepper button {
   width: 48px;
   height: 48px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 50%;
   background: var(--bg-sunken);
-  font-size: 1.3rem;
+  color: var(--text);
+  font-size: var(--text-xl);
   cursor: pointer;
 }
 .go-stepper output {
-  font-size: 1.4rem;
+  font-family: var(--font-sign);
+  font-size: var(--display-sm);
   font-weight: 800;
+  color: var(--text);
   min-width: 2ch;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -430,46 +519,53 @@
 
 .go-fire {
   min-height: 54px;
-  border: 0;
+  border: 2px solid var(--accent-solid);
   border-radius: var(--radius);
-  background: var(--poi-gym);
-  color: #fff;
-  font-size: 1rem;
+  background: var(--accent-solid);
+  color: #fff; /* white on --accent-solid: 5.99:1, both themes */
+  font-family: var(--font-sign);
+  font-size: var(--text-base);
   font-weight: 800;
   cursor: pointer;
+  transition: transform var(--dur-1) var(--ease-out);
+}
+.go-fire:active {
+  transform: var(--press);
 }
 .go-fire:disabled {
   opacity: 0.6;
+  transform: none;
+  cursor: not-allowed;
 }
 
 .go-toast {
   position: fixed;
   left: 50%;
-  bottom: calc(108px + env(safe-area-inset-bottom, 0));
+  bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0));
   transform: translateX(-50%);
-  z-index: 1100;
+  z-index: var(--z-sheet);
   margin: 0;
-  padding: 11px 18px;
-  border-radius: 999px;
-  font-size: 0.86rem;
-  font-weight: 600;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: 700;
   box-shadow: var(--shadow-lg);
   max-width: 90vw;
   text-align: center;
 }
 .go-toast--ok {
   background: var(--accent-solid);
-  color: #fff;
+  color: #fff; /* white on --accent-solid: 5.99:1, both themes */
 }
 .go-toast--err {
   background: var(--live);
-  color: #fff;
+  color: #fff; /* white on --live: 5.00:1 light, 5.99:1 dark */
 }
 
-/* On a wide screen this is still usable, just centred rather than full-bleed. */
+/* On a wide screen this is still one panel, just centred rather than full-bleed. */
 @media (min-width: 720px) {
   .go {
-    max-width: 520px;
+    max-width: 560px;
     margin: 0 auto;
     border-inline: 1px solid var(--border);
   }

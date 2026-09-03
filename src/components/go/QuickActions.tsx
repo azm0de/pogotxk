@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { MapPoi } from '~/lib/db/map';
 import type { SessionUser } from '~/lib/auth/types';
+import { FLARE_KIND_LABEL, type FlareKind } from '~/lib/db/flares';
 import { DISCORD_INVITE } from '~/lib/socials';
+import { FlareIcon } from './flareIcons';
 import './QuickActions.css';
 
 /**
  * The one-handed surface: designed to be used standing in a park, holding a
- * phone, with Pokémon GO open in the other app. Everything actionable sits in
- * the bottom third where a thumb reaches, and every target is at least 48px.
+ * phone, with Pokémon GO open in the other app. The action grid is the first
+ * thing under the page head — everything that is only *reading* sits below it —
+ * and every target is at least 48px.
  */
 
-type Kind = 'raid' | 'gym_takedown' | 'meetup_here' | 'remote_invites' | 'trade' | 'help';
-
 interface ActionDef {
-  kind: Kind;
-  emoji: string;
-  label: string;
+  kind: FlareKind;
   hint: string;
   /** Which POIs make sense for this action; null means "anywhere". */
   poiTypes: MapPoi['type'][] | null;
@@ -23,19 +23,37 @@ interface ActionDef {
   needsCount?: boolean;
 }
 
+/**
+ * Raid first and alone on its row: it is why this screen exists, and the tile
+ * order is the priority order.
+ *
+ * The names are NOT here. `FLARE_KIND_LABEL` in src/lib/db/flares.ts is the one
+ * source: this file used to carry its own shorter set ("Invites", "Takedown",
+ * "I'm here") so the same flare was called two different things depending on
+ * whether you were looking at /go or at the board. The hint lines stay local —
+ * they are this screen's own coaching, not part of the flare vocabulary.
+ */
 const ACTIONS: ActionDef[] = [
-  { kind: 'raid', emoji: '🔥', label: 'Raid', hint: 'Starting a raid, need people', poiTypes: ['gym'], needsBoss: true },
-  { kind: 'remote_invites', emoji: '📣', label: 'Invites', hint: 'Spare remote invites', poiTypes: ['gym'], needsBoss: true, needsCount: true },
-  { kind: 'gym_takedown', emoji: '⚔️', label: 'Takedown', hint: 'Taking a gym, want backup', poiTypes: ['gym'] },
-  { kind: 'meetup_here', emoji: '👋', label: "I'm here", hint: 'Say where you are', poiTypes: null },
-  { kind: 'trade', emoji: '🤝', label: 'Trade', hint: 'Looking to trade', poiTypes: null },
-  { kind: 'help', emoji: '🙋', label: 'Need a hand', hint: 'Anything else', poiTypes: null },
+  { kind: 'raid', hint: 'Starting a raid, need people', poiTypes: ['gym'], needsBoss: true },
+  {
+    kind: 'remote_invites',
+    hint: 'Spare remote invites',
+    poiTypes: ['gym'],
+    needsBoss: true,
+    needsCount: true,
+  },
+  { kind: 'gym_takedown', hint: 'Taking a gym, want backup', poiTypes: ['gym'] },
+  { kind: 'meetup_here', hint: 'Say where you are', poiTypes: null },
+  { kind: 'trade', hint: 'Looking to trade', poiTypes: null },
+  { kind: 'help', hint: 'Anything else', poiTypes: null },
 ];
+
+const labelFor = (kind: FlareKind) => FLARE_KIND_LABEL[kind];
 
 /** Mirrors the payload of GET /api/flares — see src/lib/db/flares.ts. */
 interface Flare {
   id: number;
-  kind: Kind;
+  kind: FlareKind;
   boss: string | null;
   tier: string | null;
   needed: number | null;
@@ -50,6 +68,49 @@ interface Flare {
 interface RaidBoss {
   name: string;
   tier: string;
+}
+
+/* Drawn, not glyphs: "×" and a bell emoji are whatever face the reader's
+   system happens to ship. Same stroke spec as ./flareIcons.tsx. */
+function BellIcon({ off = false }: { off?: boolean }) {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 1.8 5.5 1.8 5.5H4.2S6 14 6 9.5z" />
+      <path d="M10.2 18.6a2.2 2.2 0 0 0 3.6 0" />
+      {off && <path d="M3.5 3.5l17 17" />}
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M6.5 6.5l11 11" />
+      <path d="M17.5 6.5l-11 11" />
+    </svg>
+  );
 }
 
 function distanceMeters(a: [number, number], b: [number, number]): number {
@@ -110,6 +171,99 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
+/**
+ * Where a tile sends someone who cannot post yet.
+ *
+ * Signed out, the whole round trip is preserved: `next` carries `/go?action=…`
+ * so Discord hands the trainer back to this screen with the sheet they tapped
+ * already open. The `action` parameter has to ride *inside* `next` — `safeNext`
+ * takes a path, and anything left beside it on /auth/login is dropped.
+ *
+ * Signed in but not a member, the only thing that unblocks the tile is joining
+ * the Discord, which is exactly what the gate above the grid says.
+ */
+function gatedHref(kind: FlareKind, signedIn: boolean): string {
+  if (signedIn) return DISCORD_INVITE;
+  return `/auth/login?next=${encodeURIComponent(`/go?action=${kind}`)}`;
+}
+
+/* Everything a Tab can land on inside a sheet. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+interface SheetProps {
+  /** Id of the sheet's own <h2>; labels the dialog and takes focus on open. */
+  titleId: string;
+  onClose: () => void;
+  children: ReactNode;
+}
+
+/**
+ * The bottom sheet, with the focus behaviour `aria-modal` promises.
+ *
+ * Both sheets on this screen claimed `role="dialog" aria-modal="true"` and did
+ * none of it: opening one left focus on the tile behind the backdrop, Tab
+ * walked straight out into the page underneath, and Escape did nothing. On a
+ * phone that is invisible; with a keyboard or a screen reader it means the
+ * dialog is a rumour.
+ *
+ * Focus lands on the heading rather than the first field on purpose — a sheet
+ * that opens with the cursor already inside a <select> skips its own title and
+ * pops a native picker on some Android builds.
+ */
+function Sheet({ titleId, onClose, children }: SheetProps) {
+  const sheetRef = useRef<HTMLElement | null>(null);
+  const openerRef = useRef<Element | null>(null);
+
+  useEffect(() => {
+    openerRef.current = document.activeElement;
+    document.getElementById(titleId)?.focus();
+    return () => {
+      // Back to the tile that opened it. Guarded on still being in the
+      // document: closing a flare's Edit sheet can remove the row it came from.
+      const opener = openerRef.current;
+      if (opener instanceof HTMLElement && document.contains(opener)) opener.focus();
+    };
+  }, [titleId]);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const stops = Array.from(sheetRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+    if (stops.length === 0) return;
+
+    const at = stops.indexOf(document.activeElement as HTMLElement);
+    if (event.shiftKey && at <= 0) {
+      // `at === -1` is the heading, which is where focus starts.
+      event.preventDefault();
+      stops[stops.length - 1].focus();
+    } else if (!event.shiftKey && at === stops.length - 1) {
+      event.preventDefault();
+      stops[0].focus();
+    }
+  };
+
+  return (
+    <div className="go-sheet-backdrop" onClick={onClose} onKeyDown={onKeyDown} role="presentation">
+      <section
+        className="go-sheet"
+        ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </section>
+    </div>
+  );
+}
+
 interface QuickActionsProps {
   user: SessionUser | null;
   /**
@@ -122,7 +276,8 @@ interface QuickActionsProps {
   initialPoi?: string;
   /**
    * Kind of action to arrive with its sheet already open, from
-   * `/go?action=<kind>` — the installed app's home-screen shortcut.
+   * `/go?action=<kind>` — the installed app's home-screen shortcut, and where
+   * a signed-out trainer lands after tapping a tile and signing in.
    *
    * Unrecognised values are ignored rather than surfaced: this is the one
    * entry point with no map screen in front of it to have already validated
@@ -278,9 +433,11 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
    * opens. An unrecognised `action` kind just finds nothing in `ACTIONS` and
    * is dropped, leaving the ordinary picker.
    *
-   * `action` is gated on `canPost`: the grid's buttons are disabled for
-   * anyone who cannot post, and a deep link must not open a sheet — with a
-   * live "Send" button — that the grid itself would not let them reach.
+   * `action` is gated on `canPost`: a deep link must not open a sheet — with a
+   * live "Send" button — that this account cannot actually post from. This is
+   * also the return leg of a signed-out tile tap: the tile sent them to
+   * /auth/login with `next=/go?action=<kind>`, so the sheet they reached for
+   * opens the moment they are back and allowed.
    * `poi` has no such gate; picking a location isn't posting.
    */
   useEffect(() => {
@@ -645,46 +802,51 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
   const mayAlter = (flare: Flare) =>
     canModerate || (user != null && flare.author?.id === user.id);
 
+  /*
+   * A location line, not an error line. "Location off — pick manually" read as
+   * something having gone wrong; nothing has, and the screen works either way —
+   * it just means the Where field starts empty instead of guessing.
+   */
+  const locationLine =
+    gpsState === 'ok' && here
+      ? 'Nearest gyms first'
+      : gpsState === 'locating'
+        ? 'Finding you…'
+        : 'Pick the spot by hand';
+
+  /* The boss suggestions only mean anything while a sheet with a boss field is
+     open. Rendered unconditionally, the 17 generic names in the list were 17
+     bare options sitting in the accessibility tree of a screen where nobody
+     could post at all. */
+  const wantsBossList = Boolean(action?.needsBoss || editing);
+
   return (
     <div className="go">
-      <header className="go-head">
-        <div>
+      <div className="panel-head go-head">
+        <div className="go-head-title">
           <h1>Quick actions</h1>
-          <p className="go-sub">
-            {gpsState === 'ok' && here
-              ? 'Located — nearest gyms first'
-              : gpsState === 'locating'
-                ? 'Finding you…'
-                : gpsState === 'denied'
-                  ? 'Location off — pick manually'
-                  : 'Location unavailable'}
-          </p>
+          <p className="go-status">{locationLine}</p>
         </div>
-        <div className="go-head-right">
-          {canPost && (pushState === 'on' || pushState === 'off') && (
-            <button
-              type="button"
-              className={`go-bell${pushState === 'on' ? ' is-on' : ''}`}
-              onClick={() => void togglePush()}
-              disabled={pushBusy}
-              aria-pressed={pushState === 'on'}
-              title={pushState === 'on' ? 'Notifications on' : 'Turn on notifications'}
-            >
-              <span aria-hidden="true">{pushState === 'on' ? '🔔' : '🔕'}</span>
-              <span className="sr-only">
-                {pushState === 'on' ? 'Turn notifications off' : 'Turn notifications on'}
-              </span>
-            </button>
-          )}
-          {user ? (
-            <span className="go-user">{user.displayName}</span>
-          ) : (
-            <a className="go-signin" href="/auth/login?next=%2Fgo">
-              Sign in
-            </a>
-          )}
-        </div>
-      </header>
+        {(canPost && (pushState === 'on' || pushState === 'off')) || user ? (
+          <div className="go-head-right">
+            {canPost && (pushState === 'on' || pushState === 'off') && (
+              <button
+                type="button"
+                className="go-bell"
+                onClick={() => void togglePush()}
+                disabled={pushBusy}
+                aria-pressed={pushState === 'on'}
+              >
+                <BellIcon off={pushState !== 'on'} />
+                <span className="sr-only">
+                  {pushState === 'on' ? 'Turn notifications off' : 'Turn notifications on'}
+                </span>
+              </button>
+            )}
+            {user && <span className="go-user">{user.displayName}</span>}
+          </div>
+        ) : null}
+      </div>
 
       {pushState === 'blocked' && canPost && (
         <p className="go-note">
@@ -693,7 +855,110 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
         </p>
       )}
 
-      <section className="go-board" aria-label="Active flares">
+      {/*
+       * Sits directly above the action grid, so the way out of the gate is
+       * under the same thumb as the tiles it explains — and it is the ONE
+       * sign-in affordance in the page body now. There used to be three: a
+       * blurple pill in the head, this link, and the tiles themselves being
+       * dead.
+       *
+       * The guest wording used to read "ask an ambassador on Discord", which
+       * sends someone to ask for something nobody has to grant: `resolveRole`
+       * upgrades on guild membership alone, so joining is the whole of it and
+       * it takes effect on their next sign-in. Same wording as /live now.
+       */}
+      {!canPost && (
+        <div className="go-gate">
+          <p className="go-gate-note" id="go-gate-note">
+            {signedIn
+              ? 'Flares are for community members. Join the Discord and your account is upgraded on your next sign-in.'
+              : 'Sign in with Discord to raise a flare, join one, or get a ping when one goes up.'}
+          </p>
+          {signedIn ? (
+            <a
+              className="btn btn--discord btn--arrow"
+              href={DISCORD_INVITE}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Join the Discord
+            </a>
+          ) : (
+            <a className="btn btn--discord btn--arrow" href="/auth/login?next=%2Fgo">
+              Sign in with Discord
+            </a>
+          )}
+        </div>
+      )}
+
+      {/*
+       * The grid, first. It used to sit under roughly 400px of empty board, at
+       * the bottom of the screen, with all six tiles `disabled` for anyone not
+       * signed in — so the one thing this page is for was both the last thing
+       * you reached and dead on arrival.
+       *
+       * Signed out, each tile is a real link that carries its own kind through
+       * sign-in and comes back with that sheet open. A tap is never dead.
+       */}
+      <nav className="go-actions" aria-label="Raise a flare">
+        {ACTIONS.map((def) => {
+          const inner = (
+            <>
+              <FlareIcon kind={def.kind} size={def.kind === 'raid' ? 32 : 26} />
+              <span className="go-action-label">{labelFor(def.kind)}</span>
+              {def.kind === 'raid' && <span className="go-action-hint">{def.hint}</span>}
+            </>
+          );
+          const className = def.kind === 'raid' ? 'go-action go-action--primary' : 'go-action';
+
+          return canPost ? (
+            <button
+              key={def.kind}
+              type="button"
+              className={className}
+              onClick={() => openAction(def)}
+            >
+              {inner}
+            </button>
+          ) : (
+            <a
+              key={def.kind}
+              className={className}
+              href={gatedHref(def.kind, signedIn)}
+              aria-describedby="go-gate-note"
+              {...(signedIn ? { rel: 'noopener noreferrer', target: '_blank' } : {})}
+            >
+              {inner}
+            </a>
+          );
+        })}
+      </nav>
+
+      {/*
+       * What this screen is, for someone who has just installed it to a home
+       * screen and has never seen a flare. Two lines under the grid: it is the
+       * explanation, not the offer, so it sits below the thing it explains.
+       */}
+      {!canPost && (
+        <div className="panel go-lede">
+          <p className="go-lede-line">Flares, so nobody raids alone.</p>
+          <p className="go-lede-sub">
+            Call a raid, offer spare remote invites, or say where you are. Built for one hand, at a
+            gym, with the game open in the other app.
+          </p>
+        </div>
+      )}
+
+      <section className="go-board" aria-labelledby="go-board-head">
+        <div className="go-board-head">
+          <h2 id="go-board-head">On the board</h2>
+          {flares.length > 0 && (
+            <span className="count">
+              {flares.length} live
+            </span>
+          )}
+        </div>
+
         {boardStatus === 'error' && (
           // Same job as /live's connection pill, in the vocabulary this page
           // already has: a small conditional note, not a toast (a poll fails
@@ -706,56 +971,29 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
               : 'Could not load the board. Checking again shortly.'}
           </p>
         )}
+
         {flares.length === 0 ? (
-          boardStatus === 'error' ? null : canPost ? (
-            <p className="go-empty empty-art-bg">
-              Nothing active right now. Fire one below when you are at a gym and want company.
+          boardStatus === 'error' ? null : (
+            <p className="go-empty empty-state empty-art-bg">
+              {canPost
+                ? 'Nothing active right now. Raise one when you are at a gym and want company.'
+                : 'Nothing active right now.'}
             </p>
-          ) : (
-            /*
-             * Someone who cannot post must not be told to "fire one below" at a
-             * row of buttons they cannot press. And this is the screen people
-             * install to a home screen, so an empty board is the one place with
-             * room to say what the app is actually for — which it previously
-             * did not, anywhere.
-             *
-             * No `empty-art-bg` here on purpose: the pin motif reads as "there
-             * is nothing here", which is the wrong thing to say underneath a
-             * description of what the thing does.
-             */
-            <div className="go-intro">
-              <p className="go-intro-lede">Flares, so nobody raids alone.</p>
-              <ul className="go-intro-list">
-                <li>
-                  <span aria-hidden="true">🔥</span> Call a raid and watch who is on their way
-                </li>
-                <li>
-                  <span aria-hidden="true">📣</span> Offer remote invites going spare
-                </li>
-                <li>
-                  <span aria-hidden="true">🔔</span> Get a ping the moment someone else flares
-                </li>
-              </ul>
-              <p className="go-intro-foot">
-                Built for one hand, at a gym, with the game open in the other app.
-              </p>
-            </div>
           )
         ) : (
           <ul>
             {flares.map((flare) => {
-              const def = ACTIONS.find((a) => a.kind === flare.kind);
               const state = mine[String(flare.id)];
               // "coming" and "here" both mean a body is on its way or present.
               const going = (flare.rsvps?.coming ?? 0) + (flare.rsvps?.here ?? 0);
               return (
                 <li key={flare.id} className="go-flare">
-                  <span className="go-flare-emoji" aria-hidden="true">
-                    {def?.emoji ?? '📍'}
+                  <span className="go-flare-icon">
+                    <FlareIcon kind={flare.kind} size={24} />
                   </span>
                   <div className="go-flare-body">
                     <strong>
-                      {flare.boss ? flare.boss : (def?.label ?? 'Flare')}
+                      {flare.boss ? flare.boss : labelFor(flare.kind)}
                       {flare.needed ? ` · needs ${flare.needed}` : ''}
                     </strong>
                     <span>
@@ -809,200 +1047,154 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
         )}
       </section>
 
-      {/*
-       * Sits directly above the action grid, so the way out of the gate is
-       * under the same thumb as the buttons it is gating.
-       *
-       * The guest wording used to read "ask an ambassador on Discord", which
-       * sends someone to ask for something nobody has to grant: `resolveRole`
-       * upgrades on guild membership alone, so joining is the whole of it and
-       * it takes effect on their next sign-in. Same wording as /live now.
-       */}
-      {!canPost && (
-        <p className="go-gate">
-          {signedIn ? (
-            <>
-              Flares are for community members.{' '}
-              <a href={DISCORD_INVITE} rel="noopener noreferrer" target="_blank">
-                Join the Discord
-              </a>{' '}
-              and your account will be upgraded on your next sign-in.
-            </>
-          ) : (
-            <>
-              <a href="/auth/login?next=%2Fgo">Sign in with Discord</a> to fire a flare, join
-              someone else&rsquo;s, or get a ping when one goes up.
-            </>
-          )}
-        </p>
-      )}
-
-      <nav className="go-actions" aria-label="Quick actions">
-        {ACTIONS.map((def) => (
-          <button
-            key={def.kind}
-            type="button"
-            className="go-action"
-            disabled={!canPost}
-            onClick={() => openAction(def)}
-          >
-            <span className="go-action-emoji" aria-hidden="true">
-              {def.emoji}
-            </span>
-            <span className="go-action-label">{def.label}</span>
-          </button>
-        ))}
-      </nav>
-
       {action && (
-        <div className="go-sheet-backdrop" onClick={() => setAction(null)}>
-          <section
-            className="go-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label={action.label}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header>
-              <span aria-hidden="true">{action.emoji}</span>
-              <div>
-                <h2>{action.label}</h2>
-                <p>{action.hint}</p>
-              </div>
-              <button type="button" className="go-close" onClick={() => setAction(null)} aria-label="Close">
-                ×
-              </button>
-            </header>
-
-            <label className="go-field">
-              <span>Where</span>
-              <select
-                value={poiId ?? ''}
-                onChange={(e) => chooseLocation(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">— not at a specific spot —</option>
-                {candidates.map(({ poi, d }) => (
-                  <option key={poi.id} value={poi.id}>
-                    {poi.name}
-                    {d === null ? '' : ` — ${fmtDistance(d)}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {action.needsBoss && (
-              <label className="go-field">
-                <span>Boss</span>
-                <input
-                  list="go-bosses"
-                  value={boss}
-                  onChange={(e) => setBoss(e.target.value)}
-                  placeholder={bosses[0]?.name ?? 'e.g. Mewtwo'}
-                  maxLength={80}
-                />
-              </label>
-            )}
-
-            {action.needsCount && (
-              <label className="go-field">
-                <span>How many more do you need?</span>
-                <div className="go-stepper">
-                  <button type="button" onClick={() => setNeeded((n) => Math.max(1, n - 1))} aria-label="One fewer">
-                    −
-                  </button>
-                  <output>{needed}</output>
-                  <button type="button" onClick={() => setNeeded((n) => Math.min(20, n + 1))} aria-label="One more">
-                    +
-                  </button>
-                </div>
-              </label>
-            )}
-
-            <label className="go-field">
-              <span>Note (optional)</span>
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Starting in 5, parking lot side"
-                maxLength={280}
-              />
-            </label>
-
-            <button type="button" className="go-fire" onClick={() => void fire()} disabled={sending}>
-              {sending ? 'Sending…' : `Send ${action.label.toLowerCase()} flare`}
+        <Sheet titleId="go-sheet-title" onClose={() => setAction(null)}>
+          <header className="go-sheet-head">
+            <FlareIcon kind={action.kind} size={30} />
+            <div>
+              <h2 id="go-sheet-title" tabIndex={-1}>
+                {labelFor(action.kind)}
+              </h2>
+              <p>{action.hint}</p>
+            </div>
+            <button
+              type="button"
+              className="go-close"
+              onClick={() => setAction(null)}
+              aria-label="Close"
+            >
+              <CloseIcon />
             </button>
-          </section>
-        </div>
-      )}
+          </header>
 
-      {/*
-        Hoisted out of the action sheet so BOTH sheets can point at it. A
-        datalist only exists while it is rendered, and the edit sheet is never
-        open at the same time as the one this used to live inside — the boss
-        suggestions would simply have been missing there. It renders nothing.
-      */}
-      <datalist id="go-bosses">
-        {bosses.map((b) => (
-          <option key={`${b.tier}-${b.name}`} value={b.name}>
-            {b.tier}
-          </option>
-        ))}
-      </datalist>
+          <label className="go-field">
+            <span>Where</span>
+            <select
+              value={poiId ?? ''}
+              onChange={(e) => chooseLocation(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">— not at a specific spot —</option>
+              {candidates.map(({ poi, d }) => (
+                <option key={poi.id} value={poi.id}>
+                  {poi.name}
+                  {d === null ? '' : ` — ${fmtDistance(d)}`}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      {editing && (
-        <div className="go-sheet-backdrop" onClick={() => setEditing(null)}>
-          <section
-            className="go-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Correct this flare"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header>
-              <span aria-hidden="true">✏️</span>
-              <div>
-                <h2>Fix the details</h2>
-                <p>Everyone on the board and in Discord sees the correction.</p>
-              </div>
-              <button type="button" className="go-close" onClick={() => setEditing(null)} aria-label="Close">
-                ×
-              </button>
-            </header>
-
+          {action.needsBoss && (
             <label className="go-field">
               <span>Boss</span>
               <input
                 list="go-bosses"
-                value={editBoss}
-                onChange={(e) => {
-                  setEditBoss(e.target.value);
-                  // Picking a known boss fills the tier in, because the two
-                  // always agree and asking twice is a tax paid at a gym.
-                  const t = tierForBoss(e.target.value);
-                  if (t) setEditTier(t);
-                }}
-                placeholder="Leave empty to remove it"
+                value={boss}
+                onChange={(e) => setBoss(e.target.value)}
+                placeholder={bosses[0]?.name ?? 'e.g. Mewtwo'}
                 maxLength={80}
               />
             </label>
+          )}
 
-            {editing.kind === 'raid' && (
-              <label className="go-field">
-                <span>Tier</span>
-                <input
-                  value={editTier}
-                  onChange={(e) => setEditTier(e.target.value)}
-                  placeholder="e.g. Tier 5"
-                  maxLength={24}
-                />
-              </label>
-            )}
+          {action.needsCount && (
+            <label className="go-field">
+              <span>How many more do you need?</span>
+              <div className="go-stepper">
+                <button type="button" onClick={() => setNeeded((n) => Math.max(1, n - 1))} aria-label="One fewer">
+                  −
+                </button>
+                <output>{needed}</output>
+                <button type="button" onClick={() => setNeeded((n) => Math.min(20, n + 1))} aria-label="One more">
+                  +
+                </button>
+              </div>
+            </label>
+          )}
 
-            <button type="button" className="go-fire" onClick={() => void saveEdit()} disabled={savingEdit}>
-              {savingEdit ? 'Saving…' : 'Save changes'}
+          <label className="go-field">
+            <span>Note (optional)</span>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Starting in 5, parking lot side"
+              maxLength={280}
+            />
+          </label>
+
+          <button type="button" className="go-fire" onClick={() => void fire()} disabled={sending}>
+            {sending ? 'Sending…' : 'Send flare'}
+          </button>
+        </Sheet>
+      )}
+
+      {/*
+        Hoisted out of the action sheet so BOTH sheets can point at it — but
+        only while one of them is open. A datalist only exists while it is
+        rendered, and the edit sheet is never open at the same time as the
+        action sheet, so one shared list serves both. It renders nothing.
+      */}
+      {wantsBossList && (
+        <datalist id="go-bosses">
+          {bosses.map((b) => (
+            <option key={`${b.tier}-${b.name}`} value={b.name}>
+              {b.tier}
+            </option>
+          ))}
+        </datalist>
+      )}
+
+      {editing && (
+        <Sheet titleId="go-edit-title" onClose={() => setEditing(null)}>
+          <header className="go-sheet-head">
+            <div>
+              <h2 id="go-edit-title" tabIndex={-1}>
+                Fix the details
+              </h2>
+              <p>Everyone on the board and in Discord sees the correction.</p>
+            </div>
+            <button
+              type="button"
+              className="go-close"
+              onClick={() => setEditing(null)}
+              aria-label="Close"
+            >
+              <CloseIcon />
             </button>
-          </section>
-        </div>
+          </header>
+
+          <label className="go-field">
+            <span>Boss</span>
+            <input
+              list="go-bosses"
+              value={editBoss}
+              onChange={(e) => {
+                setEditBoss(e.target.value);
+                // Picking a known boss fills the tier in, because the two
+                // always agree and asking twice is a tax paid at a gym.
+                const t = tierForBoss(e.target.value);
+                if (t) setEditTier(t);
+              }}
+              placeholder="Leave empty to remove it"
+              maxLength={80}
+            />
+          </label>
+
+          {editing.kind === 'raid' && (
+            <label className="go-field">
+              <span>Tier</span>
+              <input
+                value={editTier}
+                onChange={(e) => setEditTier(e.target.value)}
+                placeholder="e.g. Tier 5"
+                maxLength={24}
+              />
+            </label>
+          )}
+
+          <button type="button" className="go-fire" onClick={() => void saveEdit()} disabled={savingEdit}>
+            {savingEdit ? 'Saving…' : 'Save changes'}
+          </button>
+        </Sheet>
       )}
 
       {toast && (

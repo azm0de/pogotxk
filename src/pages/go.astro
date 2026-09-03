@@ -35,14 +35,35 @@ const initialAction = Astro.url.searchParams.get('action') ?? undefined;
     <meta name="robots" content="noindex" />
   </Fragment>
 
-  <!-- Renders nothing unless the page is inside the Android app, which is the
-       only place the ball can exist. Placed above the actions because turning
-       it on is a thing you do once, before you start playing — not a step in
-       sending a flare. -->
-  <BubbleControl client:load />
+  <div class="go-page">
+    <!-- Renders nothing unless the page is inside the Android app, which is the
+         only place the ball can exist. Placed above the actions because turning
+         it on is a thing you do once, before you start playing — not a step in
+         sending a flare.
 
-  <QuickActions client:load user={user} initialPoi={initialPoi} initialAction={initialAction} />
+         `client:idle` rather than `client:load`: outside the app this component
+         renders nothing at all, so it has no business competing with the action
+         grid for the main thread on a phone on park wifi. -->
+    <BubbleControl client:idle />
+
+    <QuickActions client:load user={user} initialPoi={initialPoi} initialAction={initialAction} />
+  </div>
 </Base>
+
+<style>
+  /*
+   * The page's root wrapper. `main` is a flex item with a definite height (see
+   * `body.is-full-bleed` in Base.astro), so this passes that height straight
+   * through to the panel, which does its own scrolling.
+   */
+  .go-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    font-family: var(--font-read);
+  }
+</style>
 
 <script>
   // Registered only from /go: the service worker exists to make the installed

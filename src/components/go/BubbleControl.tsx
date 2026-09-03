@@ -96,13 +96,19 @@ export default function BubbleControl() {
 
   return (
     <div className="go-bubble">
+      {/*
+       * `.btn` from primitives, so the one control the app injects is the same
+       * object as every other button on the site. Turning it off is the quiet
+       * variant: when the ball is already up, "off" is the recovery action, and
+       * giving it the same weight as "launch" makes the panel read as two
+       * competing choices.
+       */}
       <button
         type="button"
-        className={running ? 'go-bubble-btn is-on' : 'go-bubble-btn'}
+        className={running ? 'btn btn--block btn--outline' : 'btn btn--block btn--primary'}
         onClick={() => (running ? bridge.stop() : bridge.start())}
       >
-        <span aria-hidden="true">{running ? '✕' : '⦿'}</span>
-        {running ? 'Turn Raid Assist off' : 'Launch Raid Assist!'}
+        {running ? 'Turn Raid Assist off' : 'Turn Raid Assist on'}
       </button>
       <p className="go-bubble-note">
         {running
