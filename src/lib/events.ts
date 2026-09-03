@@ -7,7 +7,7 @@
  * know where a given event came from.
  */
 
-import { DEFAULT_TZ, zonedToUtc } from './time';
+import { DEFAULT_TZ, zonedToUtc, utcToZoned } from './time';
 
 /**
  * Meetups are often stored with no end time. Treating a zero-length event as
@@ -94,12 +94,157 @@ export interface GroupedEvents {
   past: CalendarEvent[];
 }
 
+/* ------------------------------------------------------------ recurrence -- */
+
+/** How far ahead a rule is expanded before the event is left in the past. */
+export const RECURRENCE_HORIZON_DAYS = 730;
+
+const DAY_MS = 86_400_000;
+const WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+interface RecurrenceRule {
+  freq: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  interval: number;
+  /** 0 = Sunday, as `Date#getUTCDay`. */
+  byDay: number[];
+  /** `2WE` = the second Wednesday; `-1FR` = the last Friday. */
+  ordinal: number | null;
+}
+
+/**
+ * The subset of RRULE a meetup actually uses: FREQ, INTERVAL, BYDAY (plain or
+ * ordinal). Anything else returns null and the event is left exactly as stored,
+ * which is the same thing the badge does with a rule it cannot describe.
+ */
+function parseRecurrence(rrule: string): RecurrenceRule | null {
+  const parts = new Map<string, string>();
+  for (const kv of rrule.replace(/^RRULE:/i, '').split(';')) {
+    const [key, value = ''] = kv.split('=');
+    parts.set(key.trim().toUpperCase(), value.trim().toUpperCase());
+  }
+  const freq = parts.get('FREQ');
+  if (freq !== 'DAILY' && freq !== 'WEEKLY' && freq !== 'MONTHLY') return null;
+
+  const parsedInterval = Number(parts.get('INTERVAL') ?? '1');
+  const interval = Number.isFinite(parsedInterval) && parsedInterval >= 1 ? Math.floor(parsedInterval) : 1;
+
+  const byDay: number[] = [];
+  let ordinal: number | null = null;
+  for (const token of (parts.get('BYDAY') ?? '').split(',').filter(Boolean)) {
+    const match = token.match(/^([+-]?\d)?(SU|MO|TU|WE|TH|FR|SA)$/);
+    if (!match) return null;
+    if (match[1]) ordinal = Number(match[1]);
+    byDay.push(WEEKDAYS.indexOf(match[2]));
+  }
+  return { freq, interval, byDay, ordinal };
+}
+
+/** The nth (or, negative, nth-from-last) weekday of a month, as a UTC-midnight date. */
+function nthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date | null {
+  if (n > 0) {
+    const first = new Date(Date.UTC(year, month, 1));
+    const offset = (weekday - first.getUTCDay() + 7) % 7;
+    const day = 1 + offset + (n - 1) * 7;
+    const candidate = new Date(Date.UTC(year, month, day));
+    return candidate.getUTCMonth() === month ? candidate : null;
+  }
+  const last = new Date(Date.UTC(year, month + 1, 0));
+  const offset = (last.getUTCDay() - weekday + 7) % 7;
+  const day = last.getUTCDate() - offset + (n + 1) * 7;
+  return day >= 1 ? new Date(Date.UTC(year, month, day)) : null;
+}
+
+/**
+ * Roll a recurring event forward to its first occurrence that has not finished
+ * by `now`.
+ *
+ * A meetup row is stored once, at the date it was first entered; the weekly
+ * Wednesday raid hour anchored in July is still the weekly raid hour in
+ * September. Without this, `groupEvents` filed it under `past` and the events
+ * page said there was no meetup on the calendar while one happened every week.
+ *
+ * The arithmetic runs in wall-clock time in the meetup's zone, so "6 PM on
+ * Wednesday" stays 6 PM across the CST/CDT switch; the length of the event is
+ * carried over in real milliseconds. Non-recurring events, events still current
+ * and rules this module cannot read come back untouched.
+ */
+export function nextOccurrence(
+  event: CalendarEvent,
+  now: Date = new Date(),
+  tz: string = DEFAULT_TZ,
+): CalendarEvent {
+  if (!event.rrule) return event;
+  const rule = parseRecurrence(event.rrule);
+  if (!rule) return event;
+
+  const anchorStart = Date.parse(event.start);
+  if (!Number.isFinite(anchorStart)) return event;
+  const at = now.getTime();
+  const end = effectiveEnd(event);
+  if (end > at) return event;
+  const duration = end - anchorStart;
+
+  const wall = utcToZoned(event.start, tz);
+  if (!wall) return event;
+  const [anchorDate, time] = wall.split('T');
+  const anchorDay = new Date(`${anchorDate}T00:00:00Z`);
+  const horizon = at + RECURRENCE_HORIZON_DAYS * DAY_MS;
+
+  const occurrence = (day: Date): CalendarEvent | null => {
+    const startIso = zonedToUtc(`${day.toISOString().slice(0, 10)}T${time}`, tz);
+    const start = Date.parse(startIso);
+    if (start + duration <= at) return null;
+    if (start > horizon) return null;
+    return {
+      ...event,
+      start: startIso,
+      end: event.end ? new Date(start + duration).toISOString().replace(/\.\d{3}Z$/, 'Z') : event.end,
+    };
+  };
+
+  if (rule.freq === 'MONTHLY') {
+    const weekday = rule.byDay[0] ?? anchorDay.getUTCDay();
+    const n = rule.ordinal ?? Math.ceil(anchorDay.getUTCDate() / 7);
+    for (let months = 0; months <= 36 * rule.interval; months += rule.interval) {
+      const y = anchorDay.getUTCFullYear();
+      const m = anchorDay.getUTCMonth() + months;
+      const day = rule.byDay.length
+        ? nthWeekdayOfMonth(y, m, weekday, n)
+        : new Date(Date.UTC(y, m, anchorDay.getUTCDate()));
+      if (!day) continue;
+      if (day.getTime() > horizon) break;
+      const hit = occurrence(day);
+      if (hit) return hit;
+    }
+    return event;
+  }
+
+  // DAILY and WEEKLY: walk the days, counting periods from the anchor so
+  // INTERVAL=2 lands on the right alternate weeks. Skip straight to the week
+  // before `now`; everything earlier has finished by definition.
+  const periodDays = rule.freq === 'DAILY' ? rule.interval : 7 * rule.interval;
+  const days = rule.freq === 'WEEKLY' && rule.byDay.length ? rule.byDay : [anchorDay.getUTCDay()];
+  const todayIndex = Math.floor((at - anchorDay.getTime()) / DAY_MS);
+  const from = Math.max(0, todayIndex - 8);
+  const to = Math.ceil((horizon - anchorDay.getTime()) / DAY_MS);
+  for (let i = from; i <= to; i++) {
+    const day = new Date(anchorDay.getTime() + i * DAY_MS);
+    const inPeriod =
+      rule.freq === 'DAILY' ? i % periodDays === 0 : Math.floor(i / 7) % rule.interval === 0;
+    if (!inPeriod || !days.includes(day.getUTCDay())) continue;
+    const hit = occurrence(day);
+    if (hit) return hit;
+  }
+  return event;
+}
+
 /** Split events into the buckets the events page renders. */
 export function groupEvents(events: CalendarEvent[], now: Date = new Date()): GroupedEvents {
   const at = now.getTime();
   const grouped: GroupedEvents = { live: [], ongoing: [], upcoming: [], past: [] };
 
-  for (const event of events) {
+  for (const stored of events) {
+    const event = nextOccurrence(stored, now);
     const start = Date.parse(event.start);
     if (!Number.isFinite(start)) continue;
 

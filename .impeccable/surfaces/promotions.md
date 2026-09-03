@@ -39,6 +39,12 @@ Owner: main thread. **Applied 2026-09-02 (during W2, files disjoint from W2 owne
 - [ ] **Owner question:** the GO Fest banner carries no photographer byline in code (the vault says the photo has a named photographer); W1-A kept the caption text as-is rather than invent a credit. Ask Justin for the byline and add it to the `.credit`.
 - [ ] Vault/plan drift: the landmark rail and the "Right now" card were dropped in `e814e0d`; `vault/Design System.md` and `Backlog.md` still describe them. Fix in the documenter pass.
 
+## Owner answers (2026-09-03)
+- Legal copy corrections (Protomaps/OSM on `/privacy` + `/terms`) and the `/offline` rewrite **stand**.
+- GO Fest banner: **no byline needed**; caption stays.
+- Leek Duck weather/type icons: **words are fine**; the proxy stays narrow.
+- Recurring-meetup grouping bug: **fix now** in this branch, with a test.
+
 ## Fonts
 - [x] Atkinson regular/italic files were swapped at download; swapped back on disk 2026-09-02 (regular = 33,996 B, italic = 37,644 B). Any wave that screenshotted "oblique body text" before the swap should be re-checked.
 

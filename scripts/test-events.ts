@@ -234,6 +234,56 @@ check(
   groupEvents([stub('day+', '2026-08-05T00:00:00Z', '2026-08-06T00:01:00Z')], NOW).ongoing.length,
   1,
 );
+// A stored row is one row; the rule is what makes it a standing meetup. NOW is
+// Wednesday 5 Aug 2026, 07:00 CDT.
+const weekly = (uid: string, start: string, end: string | null, rrule: string): CalendarEvent => ({
+  ...stub(uid, start, end),
+  source: 'meetup',
+  rrule,
+});
+const rolled = groupEvents(
+  [weekly('wed-6pm', '2026-07-08T23:00:00Z', '2026-07-09T00:00:00Z', 'FREQ=WEEKLY;BYDAY=WE')],
+  NOW,
+);
+check('a weekly meetup anchored four weeks ago is upcoming, not past', rolled.upcoming.length, 1);
+check('and it is rolled to this Wednesday at the same wall-clock time', rolled.upcoming[0]?.start, '2026-08-05T23:00:00Z');
+check('with its length carried over', rolled.upcoming[0]?.end, '2026-08-06T00:00:00Z');
+check('and its uid untouched', rolled.upcoming[0]?.uid, 'wed-6pm');
+check(
+  'no BYDAY: the anchor weekday repeats (a Tuesday rolls to next Tuesday)',
+  groupEvents([weekly('tue', '2026-07-07T23:00:00Z', null, 'FREQ=WEEKLY')], NOW).upcoming[0]?.start,
+  '2026-08-11T23:00:00Z',
+);
+check(
+  'INTERVAL=2 lands on the alternate week',
+  groupEvents([weekly('fortnight', '2026-07-08T23:00:00Z', null, 'FREQ=WEEKLY;INTERVAL=2;BYDAY=WE')], NOW)
+    .upcoming[0]?.start,
+  '2026-08-05T23:00:00Z',
+);
+check(
+  'the wall-clock hour survives the DST switch (6 PM CDT becomes 6 PM CST)',
+  groupEvents(
+    [weekly('dst', '2026-10-28T23:00:00Z', null, 'FREQ=WEEKLY;BYDAY=WE')],
+    new Date('2026-11-05T12:00:00Z'),
+  ).upcoming[0]?.start,
+  '2026-11-12T00:00:00Z',
+);
+check(
+  'a monthly ordinal rule finds the second Wednesday',
+  groupEvents([weekly('monthly', '2026-06-10T23:00:00Z', null, 'FREQ=MONTHLY;BYDAY=2WE')], NOW).upcoming[0]?.start,
+  '2026-08-12T23:00:00Z',
+);
+check(
+  'a rule this module cannot read leaves the event alone',
+  groupEvents([weekly('odd', '2026-07-08T23:00:00Z', null, 'FREQ=YEARLY')], NOW).past.length,
+  1,
+);
+check(
+  'a recurring event still in progress is not rolled',
+  groupEvents([weekly('now', '2026-08-05T11:30:00Z', '2026-08-05T12:30:00Z', 'FREQ=WEEKLY')], NOW).live[0]?.start,
+  '2026-08-05T11:30:00Z',
+);
+
 check('unparseable dates are dropped, not crashed on', groupEvents([stub('bad', 'nope', null)], NOW), {
   live: [],
   ongoing: [],
