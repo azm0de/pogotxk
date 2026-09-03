@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 
 import type { MapData, MapPoi, PoiType } from '~/lib/db/map';
-import { basemapLayer } from './basemap';
+import { BASEMAP_URL, basemapLayer } from './basemap';
 import { GLYPH_PATHS, GLYPH_VIEWBOX, photoIcon, poiIcon, TYPE_LABEL, userIcon } from './markerIcons';
 import './MapView.css';
 
@@ -86,6 +86,22 @@ function formatDistance(m: number): string {
 /** Generous rather than tight — this is a phone on park wifi. */
 const FETCH_TIMEOUT_MS = 12000;
 
+/**
+ * The legend panel's width in pixels, mirrored from `.map-panel` in MapView.css
+ * (`width: min(340px, …)`) because Leaflet's `fitBounds` padding and the
+ * selected-pin pan both take numbers, not lengths. Keep the two in step.
+ */
+const PANEL_W = 340;
+
+/**
+ * How long a failing basemap is allowed to look like a loading one.
+ *
+ * A tile error on the first paint is normal — a cold cache, a slow range
+ * request — so the notice waits. Past this the map is not coming, and a grey
+ * rectangle that never resolves is the failure this page must not hide.
+ */
+const TILE_GRACE_MS = 4000;
+
 /** How long the visible status row holds a message before it clears itself. */
 const FLASH_MS = 9000;
 
@@ -157,7 +173,10 @@ function buildPoiPopup(
       : flare.kind === 'remote_invites'
         ? `Remote invites${flare.needed ? `, needs ${flare.needed}` : ''}`
         : 'Active now';
-    add(banner, el('strong', undefined, `● ${headline}`));
+    // No `●` in front of it: the banner is already a red fill under the word,
+    // and a bullet from whatever font the reader fell back to is not this
+    // world's mark.
+    add(banner, el('strong', undefined, headline));
     add(banner, el('span', undefined, `${minutes} min left`));
     if (flare.note) add(banner, el('span', 'popup-live-note', flare.note));
     add(root, banner);
@@ -191,7 +210,13 @@ function buildPoiPopup(
   if (poi.isCampsite || poi.isMeetupSpot) {
     const badges = el('div', 'popup-badges');
     if (poi.isCampsite) {
-      add(badges, el('span', 'popup-badge popup-badge--attr-campsite', '★ Campsite'));
+      const campsite = el('span', 'popup-badge popup-badge--attr-campsite');
+      // Our own constant path data, never user text — same star the pin is
+      // badged with, drawn rather than typeset.
+      campsite.innerHTML =
+        '<svg class="popup-badge-star" viewBox="0 0 24 24" width="11" height="11" aria-hidden="true" focusable="false"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg>';
+      add(campsite, 'Campsite');
+      add(badges, campsite);
     }
     if (poi.isMeetupSpot) {
       add(badges, el('span', 'popup-badge popup-badge--attr-meetup', 'Meetup spot'));
@@ -283,6 +308,47 @@ function buildPoiPopup(
   return root;
 }
 
+/*
+ * The panel's own marks, drawn.
+ *
+ * These were `▾` and `★` — typeface glyphs whose weight, size and colour come
+ * from whatever font the reader's system fell back to, sitting beside drawn
+ * arrows and drawn pins. The star is the same path the map badges a Campsite
+ * pin with, so the legend row and the pin it keys are one object.
+ */
+function ChevronMark() {
+  return (
+    <svg
+      className="panel-chevron-mark"
+      viewBox="0 0 16 16"
+      width="12"
+      height="12"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 6l5 5 5-5"
+      />
+    </svg>
+  );
+}
+
+function StarMark({ size = 13 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"
+      />
+    </svg>
+  );
+}
+
 interface MapViewProps {
   initialPoi?: string;
   /**
@@ -301,11 +367,22 @@ interface MapViewProps {
 }
 
 export default function MapView({ initialPoi, compact = false }: MapViewProps) {
+  /** The handle's `aria-controls` target — the panel body it folds. */
+  const panelId = useId();
   const shellRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  /**
+   * The cluster group, on the full map only.
+   *
+   * `compact` builds a plain layer group instead: a cluster icon is a Leaflet
+   * marker, so it is a `role="button"` with `tabindex="0"`, and the home page's
+   * preview was handing the reader a dozen of them on the way to its first CTA.
+   */
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
+  /** Whichever of the two is actually holding the POI markers. */
+  const markerLayerRef = useRef<L.LayerGroup | null>(null);
   const markersRef = useRef(new Map<string, L.Marker>());
   const shapeLayersRef = useRef(new Map<string, L.Layer>());
   const userMarkerRef = useRef<L.Marker | null>(null);
@@ -374,6 +451,17 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
   const [panelOpen, setPanelOpen] = useState(
     () => typeof window === 'undefined' || window.innerWidth > 640,
   );
+  /**
+   * The place the reader last chose from the list.
+   *
+   * Tapping a row used to do nothing a phone user could see: the panel covers
+   * 721 of 812px, so the map moved and the popup opened behind the sign that was
+   * still in front of it. The row now stays marked when the panel comes back, so
+   * "which one did I tap" survives the trip.
+   */
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(initialPoi ?? null);
+  /** The basemap has failed for longer than the grace period. See TILE_GRACE_MS. */
+  const [tilesDown, setTilesDown] = useState(false);
   /** Stepped ellipsis for the loading state; see the note in MapView.css. */
   const [loadingDots, setLoadingDots] = useState(1);
 
@@ -545,6 +633,15 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
 
       setActiveTypes((prev) => (prev.has(poi.type) ? prev : new Set(prev).add(poi.type)));
       setShowCampsiteOnly((prev) => (prev && !poi.isCampsite ? false : prev));
+      setSelectedSlug(slug);
+
+      /*
+       * Below the tablet break the panel IS the screen — 721 of 812px — so
+       * choosing a place has to get out of its own way. The panel folds, the
+       * map moves, the popup opens; reopening the panel shows the row marked.
+       */
+      const narrow = window.innerWidth < 768;
+      if (narrow) setPanelOpen(false);
 
       const marker = markersRef.current.get(slug);
       const cluster = clusterRef.current;
@@ -557,8 +654,15 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       // zoomToShowLayer first: a marker inside a collapsed cluster ignores
       // openPopup() outright. This is the bug that made deep links look broken.
       cluster.zoomToShowLayer(marker, () => {
+        map.setView([poi.lat, poi.lng], Math.max(map.getZoom(), 18), { animate: false });
+        /*
+         * Wide screens keep the panel open, so centring the pin puts it under
+         * the sign. Shifting the view left by half the panel's width lands the
+         * pin in the middle of the map the reader can actually see. Negative,
+         * because `panBy` moves the viewport and the pin travels the other way.
+         */
+        if (!narrow) map.panBy([-(PANEL_W / 2), 0], { animate: false });
         marker.openPopup();
-        map.setView([poi.lat, poi.lng], Math.max(map.getZoom(), 18));
         announce(`Showing ${poi.name}.`);
       });
     },
@@ -579,6 +683,13 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       // See the `compact` prop: page scroll must not be hijacked by a map the
       // reader is only scrolling past. Leaflet still zooms on ctrl/⌘ + wheel.
       scrollWheelZoom: !compact,
+      /*
+       * Leaflet gives the map container `tabindex="0"` so arrow keys can pan it.
+       * On the full map that is the keyboard route into the park; on the home
+       * preview it is a tab stop that lands the reader inside a picture with
+       * nothing to do and no obvious way out.
+       */
+      keyboard: !compact,
     });
     mapRef.current = map;
 
@@ -603,46 +714,122 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
      * pill: see MapView.css for why an 88%-opaque panel over a permanently
      * light map is not a colour.
      */
-    basemapLayer().addTo(map);
+    const tiles = basemapLayer();
+    tiles.addTo(map);
 
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    /*
+     * A basemap that never loads looks exactly like one still loading.
+     *
+     * The map ground is warm paper in both themes so an undrawn tile reads as
+     * "coming", which is right for four seconds and a lie after that. Past the
+     * grace period the corner says so in words, and `/map` opens its list,
+     * because the 104 places are ours and do not depend on the tiles at all.
+     *
+     * The watchdog asks the tile store, because neither Leaflet event tells the
+     * truth here. `protomaps-leaflet` draws each tile onto a canvas and calls
+     * Leaflet's `done` callback with `undefined` for the error, always — so a
+     * pmtiles range request that rejects (measured here: `TypeError: Failed to
+     * fetch`, once per tile) still fires `tileload` and still marks the tile
+     * `leaflet-tile-loaded`. `tileerror` never fires at all. Reading the canvas
+     * does not settle it either: the flavour paints its land colour first and
+     * only then fails to draw anything on top, so a dead tile is a perfectly
+     * opaque flat grey square.
+     *
+     * What is left is the question the notice actually makes a claim about — can
+     * this browser reach the basemap at all — so after the grace period it asks,
+     * with a sixteen-byte range request for the header the library needs first
+     * anyway. No heuristics, and no false alarm on a slow connection: a store
+     * that answers is a map that will draw.
+     *
+     * Attached here rather than in `basemap.ts`: the layer is shared with the
+     * admin editor, and this notice is the public map's own chrome.
+     */
+    const probe = () =>
+      fetch(BASEMAP_URL, {
+        headers: { range: 'bytes=0-15' },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      })
+        .then((r) => setTilesDown(!r.ok))
+        .catch(() => setTilesDown(true));
+
+    const graceTimer = window.setTimeout(() => void probe(), TILE_GRACE_MS);
+    // Wired anyway: it costs nothing, and it is the right answer the day the
+    // library starts reporting a failed tile.
+    const onTileError = () => void probe();
+    tiles.on('tileerror', onTileError);
+
+    // Two more tab stops, on a preview that is not a control. Pinch and
+    // ctrl/⌘ + wheel still work for anyone who wants to look closer; the arrow
+    // to the real map is directly under it.
+    if (!compact) L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     if (data.zone.bounds) {
-      // Less breathing room in the preview: 40px of padding is a small margin
-      // in a full-viewport map and a third of the frame in a 4:3 card. Not
-      // tighter than this, though — pins are anchored at their point and draw
-      // upward, so a marker on the boundary clips against the top edge.
-      map.fitBounds(data.zone.bounds, { padding: compact ? [26, 26] : [40, 40] });
+      /*
+       * Less breathing room in the preview: 40px of padding is a small margin
+       * in a full-viewport map and a third of the frame in a 4:3 card. Not
+       * tighter than this, though — pins are anchored at their point and draw
+       * upward, so a marker on the boundary clips against the top edge.
+       *
+       * On a wide screen the legend panel stands over the map's left-hand
+       * 340px, so a park fitted to the whole frame put a third of the survey
+       * behind an opaque sign. The left padding is the panel's width plus its
+       * two gutters, which is why the number is written out rather than guessed.
+       */
+      const panelGutter = PANEL_W + 12 * 2 + 40;
+      map.fitBounds(
+        data.zone.bounds,
+        compact
+          ? { padding: [26, 26] }
+          : window.innerWidth > 640
+            ? { paddingTopLeft: [panelGutter, 40], paddingBottomRight: [40, 40] }
+            : { padding: [40, 40] },
+      );
     }
 
-    const cluster = L.markerClusterGroup({
-      maxClusterRadius: 45,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      // Below this the park is legible without grouping.
-      disableClusteringAtZoom: 18,
-      iconCreateFunction: (c) =>
-        L.divIcon({
-          // `.map-cluster`, not `.cluster` — the latter is a layout primitive,
-          // and this unlayered file was overriding it site-wide.
-          className: 'map-cluster-wrap',
-          // The count alone announced as a bare number, which tells a screen
-          // reader nothing about what it is or what pressing it does.
-          html: `<span class="map-cluster" aria-hidden="true">${c.getChildCount()}</span><span class="sr-only">${c.getChildCount()} places, zoom in</span>`,
-          iconSize: [38, 38],
-        }),
-    });
+    /*
+     * Clustering, on the full map only.
+     *
+     * In `compact` the preview is a picture of the park: markers are drawn but
+     * nothing in it is a control, so grouping them behind a "tap to zoom" disc
+     * would add back the one thing this mode exists to remove — a focusable
+     * button per group. A plain layer group draws the same pins with no
+     * interaction of their own.
+     */
+    const cluster = compact
+      ? null
+      : L.markerClusterGroup({
+          maxClusterRadius: 45,
+          spiderfyOnMaxZoom: true,
+          showCoverageOnHover: false,
+          // Below this the park is legible without grouping.
+          disableClusteringAtZoom: 18,
+          iconCreateFunction: (c) =>
+            L.divIcon({
+              // `.map-cluster`, not `.cluster` — the latter is a layout primitive,
+              // and this unlayered file was overriding it site-wide.
+              className: 'map-cluster-wrap',
+              // The count alone announced as a bare number, which tells a screen
+              // reader nothing about what it is or what pressing it does.
+              html: `<span class="map-cluster" aria-hidden="true">${c.getChildCount()}</span><span class="sr-only">${c.getChildCount()} places, tap to zoom in</span>`,
+              iconSize: [38, 38],
+            }),
+        });
     clusterRef.current = cluster;
-    map.addLayer(cluster);
+    const markerLayer: L.LayerGroup = cluster ?? L.layerGroup();
+    markerLayerRef.current = markerLayer;
+    map.addLayer(markerLayer);
 
     routeOrderRef.current = L.layerGroup();
 
     // Community photo pins sit outside the cluster — there are only nine and
     // they are a different kind of thing. Held in their own layer group so the
     // Photos chip can take them off the map; they used to be unfilterable.
+    //
+    // Never built in `compact`: nine more markers, each of them a popup and a
+    // tab stop, on a preview whose whole job is to be looked at.
     const photoLayer = L.layerGroup();
     photoLayerRef.current = photoLayer;
-    for (const photo of data.communityPhotos) {
+    for (const photo of compact ? [] : data.communityPhotos) {
       const marker = L.marker([photo.lat, photo.lng], {
         icon: photoIcon(`${photo.alt ?? 'Community photo'} — community photo`),
         alt: photo.alt ?? 'Community photo',
@@ -692,9 +879,12 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     }
 
     return () => {
+      window.clearTimeout(graceTimer);
+      tiles.off('tileerror', onTileError);
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
+      markerLayerRef.current = null;
       routeOrderRef.current = null;
       photoLayerRef.current = null;
       markersRef.current.clear();
@@ -725,25 +915,55 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     const attribution = container.querySelector<HTMLElement>('.leaflet-control-attribution');
     const panel = panelRef.current;
 
-    const sync = () => {
-      map.invalidateSize();
-      if (attribution) {
-        const h = Math.ceil(attribution.getBoundingClientRect().height);
-        if (h > 0) shell.style.setProperty('--map-attrib-h', `${h}px`);
-      }
-      shell.style.setProperty(
-        '--map-panel-h',
-        panel ? `${Math.ceil(panel.getBoundingClientRect().height)}px` : '0px',
-      );
+    /*
+     * Measure in the callback, write on the next frame.
+     *
+     * The observed nodes sit inside `shell`, and these writes are custom
+     * properties the same nodes are laid out from — writing them synchronously
+     * from a ResizeObserver callback is the classic way to get "ResizeObserver
+     * loop completed with undelivered notifications". Deferring to a frame and
+     * skipping a write whose value has not moved breaks the loop at both ends.
+     */
+    let frame = 0;
+    const written = new Map<string, string>();
+    const write = (name: string, value: string) => {
+      if (written.get(name) === value) return;
+      written.set(name, value);
+      shell.style.setProperty(name, value);
     };
 
-    sync();
-    const observer = new ResizeObserver(sync);
+    const measure = () => {
+      map.invalidateSize();
+      const attribH = attribution ? Math.ceil(attribution.getBoundingClientRect().height) : 0;
+      const panelH = panel ? Math.ceil(panel.getBoundingClientRect().height) : 0;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (attribH > 0) write('--map-attrib-h', `${attribH}px`);
+        write('--map-panel-h', `${panelH}px`);
+      });
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(container);
     if (attribution) observer.observe(attribution);
     if (panel) observer.observe(panel);
-    return () => observer.disconnect();
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [data, panelOpen]);
+
+  /*
+   * A failed basemap opens the list, on the full map only.
+   *
+   * The tiles are the only part of this page that is not ours; the 104 surveyed
+   * places are, and they are just as usable against a grey rectangle. So the
+   * failure that hides the park hands back the thing that still works.
+   */
+  useEffect(() => {
+    if (tilesDown && !compact) setPanelOpen(true);
+  }, [tilesDown, compact]);
 
   // --- community photo pins on or off ---------------------------------------
   // Dropped while a text search is running: the search filters places by name,
@@ -760,10 +980,11 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
 
   // --- sync markers to the current filter ---------------------------------
   useEffect(() => {
+    const markerLayer = markerLayerRef.current;
     const cluster = clusterRef.current;
-    if (!cluster || !data) return;
+    if (!markerLayer || !data) return;
 
-    cluster.clearLayers();
+    markerLayer.clearLayers();
     markersRef.current.clear();
 
     const layers: L.Marker[] = [];
@@ -782,27 +1003,41 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
         }),
         // Kept for the non-divIcon path and as documentation of intent.
         alt: pinLabel(poi, flare !== null),
-        keyboard: true,
-        riseOnHover: true,
+        /*
+         * `compact` is a picture of the park, and this is what makes that true.
+         *
+         * Leaflet defaults `keyboard: true`, which gives every marker
+         * `role="button"` and `tabindex="0"` — so the home page's preview owned
+         * 24 of the page's 63 tab stops and put its first call to action at stop
+         * 30. Nothing in the preview is a control, so nothing in it is focusable
+         * or clickable; `/map` is one arrow away and is where acting happens.
+         */
+        keyboard: !compact,
+        interactive: !compact,
+        riseOnHover: !compact,
         // A gym with something happening on it should sit above its neighbours.
         zIndexOffset: flare ? 1000 : 0,
       });
       // Reads the refs, so the popup is current without re-binding on every
-      // flare refresh or location fix.
-      marker.bindPopup(
-        () =>
-          buildPoiPopup(
-            poi,
-            userPosRef.current,
-            liveFlaresRef.current.get(poi.id) ?? null,
-            canFlareRef.current,
-          ),
-        { maxWidth: 320, minWidth: 240 },
-      );
+      // flare refresh or location fix. No popup at all in the preview: a popup
+      // needs something to click on, and nothing in it is clickable.
+      if (!compact) {
+        marker.bindPopup(
+          () =>
+            buildPoiPopup(
+              poi,
+              userPosRef.current,
+              liveFlaresRef.current.get(poi.id) ?? null,
+              canFlareRef.current,
+            ),
+          { maxWidth: 320, minWidth: 240 },
+        );
+      }
       markersRef.current.set(poi.slug, marker);
       layers.push(marker);
     }
-    cluster.addLayers(layers);
+    if (cluster) cluster.addLayers(layers);
+    else for (const marker of layers) markerLayer.addLayer(marker);
 
     const total = data.pois.length;
     setStatus(
@@ -818,7 +1053,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     // addLayers guarantees the marker is live, and zoomToShowLayer expands the
     // cluster around it first.
     const wanted = pendingFocusRef.current;
-    if (!wanted) return;
+    if (!wanted || !cluster) return;
 
     const marker = markersRef.current.get(wanted);
     if (!marker) return; // filtered out; the effect that re-enables its type will re-run us
@@ -836,7 +1071,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     // Locate would otherwise close the popup the reader was standing in front
     // of. Both are read from refs above; the effects below refresh open popups
     // in place instead.
-  }, [visiblePois, data, poiBySlug]);
+  }, [visiblePois, data, poiBySlug, compact]);
 
   // --- reflect flare changes without rebuilding markers ----------------------
   useEffect(() => {
@@ -1112,6 +1347,33 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
         </div>
       )}
 
+      {/*
+        The basemap's own failure, said in the corner it failed in.
+        `role="status"` rather than an alert: the page still works, and it is the
+        map that has gone quiet, not the site.
+      */}
+      {tilesDown && data && (
+        <p className="map-tiles-down" role="status">
+          <span className="map-mark" aria-hidden="true" />
+          {compact
+            ? 'The park map is not loading. Every place is still listed on the map page.'
+            : 'The park map is not loading. The places are still listed below.'}
+        </p>
+      )}
+
+      {/*
+        The locate flash, beside the button that causes it.
+        It used to print at the top of the legend panel — roughly 700px away on a
+        phone, wearing the You-Are-Here disc, so a permission failure was
+        announced by the mark that means "found you".
+      */}
+      {!compact && flash && (
+        <p className="map-flash">
+          <span className="map-mark" aria-hidden="true" />
+          {flash}
+        </p>
+      )}
+
       {!compact && (
         <button
           type="button"
@@ -1136,23 +1398,25 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
           className="map-panel panel panel--flush"
           aria-label="Map legend and filters"
         >
-          {flash && <p className="map-status">{flash}</p>}
-
           <button
             type="button"
             className="panel-handle"
             aria-expanded={panelOpen}
+            aria-controls={`${panelId}-body`}
             onClick={() => setPanelOpen((v) => !v)}
           >
-            Legend
-            <span className="sr-only"> and filters</span>
-            <span className="panel-chevron" aria-hidden="true">
-              ▾
-            </span>
+            {/* Said out loud. It used to read "Legend" with "and filters" hidden
+                in an sr-only span, so a sighted reader looking for the search
+                box, the type filters and the list of 104 places was told the
+                panel held a key and nothing else. */}
+            Legend &amp; filters
+            <ChevronMark />
           </button>
 
           {/* The key stays out of the fold: a legend you have to open is not a
-              legend. Hue, silhouette and word on every row. */}
+              legend. Hue, silhouette and word on every row — and every mark that
+              is actually drawn on the map has a row, which is the difference
+              between a key and a sample. */}
           <ul className="map-legend">
             {TYPES.map((type) => (
               <li key={type} className="legend-item">
@@ -1170,9 +1434,42 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
                 {TYPE_LABEL[type]}
               </li>
             ))}
+
+            {/* The star badge, at the size it is badged onto a pin. */}
+            <li className="legend-item">
+              <span className="legend-star" aria-hidden="true">
+                <StarMark size={11} />
+              </span>
+              Campsite spot
+            </li>
+
+            {/* The camera pin, drawn from the same silhouette as the marker. */}
+            <li className="legend-item">
+              <svg
+                className="legend-photo"
+                viewBox="0 0 32 32"
+                width="15"
+                height="15"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <rect x="1.5" y="4.5" width="29" height="23" rx="5" />
+                <circle className="legend-photo-lens" cx="16" cy="16" r="6.2" />
+                <circle cx="16" cy="16" r="2.8" />
+              </svg>
+              Has a photo
+            </li>
+
+            {/* The cluster disc, at a size that still reads as the same object. */}
+            <li className="legend-item">
+              <span className="legend-cluster" aria-hidden="true">
+                3
+              </span>
+              3 places, tap to zoom
+            </li>
           </ul>
 
-          <div className="panel-body" hidden={!panelOpen}>
+          <div className="panel-body" id={`${panelId}-body`} hidden={!panelOpen}>
             <label className="map-search">
               <span className="sr-only">Search locations by name</span>
               <input
@@ -1206,7 +1503,7 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
                 aria-pressed={showCampsiteOnly}
                 onClick={() => setShowCampsiteOnly((v) => !v)}
               >
-                <span aria-hidden="true">★</span> Campsite only
+                <StarMark size={12} /> Campsite only
               </button>
               <button
                 type="button"
@@ -1254,14 +1551,23 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
               <ul className="poi-list">
                 {listedPois.map((poi) => (
                   <li key={poi.slug}>
-                    <button type="button" className="poi-row" onClick={() => focusPoi(poi.slug)}>
+                    <button
+                      type="button"
+                      className="poi-row"
+                      /* The chosen row inverts to ink, the same move a pressed
+                         chip makes. It is what the reader comes back to when
+                         they reopen the panel and ask which one they tapped. */
+                      aria-current={poi.slug === selectedSlug ? 'true' : undefined}
+                      onClick={() => focusPoi(poi.slug)}
+                    >
                       <span className={`chip-dot chip-dot--${poi.type}`} aria-hidden="true" />
                       <span className="poi-row-name">{poi.name}</span>
                       {poi.isMeetupSpot && <span className="poi-row-tag">Meetup spot</span>}
                       <span className="poi-row-type">{TYPE_LABEL[poi.type]}</span>
                       {poi.isCampsite && (
-                        <span className="poi-row-star" aria-label="Campsite">
-                          ★
+                        <span className="poi-row-star">
+                          <StarMark size={12} />
+                          <span className="sr-only">Campsite</span>
                         </span>
                       )}
                     </button>

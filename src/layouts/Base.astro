@@ -76,6 +76,19 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <meta property="og:image" content={new URL(ogImage, canonical)} />
     <meta name="twitter:card" content="summary_large_image" />
 
+    {/* The two faces the first paint needs, requested before the stylesheet is
+        parsed rather than after it: measured, the woff2 requests started at
+        603ms behind CSS parse and every H1 flashed in system-ui on a cold load.
+        The italic is not preloaded; the browser fetches it only if italic text
+        appears. Same-origin, so no preconnect. */}
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/overpass-wght.woff2" />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/fonts/atkinson-hyperlegible-next-wght.woff2"
+    />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="apple-mobile-web-app-title" content="PoGo TXK" />
@@ -117,9 +130,12 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       {/*
         The menu, below 820px only, where the nav collapses into a panel.
 
-        The ball with the word beside it, not the ball alone. On its own it was
-        an unlabelled control that happened to be the same mark as the brand two
-        inches to its left, and the word is what tells them apart.
+        A drawn mark with the word beside it. It used to be a second Poké Ball,
+        two inches from the brand's — the same mark meaning two different things
+        in one bar, so the ball stopped meaning the brand. Three stacked ink
+        rules instead: the same 2px rule this world draws under every panel head,
+        which is a mark from the board rather than a borrowed hamburger. The ball
+        stays the brand, once, on the left.
 
         Sits before the nav in source order deliberately: with the panel closed
         the links are `display: none` and out of the tab order entirely, and
@@ -134,7 +150,22 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         aria-controls="primary-nav"
         aria-label="Open menu"
       >
-        <PokeBall size={24} />
+        <svg
+          class="nav-toggle-mark"
+          viewBox="0 0 20 14"
+          width="20"
+          height="14"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="square"
+            d="M1 1h18M1 7h18M1 13h18"
+          />
+        </svg>
         <span class="nav-toggle-label">Menu</span>
       </button>
 
@@ -867,19 +898,18 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         background: var(--header-wash);
         border-color: var(--header-fg);
       }
-      /*
-       * Open reads as the chip lighting up, not as the ball turning over. A Poké
-       * Ball rotated 180° just puts the red half underneath, which reads as an
-       * upside-down ball rather than as an open menu.
-       */
+      /* Open reads as the chip lighting up. The three rules stay three rules —
+         collapsing them into an X is a different icon system's idiom, and this
+         one keeps the word "Menu" beside it either way. */
       .nav-toggle[aria-expanded='true'] {
         background: var(--header-wash);
         border-color: var(--header-fg);
       }
-      /* `:global` for the same reason as the brand's ball above. */
-      .nav-toggle :global(.pokeball) {
+      /* The three ink rules, at the header's own foreground. */
+      .nav-toggle-mark {
         display: block;
         flex: none;
+        color: var(--header-fg);
       }
 
       /* ---------------------------------------------------------- right zone --

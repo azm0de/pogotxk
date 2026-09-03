@@ -48,6 +48,21 @@
   --map-attrib-h: 24px;
   --map-panel-h: 0px;
   --map-panel-bottom: calc(var(--map-attrib-h) + var(--space-2));
+
+  /*
+   * Where the locate button sits, as one value.
+   *
+   * The status flash is anchored to the same corner (it is the button's own
+   * answer), so the two cannot drift: one property, two consumers. The `min()`
+   * is a guard — on a short viewport with the panel open the sum would push the
+   * button off the top of the map.
+   */
+  --map-locate-left: var(--space-3);
+  --map-locate-right: auto;
+  --map-locate-bottom: min(
+    calc(var(--map-panel-bottom) + var(--map-panel-h) + var(--space-2)),
+    calc(100% - 72px)
+  );
 }
 
 .map-canvas {
@@ -335,15 +350,22 @@
   background: none;
   border: 0;
 }
+/*
+ * Pinned to the light pair in both themes, like the pins and the route badges
+ * above it. `--bg-panel` and `--text` invert, and this disc does not sit on a
+ * panel — it sits on the basemap, which is light in both schemes, so in dark
+ * mode the disc was a near-black circle with pale numerals dropped onto warm
+ * paper. The two values are the light theme's own `--bg-panel` and `--ink-800`.
+ */
 .map-cluster {
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: var(--bg-panel);
-  color: var(--text);
-  border: 2px solid var(--text);
+  background: #fff; /* pinned light: this disc sits on the always-light basemap */
+  color: var(--ink-800); /* on #fff: 16.83:1 */
+  border: 2px solid var(--ink-800);
   font-family: var(--font-sign);
   font-weight: 800;
   font-size: var(--text-md);
@@ -503,6 +525,13 @@
 .popup-badge--attr-campsite {
   border-color: var(--poi-campsite);
 }
+/* The drawn star, on the badge's own baseline. `--poi-campsite-text` rather than
+   the pin hue: this one sits on the panel, where the pin hue is 2.1:1. */
+.popup-badge-star {
+  vertical-align: -1px;
+  margin-inline-end: 3px;
+  fill: var(--poi-campsite-text);
+}
 .popup-badge--attr-meetup {
   /* `--accent-solid`, not `--accent`: the latter inverts to a light red in
      dark mode, which against a dark panel is a border you cannot see. */
@@ -589,11 +618,17 @@
 }
 /*
  * Same Leaflet fight, for the press-source link under the photograph: their
- * `.leaflet-container a` is unlayered, so the reset's `a { color: var(--accent) }`
- * never reached it and the link rendered teal at 3.36:1 in dark mode.
+ * `.leaflet-container a` is unlayered, so the reset never reached it and the
+ * link rendered teal at 3.36:1 in dark mode.
+ *
+ * Ink with an underline, matching the site's link rule now that red is rationed
+ * to here / now / active. Nothing about a source credit is "now".
  */
 .leaflet-container .leaflet-popup-content a {
-  color: var(--accent);
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 0.16em;
 }
 
 /* --------------------------------------------------------------- chrome -- */
@@ -609,11 +644,9 @@
  */
 .map-locate {
   position: absolute;
-  left: var(--space-3);
-  bottom: min(
-    calc(var(--map-panel-bottom) + var(--map-panel-h) + var(--space-2)),
-    calc(100% - 72px)
-  );
+  left: var(--map-locate-left);
+  right: var(--map-locate-right);
+  bottom: var(--map-locate-bottom);
   z-index: 600; /* above Leaflet's marker pane; below its control pane (800) */
   display: grid;
   place-items: center;
@@ -630,16 +663,23 @@
   background: var(--bg-sunken);
 }
 /*
- * Wide screens: the legend is open by default and taller than the map, so
- * "above the panel" clamps the button to the map's top-left corner, a long way
- * from the panel it belongs with. Park it beside the panel's bottom corner
- * instead: still bottom-left of the map, still clear of the zoom stack and the
- * attribution on the right. 340px is the panel's own width at this breakpoint.
+ * Wide screens: dock it on top of the zoom stack, bottom-right.
+ *
+ * It used to be parked beside the legend panel's bottom corner, which at 1440
+ * is 364px in from the left edge — the middle of the map, floating on its own,
+ * with the zoom controls in the opposite corner. Locate and zoom are the same
+ * kind of thing (move the map), so they read as one stack of controls in one
+ * corner rather than two stray widgets. The offset clears the zoom stack (two
+ * 30px buttons plus Leaflet's own 10px margin) and the attribution under it.
+ *
+ * Below 641px the button stays bottom-left above the panel: that is the corner
+ * a thumb reaches on the surface most likely to be used one-handed, walking.
  */
 @media (min-width: 641px) {
-  .map-locate {
-    left: calc(var(--space-3) + 340px + var(--space-3));
-    bottom: var(--map-panel-bottom);
+  .map-shell {
+    --map-locate-left: auto;
+    --map-locate-right: var(--space-3);
+    --map-locate-bottom: calc(var(--map-attrib-h) + 78px + var(--space-2));
   }
 }
 /* Busy is a static ring, not a spinner: there is nothing to animate that would
@@ -648,6 +688,80 @@
   box-shadow:
     var(--shadow-md),
     0 0 0 3px var(--accent-solid);
+}
+
+/*
+ * The locate flash, and the basemap's failure line: two small panels that print
+ * where the thing they are about happened.
+ *
+ * `.map-flash` sits directly above the locate button — the answer beside the
+ * question — rather than 700px away at the top of the legend. `.map-tiles-down`
+ * sits in the map's own top-left corner, over the ground that failed to draw.
+ */
+.map-flash,
+.map-tiles-down {
+  position: absolute;
+  z-index: 650; /* over the locate button's pane, under Leaflet's controls (800) */
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  max-width: min(280px, calc(100% - var(--space-6)));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: var(--lh-ui);
+  box-shadow: var(--shadow-md);
+}
+/*
+ * Above the button, and never off the top of the map.
+ *
+ * The second term of the `min()` is the guard. With the legend open and tall on
+ * a short phone, the locate button is itself clamped to the map's top edge, and
+ * "above the button" then meant above the map — a four-line permission error
+ * printed under the site header, outside the surface it was about. 108px is the
+ * longest of these messages (four lines at this width, plus its padding) plus a
+ * margin, so in that one state the panel drops to just below the button and
+ * over the legend's top edge instead, where it is still beside the control that
+ * raised it and still on the map. It out-ranks the legend by z-index, so it is
+ * never the thing that gets covered.
+ */
+.map-flash {
+  left: var(--map-locate-left);
+  right: var(--map-locate-right);
+  bottom: min(
+    calc(var(--map-locate-bottom) + 48px + var(--space-2)),
+    calc(100% - 108px)
+  );
+}
+/*
+ * Top-right, not top-left. The left column of the map belongs to the locate
+ * button and the flash that answers it, and with the panel open the button is
+ * clamped to the top of the map — so a notice in the left corner landed on top
+ * of the flash. Nothing else uses this corner; the zoom stack is at the bottom.
+ */
+.map-tiles-down {
+  top: var(--space-3);
+  right: var(--space-3);
+}
+/*
+ * An ink rule, not the You-Are-Here disc.
+ *
+ * These lines are usually the bad news — permission refused, tiles not coming —
+ * and the red disc in its double ring is the mark that means "found you, this is
+ * where you are". Wearing it to say "could not find you" is the one place on
+ * this board where red lied. A 2px ink rule is the panel's own mark.
+ */
+.map-mark {
+  flex: none;
+  width: 12px;
+  height: 2px;
+  margin-top: 0.55em;
+  background: var(--text);
 }
 
 /*
@@ -670,33 +784,6 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-}
-
-/*
- * The visible twin of the sr-only live region: locating, failures, and the
- * nearest gym. Sighted users had none of this — the button gave no feedback at
- * all between the tap and the map moving, which on a slow fix is several
- * seconds of nothing.
- */
-.map-status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-2) var(--space-4);
-  background: var(--bg-sunken);
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  line-height: var(--lh-ui);
-}
-.map-status::before {
-  content: '';
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent-solid);
 }
 
 .panel-handle {
@@ -724,16 +811,23 @@
 }
 
 /* A second read on the state, on the far side of the label: points down when
-   the panel is open, flips up when it is closed. */
-.panel-chevron {
+   the panel is open, flips up when it is closed. Drawn, in the same stroke
+   weight as the arrows on the buttons. */
+.panel-chevron-mark {
+  flex: none;
   margin-left: auto;
   color: var(--text-muted);
-  font-size: var(--text-sm);
-  line-height: 1;
   transition: transform var(--dur-2) var(--ease-out);
 }
-.panel-handle[aria-expanded='false'] .panel-chevron {
+.panel-handle[aria-expanded='false'] .panel-chevron-mark {
   transform: rotate(180deg);
+}
+/* A rotation is a transform, so it needs the same escape every other transform
+   on this site has. Reduced motion keeps the direction, drops the sweep. */
+@media (prefers-reduced-motion: reduce) {
+  .panel-chevron-mark {
+    transition: none;
+  }
 }
 
 /*
@@ -764,6 +858,56 @@
 .legend-glyph {
   flex: none;
   fill: var(--text);
+}
+
+/*
+ * The three rows the legend was missing, each drawn as the thing it keys.
+ *
+ * The panel used to key three of the six marks actually on the map: the star
+ * badge, the camera pin and the cluster disc were all on screen with nothing
+ * naming them. Each of these is the same artwork at legend scale, so the key and
+ * the map are one object rather than two drawings of the same idea.
+ */
+.legend-star {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--poi-campsite);
+  color: var(--ink-900); /* on --poi-campsite #f2a33c: 12.3:1 */
+  /* The white ring the badge is cut out of the map with, restated at this size
+     as a border rather than a shadow so it survives the flex row. */
+  border: 1.5px solid var(--bg-panel);
+}
+/* Ink and panel-white, not the pin's fixed `--ink-700` on fixed white: the pin
+   sits on the always-light basemap, this row sits on a panel that inverts, and
+   a #2c2c31 camera on a #1e1e22 panel is a mark nobody can see. Same call
+   `.legend-glyph` makes one row up. */
+.legend-photo {
+  flex: none;
+  fill: var(--text);
+}
+.legend-photo-lens {
+  fill: var(--bg-panel);
+}
+/* The cluster disc, shrunk. Same ink ring, same tabular numeral, and the same
+   fixed light pair the disc itself uses on the always-light basemap. */
+.legend-cluster {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff; /* the disc is pinned light; see .map-cluster */
+  color: var(--ink-800); /* on #fff: 16.83:1 */
+  border: 1.5px solid var(--ink-800);
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .panel-body {
@@ -845,6 +989,36 @@
 .poi-row:hover {
   background: var(--bg-sunken);
 }
+/*
+ * The row you chose.
+ *
+ * Choosing a place used to leave no trace anywhere in the panel — on a phone the
+ * panel folds away to show the pin, and coming back to a list of 104 identical
+ * rows with no idea which one you had tapped was the whole of the feedback.
+ * Ink invert, the same move a pressed chip makes, so the panel has one idea of
+ * "this one" rather than two. `aria-current` carries it for a screen reader, so
+ * the fill is not the only signal.
+ */
+.poi-row[aria-current='true'] {
+  background: var(--text);
+  color: var(--bg);
+}
+.poi-row[aria-current='true'] .poi-row-type,
+.poi-row[aria-current='true'] .poi-row-star {
+  color: inherit;
+}
+.poi-row[aria-current='true'] .poi-row-tag {
+  background: var(--bg);
+  color: var(--text);
+}
+.poi-row[aria-current='true'] .chip-dot {
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.5);
+}
+/* The ring inverts with the row. `--accent` on the ink fill measures 1.4:1 —
+   an invisible focus indicator on the one row most likely to be tabbed back to. */
+.poi-row[aria-current='true']:focus-visible {
+  outline-color: var(--bg);
+}
 /* Inset, because an outset ring on the first or last row is clipped by the
    list's own rounded corner and reads as a broken half-outline. */
 .poi-row:focus-visible {
@@ -886,8 +1060,12 @@
 }
 .poi-row-star {
   flex: none;
+  display: inline-grid;
+  place-items: center;
   color: var(--poi-campsite-text);
-  font-size: var(--text-sm);
+}
+.poi-row-star svg {
+  display: block;
 }
 .poi-empty {
   margin: 0;
@@ -924,42 +1102,14 @@
 }
 
 /*
- * `.chip` is written out here rather than deferred to the primitive because
- * MapEditor.tsx imports this file into Admin.astro, which does not load
- * primitives.css — the admin type filters would lose every style. The values
- * below match `primitives.css` .chip exactly; keep them in step.
+ * `.chip` itself is the primitive now.
+ *
+ * This file used to hand-copy the whole rule, because `Admin.astro` did not load
+ * `primitives.css` and the editor's type filters would have lost every style.
+ * Admin imports the primitives now, and the copy had already drifted: it never
+ * picked up `text-decoration: none`, which started to matter the moment links
+ * became underlined by default. Only the map's own additions live here.
  */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 36px;
-  padding: var(--space-2) var(--space-3);
-  border: 1.5px solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-family: var(--font-read);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    background-color var(--dur-1) var(--ease-out),
-    border-color var(--dur-1) var(--ease-out),
-    color var(--dur-1) var(--ease-out);
-}
-.chip:hover {
-  border-color: var(--text);
-}
-/* aria-pressed is the source of truth for the active state — the styling
-   follows the semantics rather than a parallel class. Ink, so the map's red
-   keeps meaning "a flare is up". */
-.chip[aria-pressed='true'] {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg);
-}
 .chip[aria-pressed='true'] .chip-dot {
   box-shadow: 0 0 0 2px rgb(255 255 255 / 0.5);
 }
@@ -974,7 +1124,8 @@
  * switches. The `-badge` tokens rather than the pin hues: those are the versions
  * global.css measured to carry white text (>=4.6:1), which is this exact job.
  * White is set explicitly, not `--accent-contrast`, which is dark in dark mode.
- * Same specificity as the rule above, so these must — and do — come after it.
+ * These sit in this unlayered file and so beat the primitive's ink inversion at
+ * any specificity, which is the whole reason they can be written this plainly.
  */
 .chip--pokestop[aria-pressed='true'] {
   background: var(--poi-pokestop-badge);

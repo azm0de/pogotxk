@@ -39,9 +39,13 @@
 }
 
 /*
- * The connection pill. Three named states, unchanged: Live, Reconnecting, and
+ * The connection pill. Four named states: Connected, Live, Reconnecting, and
  * the polling fallback. It is the head's answer to "is this thing on"; the log
  * below carries the same states with the time they happened.
+ *
+ * "Live" is the board's word, not the socket's — see the note beside
+ * `statusText` in LiveBoard.tsx. A socket that opened over an empty board is
+ * `Connected`, in ink, with no pulse.
  */
 .live-status {
   display: inline-flex;
@@ -61,8 +65,9 @@
   line-height: var(--lh-ui);
 }
 
-/* The dot is ink by default, so a degraded board is not colour-coded at all —
-   the word carries it. Only the live state earns the red. */
+/* The dot is ink by default, so neither a degraded board nor a quiet one is
+   colour-coded at all — the word carries it. Only a board with a flare burning
+   on it earns the red and the pulse. */
 .live-dot {
   flex: none;
   width: 10px;
@@ -95,13 +100,9 @@
   }
 }
 
-/* The polling sentence is a sentence, so it wraps rather than pushing the row
-   wider than the column. */
-.live-status--polling {
-  text-transform: none;
-  letter-spacing: normal;
-  font-family: var(--font-read);
-}
+/* The polling state used to spell out "Live updates unavailable, refreshing
+   every 20 seconds" and needed a sentence's typography to wrap in. It is four
+   words now and wears the same label face as the other three. */
 
 /* ----------------------------------------------------------------- toast -- */
 
@@ -318,6 +319,23 @@
 .flare-kind--help {
   --badge-bg: var(--ink-600); /* measured 10.77:1, both themes */
 }
+/* The drawn kind, inside its own badge. `currentColor` is the badge's fixed
+   white, so the icon carries the same contrast the word does. */
+.flare-kind-icon {
+  flex: none;
+  margin-inline-end: 3px;
+}
+
+/*
+ * "Someone's here" — a fact about this flare, printed. It is deliberately NOT
+ * `.here`: the You-Are-Here marker is red and pulses, and it means the board is
+ * live right now. One RSVP saying they arrived is worth a label, not the
+ * loudest signal the site owns.
+ */
+.flare-attend {
+  --badge-bg: var(--bg-sunken);
+  --badge-fg: var(--text);
+}
 
 .flare-left {
   margin-inline-start: auto;
@@ -337,9 +355,10 @@
 }
 
 /* A place name is a link to its own pin on the map, whether it is carrying the
-   heading or standing on its own line under one. */
+   heading or standing on its own line under one. Ink and underlined, like every
+   other link: a gym's name is not "now", and the flare's own badge and its live
+   countdown are what say the board is hot. */
 .flare-place {
-  color: var(--accent);
   text-underline-offset: 0.15em;
   text-decoration-thickness: from-font;
 }
@@ -457,15 +476,37 @@
 
 /* ----------------------------------------------------------- empty state -- */
 
-.live-empty {
-  gap: var(--space-4);
-  justify-items: start;
+/*
+ * The empty board, as two objects.
+ *
+ * The dashed box used to hold three buttons, which is the one thing this
+ * world's empty state may not do: dashed and muted is a *status*, and an
+ * invitation inside it reads as an offer the site is unsure about. The status
+ * says the board is empty; the solid panel under it is where the offer lives,
+ * with real buttons on a real surface.
+ */
+.live-nothing {
+  display: grid;
+  gap: var(--space-3);
 }
 .live-empty p {
   margin: 0;
   max-width: 38ch;
   font-size: var(--text-base);
   line-height: var(--lh-body);
+}
+.live-elsewhere {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+.live-elsewhere-line {
+  margin: 0;
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: var(--text-lg);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-tight);
 }
 .live-empty-actions {
   display: flex;

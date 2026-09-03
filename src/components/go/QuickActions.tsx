@@ -806,13 +806,19 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
    * A location line, not an error line. "Location off — pick manually" read as
    * something having gone wrong; nothing has, and the screen works either way —
    * it just means the Where field starts empty instead of guessing.
+   *
+   * It prints under the Where field it is about (see the sheet below), and only
+   * while it is still moving — "Finding you…" is worth a line in the page head,
+   * because it is the one thing on this screen ever in mid-change. The settled
+   * states are the field's business.
    */
-  const locationLine =
+  const locationNote =
     gpsState === 'ok' && here
       ? 'Nearest gyms first'
       : gpsState === 'locating'
         ? 'Finding you…'
         : 'Pick the spot by hand';
+  const locationLine = gpsState === 'locating' ? 'Finding you…' : null;
 
   /* The boss suggestions only mean anything while a sheet with a boss field is
      open. Rendered unconditionally, the 17 generic names in the list were 17
@@ -825,7 +831,7 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
       <div className="panel-head go-head">
         <div className="go-head-title">
           <h1>Quick actions</h1>
-          <p className="go-status">{locationLine}</p>
+          {locationLine && <p className="go-status">{locationLine}</p>}
         </div>
         {(canPost && (pushState === 'on' || pushState === 'off')) || user ? (
           <div className="go-head-right">
@@ -974,11 +980,21 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
 
         {flares.length === 0 ? (
           boardStatus === 'error' ? null : (
-            <p className="go-empty empty-state empty-art-bg">
-              {canPost
-                ? 'Nothing active right now. Raise one when you are at a gym and want company.'
-                : 'Nothing active right now.'}
-            </p>
+            <>
+              <p className="go-empty empty-state empty-art-bg">
+                {canPost
+                  ? 'Nothing active right now. Raise one when you are at a gym and want company.'
+                  : 'Nothing active right now.'}
+              </p>
+              {/* The screen used to end here, on an absence, with nowhere to go
+                  next — and this is the page the bubble opens over the game, so
+                  "nothing" was the last word a lot of visits got. */}
+              <p className="go-exit">
+                <a className="btn btn--sm btn--outline btn--arrow" href="/live">
+                  Open the live board
+                </a>
+              </p>
+            </>
           )
         ) : (
           <ul>
@@ -1081,6 +1097,11 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
                 </option>
               ))}
             </select>
+            {/* The location state belongs to this field, not to the page title.
+                It used to sit beside the h1 as a subtitle — "Pick the spot by
+                hand" under "Quick actions" reads as a description of the whole
+                screen rather than as the reason this one list is unsorted. */}
+            <span className="go-field-note">{locationNote}</span>
           </label>
 
           {action.needsBoss && (

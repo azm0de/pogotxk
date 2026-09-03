@@ -12,6 +12,7 @@ import {
   type FlareKind,
   type FlareRsvpState,
 } from '~/lib/db/flares';
+import { FlareIcon } from '~/components/go/flareIcons';
 import { proxiedImageUrl } from '~/lib/game-image';
 import { slugify } from '~/lib/slug';
 import { DEFAULT_TZ } from '~/lib/time';
@@ -807,15 +808,19 @@ export default function LiveBoard({
 
   /*
    * The pill says whether the board is CONNECTED. It never says how many people
-   * are here.
+   * are here, and it no longer says "LIVE" over an empty board.
    *
-   * It used to read "Live · N watching", and the count was the problem, not the
-   * pill: on a quiet evening it renders "Live · 1 watching", which tells a
-   * lone user they are alone and invites them to close the tab. Worse, it made
-   * the number look like the point of the badge. Justin's call (2026-08-16) is
-   * the right one — keep the reassurance, drop the headcount. A bare "Live"
-   * with the pulsing dot answers the only question the header should answer:
-   * is this thing on?
+   * It used to read "Live · N watching", and the count was the problem: on a
+   * quiet evening it renders "Live · 1 watching", which tells a lone user they
+   * are alone and invites them to close the tab. Justin's call (2026-08-16) was
+   * to keep the reassurance and drop the headcount.
+   *
+   * Round 2 found the word itself wrong. A red pulsing "LIVE" 40px under the
+   * nav's red disc, sitting above "Nothing on the board right now", claims the
+   * loudest state this site has for the fact that a WebSocket opened. So the
+   * word follows the board rather than the socket: `Connected` when the socket
+   * is up and nothing is burning, `Live` (and the red, and the pulse) only once
+   * a flare is actually on the board.
    *
    * `connecting` stays dropped. It is the normal path on every load, so showing
    * it buys a pill that flashes once and vanishes.
@@ -825,14 +830,23 @@ export default function LiveBoard({
    * happening". A silent fallback to 20-second polling is exactly the failure a
    * live board must not hide.
    */
+  const anyLive = visible.length > 0;
   const statusText =
     status === 'live'
-      ? 'Live'
+      ? anyLive
+        ? 'Live'
+        : 'Connected'
       : status === 'reconnecting'
-        ? 'Reconnecting…'
+        ? 'Reconnecting'
         : status === 'polling'
-          ? 'Live updates unavailable, refreshing every 20 seconds'
+          ? 'Refreshing every 20s'
           : null;
+  /*
+   * The modifier the red and the pulse hang off — the socket state alone never
+   * earns them. A connected socket over an empty board is its own tone, so the
+   * `--live` styling cannot reach it by accident.
+   */
+  const statusTone = status === 'live' ? (anyLive ? 'live' : 'connected') : status;
 
   const flareRow = (flare: Flare) => {
     const myState = mine[flare.id];
@@ -864,14 +878,21 @@ export default function LiveBoard({
           <time className="flare-time" dateTime={flare.createdAt}>
             {stamp(Date.parse(flare.createdAt))}
           </time>
-          {/* PROMOTE: `<FlareIcon kind={flare.kind} />` from
-              src/components/go/flareIcons.tsx, once W2-C's six flat SVGs are
-              in. Until then the badge is the word alone, which is the signal
-              that has to work anyway. */}
+          {/* The drawn kind, beside the word. `/go` has shown these six
+              silhouettes since the flat SVGs landed and `/live` was still
+              printing text chips, so the same six flares read as two different
+              vocabularies depending which page you raised them from. */}
           <span className={`badge flare-kind flare-kind--${flare.kind}`}>
+            <FlareIcon kind={flare.kind} size={13} className="flare-kind-icon" />
             {FLARE_KIND_LABEL[flare.kind]}
           </span>
-          {flare.rsvps.here > 0 && <span className="here">Happening now</span>}
+          {/*
+            Someone has said they are standing there. That is a fact about the
+            flare, not a state of the board — so it is a printed badge, and the
+            You-Are-Here marker with its pulse is kept for a flare that is
+            genuinely live right now.
+          */}
+          {flare.rsvps.here > 0 && <span className="badge flare-attend">Someone&rsquo;s here</span>}
           <span className="flare-left">{timeLeft(flare.expiresAt, nowMs)}</span>
         </p>
 
@@ -1043,7 +1064,7 @@ export default function LiveBoard({
         <h1>Live board</h1>
 
         {statusText && (
-          <p className={`live-status live-status--${status}`} role="status" aria-live="polite">
+          <p className={`live-status live-status--${statusTone}`} role="status" aria-live="polite">
             <span className="live-dot" aria-hidden="true" />
             {statusText}
           </p>
@@ -1089,7 +1110,7 @@ export default function LiveBoard({
                       aria-pressed={form.kind === kind}
                       onClick={() => setField('kind', kind)}
                     >
-                      {/* PROMOTE: `<FlareIcon kind={kind} />` from src/components/go/flareIcons.tsx */}
+                      <FlareIcon kind={kind} size={16} />
                       {FLARE_KIND_LABEL[kind]}
                     </button>
                   ))}
@@ -1260,13 +1281,23 @@ export default function LiveBoard({
       </p>
 
       <ol className="live-log stack">
+        {/*
+          Two objects, not one.
+          The dashed box is a status — it says the board is empty and nothing
+          else. The invitation is a solid panel with real buttons under it, which
+          is this world's rule: an empty state is a statement, and an offer
+          belongs on a sign.
+        */}
         {visible.length === 0 && (
-          <li>
+          <li className="live-nothing">
             <div className="empty-state empty-art-bg live-empty">
               <p>
                 Nothing on the board right now. A flare appears here the moment someone raises one,
                 without a refresh.
               </p>
+            </div>
+            <div className="panel live-elsewhere">
+              <p className="live-elsewhere-line">Somewhere to go in the meantime.</p>
               <div className="live-empty-actions">
                 <a className="btn btn--outline btn--arrow" href="/map">
                   See the park map

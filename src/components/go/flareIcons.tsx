@@ -27,35 +27,46 @@ import { FLARE_KINDS, type FlareKind } from '~/lib/db/flares';
  */
 
 /**
- * The gym tower, shared by `raid` and `gym_takedown`.
+ * The gym tower, at the bottom of the two gym tiles.
  *
  * Same object as `GLYPH_GYM` on the map, redrawn as an outline at this size:
- * ground line, two walls under a pitched roof, a doorway. Raid sets it alight;
- * takedown puts an arrow into it.
+ * ground line, two walls under a pitched roof, a doorway.
+ *
+ * It used to be the WHOLE of both tiles, with a small flame over one and a small
+ * arrow beside the other — two icons that read as the same drawing at 28px on a
+ * phone in sunlight, which is where these are actually looked at. So the
+ * difference moved into the silhouette: a raid is the tower standing inside a
+ * burst, a takedown is the tower with its roof broken in. You can tell them
+ * apart at arm's length with the labels covered, which is the test.
  */
-const TOWER = (
-  <>
-    <path d="M4 21h16" />
-    <path d="M7 21v-7l5-3 5 3v7" />
-    <path d="M10 21v-4h4v4" />
-  </>
-);
+const TOWER_BODY = <path d="M8 21v-5h8v5" />;
 
 const GLYPHS: Record<FlareKind, JSX.Element> = {
-  /* A flame over the gym: the tile that means "this gym is hot, come now". */
+  /* The tower inside a radiating burst: this gym is hot, come now. */
   raid: (
     <>
-      <path d="M12 2.6c1.8 1.6 2.7 2.8 2.7 4a2.7 2.7 0 0 1-5.4 0c0-1.2.9-2.4 2.7-4z" />
-      {TOWER}
+      <path d="M4 21h16" />
+      {TOWER_BODY}
+      <path d="M12 4.2l1.9 3.4 3.8.6-2.8 2.7.7 3.8-3.6-1.9-3.6 1.9.7-3.8-2.8-2.7 3.8-.6z" />
+      <path d="M12 1.4v1.3" />
+      <path d="M4.6 5.1l.9.9" />
+      <path d="M19.4 5.1l-.9.9" />
+      <path d="M2.6 12.4h1.3" />
+      <path d="M21.4 12.4h-1.3" />
     </>
   ),
-  /* The same gym with a strike coming down onto it. */
+  /*
+   * The same tower with a broken roofline: one side of the pitch has dropped in,
+   * and the ridge steps down instead of meeting. The gym is coming apart, which
+   * is the whole of what a takedown is.
+   */
   gym_takedown: (
     <>
-      <path d="M21 4.5l-4.5 4.5" />
-      <path d="M16.5 9V6" />
-      <path d="M16.5 9h3" />
-      {TOWER}
+      <path d="M4 21h16" />
+      {TOWER_BODY}
+      <path d="M4.6 12.4L10 8.2l1.7 3.6 2.4-2.1 5.3 2.7" />
+      <path d="M6.2 21v-7.2" />
+      <path d="M17.8 21v-6.4" />
     </>
   ),
   /* The map's own teardrop pin: "I am standing at this spot". */

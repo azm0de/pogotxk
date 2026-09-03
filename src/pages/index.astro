@@ -114,6 +114,35 @@ const nextDiscord = discordEvents ? nextDiscordMeetup(discordEvents.events, nowI
  * it cannot do. When both exist for the same outing the hand-entered row wins
  * the tie, since it is the one carrying a POI, an RSVP list and a Campfire link.
  */
+/**
+ * A Discord location string, cut back to the place.
+ *
+ * Discord stores a scheduled event's location as free text, and the guild's
+ * events are entered from a phone's address autocomplete — so the board was
+ * printing `Street A, Texarkana, TX, USA`, a postal string nobody in Texarkana
+ * needs the last three quarters of. Everything after the venue is city, state
+ * and country, all three of which this whole site is already about.
+ *
+ * Display only, and conservative: if trimming would leave nothing, the original
+ * string is kept. The hand-entered meetups come through `meetupLocation()` with
+ * a real POI name and never match any of this.
+ *
+ * The proper fix is a resolver beside `discord-events-map.ts` that matches the
+ * string against the surveyed POIs and hands back the POI. That file is not
+ * this wave's to edit; see the cross-file request in the wave report.
+ */
+const ADMIN_TAIL = /^(texarkana|tx|texas|ar|arkansas|usa|us|united states)$/i;
+function placeLabel(where: string | null): string | null {
+  if (!where) return null;
+  const parts = where
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return where;
+  const kept = parts.filter((part) => !ADMIN_TAIL.test(part));
+  return kept.length ? kept.join(', ') : where;
+}
+
 const nextUp: {
   title: string;
   startsAt: string;
@@ -164,6 +193,7 @@ const nextUp: {
  * renders it, which is where someone has gone to browse rather than to glance.
  */
 const nextUpWhen = nextUp ? formatInZone(nextUp.startsAt, nextUp.tz) : null;
+const nextUpWhere = placeLabel(nextUp?.where ?? null);
 
 const latestPosts = Array.isArray(posts) ? posts : posts.posts;
 // Short form for a news row — /blog's own `dateFormat` spells the month out
@@ -412,8 +442,26 @@ function homeWhen(event: CalendarEvent): string {
         <div class="panel-head">
           <h1 id="board-title">Spring Lake Park</h1>
         </div>
-        <p class="board-lede">
-          The Pokémon GO Community Campsite in Texarkana, run by the official Ambassadors.
+        {/*
+          The arrow rides with the title plate, above the three posts.
+
+          It used to close the panel, and at the bottom of three posts it landed
+          at y=1,012 on a 812px phone — the board's one primary action, below the
+          fold, on the page's first screen. A signpost carries its arrow at the
+          top; the posts under it are the notices pinned to the same board, and
+          they are read after you know where the arrow goes.
+        */}
+        <p class="board-actions actions">
+          <a class="btn btn--primary btn--arrow" href="/map">Open the map</a>
+          <a
+            class="btn btn--outline"
+            href={DISCORD_INVITE}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            Join the Discord
+            <span class="sr-only"> (opens in a new tab)</span>
+          </a>
         </p>
 
         <ol class="posts" role="list">
@@ -423,11 +471,16 @@ function homeWhen(event: CalendarEvent): string {
               {
                 nextUp ? (
                   <>
-                    <p class="post-lead tnum">
+                    {/* The name leads. The date used to be the loudest line on
+                        the board, which made the display face a function of
+                        position rather than of meaning — a reader glancing at
+                        the post learned "Wed, Sep 10" before they learned what
+                        was happening. */}
+                    <p class="post-lead">{nextUp.title}</p>
+                    <p class="post-line post-when tnum">
                       <time datetime={nextUp.startsAt}>{nextUpWhen}</time>
                     </p>
-                    <p class="post-line">{nextUp.title}</p>
-                    <p class="post-line post-muted">{nextUp.where ?? 'Place to be confirmed'}</p>
+                    <p class="post-line post-muted">{nextUpWhere ?? 'Place to be confirmed'}</p>
                     {nextUp.rsvpUrl && (
                       <p class="post-action">
                         <a
@@ -469,8 +522,12 @@ function homeWhen(event: CalendarEvent): string {
                     <p class="post-line">
                       <span class="here">Live now</span>
                     </p>
+                    {/* The one red link on the board, and only in this branch:
+                        something is burning right now, which is exactly what red
+                        answers here. With no flares up the same link is ink like
+                        every other. */}
                     <p class="post-action">
-                      <a class="target" href="/live">Open the live board</a>
+                      <a class="target post-link--now" href="/live">Open the live board</a>
                     </p>
                   </>
                 ) : (
@@ -491,7 +548,12 @@ function homeWhen(event: CalendarEvent): string {
               {
                 totalPois > 0 ? (
                   <>
-                    <p class="post-lead tnum">{totalPois} places surveyed</p>
+                    {/* The tally IS the action: every one of these places is on
+                        the map, so the number is the way in rather than a fact
+                        with a button bolted under it. */}
+                    <p class="post-lead tnum">
+                      <a href="/map">{totalPois} places surveyed</a>
+                    </p>
                     <p class="post-line post-muted tnum">
                       {counts?.pokestops ?? 0} PokéStops, {counts?.gyms ?? 0} Gyms,{' '}
                       {counts?.powerspots ?? 0} Power Spots, {counts?.campsite ?? 0} starred for the
@@ -502,22 +564,16 @@ function homeWhen(event: CalendarEvent): string {
                   <p class="post-lead post-lead--quiet">The survey is not published yet</p>
                 )
               }
+              {/* The board's own identity line, folded down here off the panel
+                  head: at the top it spent two lines above the fold restating
+                  what the map underneath already shows. */}
+              <p class="post-line post-muted">
+                Spring Lake Park is the Pokémon GO Community Campsite in Texarkana, run by the
+                official Ambassadors.
+              </p>
             </div>
           </li>
         </ol>
-
-        <p class="board-actions actions">
-          <a class="btn btn--primary btn--arrow" href="/map">Open the map</a>
-          <a
-            class="btn btn--outline"
-            href={DISCORD_INVITE}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Join the Discord
-            <span class="sr-only"> (opens in a new tab)</span>
-          </a>
-        </p>
       </div>
     </section>
 
@@ -530,7 +586,7 @@ function homeWhen(event: CalendarEvent): string {
       <div class="panel">
         <div class="panel-head">
           <h2 id="in-game-heading">In game today</h2>
-          <span class="count">Raids, eggs and research</span>
+          <span class="caption">Raids, eggs and research</span>
         </div>
 
         {
@@ -674,6 +730,7 @@ function homeWhen(event: CalendarEvent): string {
                     when={homeWhen(event)}
                     state={happening.live.includes(event) ? 'live' : 'ongoing'}
                     showImage
+                    stateNamedByGroup
                   />
                 </li>
               ))}
@@ -826,7 +883,19 @@ function homeWhen(event: CalendarEvent): string {
           Ambassadors, and they act as local hubs for in-person meetups. They come with perks:
           exclusive event check-ins, special Timed Research, and enhanced PokéStops and Gyms.
         </p>
-        <p>Ours covers Spring Lake Park. The ★ markers on the map are the Campsite locations.</p>
+        {/* The star is drawn, and it is the same path the map badges the
+            Campsite pins with — a key drawn from different artwork than the
+            thing it keys is not a key. */}
+        <p>
+          Ours covers Spring Lake Park. The{' '}
+          <svg class="inline-star" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"
+            />
+          </svg>{' '}
+          <span class="sr-only">star</span> markers on the map are the Campsite locations.
+        </p>
       </div>
     </section>
 
@@ -844,7 +913,7 @@ function homeWhen(event: CalendarEvent): string {
             nextUp ? (
               <>
                 Next meetup: <strong class="tnum">{nextUpWhen}</strong>
-                {nextUp.where ? `, ${nextUp.where}.` : '.'}
+                {nextUpWhere ? `, ${nextUpWhere}.` : '.'}
               </>
             ) : (
               'Meetups run on Wednesday evenings at the Campsite, and get announced in Discord first.'
@@ -907,9 +976,26 @@ function homeWhen(event: CalendarEvent): string {
    * licence decision rather than a compositional one — the press credit lives
    * on the bottom strip of the image (`.credit`), and nothing sits on top of it.
    */
+  /*
+   * The board is one object that has to fit one screen.
+   *
+   * Round 1 shipped it 1,088–1,330px tall on a 760–900px viewport: the banner
+   * and the map together spent the whole first screen, and the panel — the only
+   * part of the board carrying a date, a place and a button — began below the
+   * fold at every width measured. The three sizes below are the budget, and
+   * they are load-bearing rather than taste:
+   *
+   *   banner  180px (220 from 900px up)
+   *   map     clamp(240px, 42dvh, 380px)
+   *   overlap 80px
+   *
+   * which leaves the panel's first post — its name, its time, its place and its
+   * RSVP button — and the board's one arrow inside 812px on the phone this site
+   * is designed for, and the whole board inside 900px on a laptop.
+   */
   .board {
-    --board-overlap: var(--space-10);
-    margin-block-start: var(--space-6);
+    --board-overlap: var(--space-20);
+    margin-block-start: var(--space-4);
   }
   .board-plate {
     border-radius: var(--radius-lg);
@@ -934,7 +1020,7 @@ function homeWhen(event: CalendarEvent): string {
     /* Matches the tight crop the `<img>` fallback actually serves, so `cover`
        is not cropping an already-cropped frame a second time. */
     aspect-ratio: 1200 / 560;
-    max-height: 300px;
+    max-height: 180px;
     object-fit: cover;
     /* Low, because the people are in the lower two-thirds of the frame. */
     object-position: center 58%;
@@ -944,7 +1030,7 @@ function homeWhen(event: CalendarEvent): string {
   @media (min-width: 900px) {
     .banner img {
       aspect-ratio: 2540 / 740;
-      max-height: 360px;
+      max-height: 220px;
       object-position: center 72%;
     }
   }
@@ -954,6 +1040,18 @@ function homeWhen(event: CalendarEvent): string {
   .banner .credit {
     font-family: var(--font-sign);
     font-weight: 700;
+  }
+  /*
+   * The credit's link underlines itself in white.
+   *
+   * Links are ink with a `--border-strong` underline now, and the underline is
+   * the whole affordance. On the credit's black scrim that token is #c7c7ce in
+   * light mode and #4c4c56 in dark — the dark one is invisible against the
+   * scrim, which left "All photos" as white text with no sign it was a link at
+   * all. `currentColor` puts the rule in the same white as the words.
+   */
+  .banner .credit a {
+    text-decoration-color: currentColor;
   }
 
   .board-map {
@@ -966,40 +1064,40 @@ function homeWhen(event: CalendarEvent): string {
      * until the finish captures caught it.
      */
     isolation: isolate;
-    height: 70dvh;
-    min-height: 320px;
-    max-height: 560px;
-  }
-  /* 768px is the tablet break, and the board's own: below it the panel needs the
-     full width to hold a date, a place and a button on one readable measure. */
-  @media (min-width: 768px) {
-    .board-map {
-      height: 560px;
-      max-height: none;
-    }
+    /* A strip of the real park, not a screenful of it. 42dvh keeps the map the
+       largest single thing on the board while still leaving the panel's first
+       post above the fold on a 812px phone; the floor stops it collapsing to a
+       band on a short landscape window, and the ceiling stops it eating a tall
+       desktop. */
+    height: clamp(240px, 42dvh, 380px);
   }
   /*
    * The tile attribution is an obligation, so the panel is never allowed to
    * cover it. Leaflet anchors its bottom controls to the map's own bottom edge
    * and the panel rises over that edge, so the whole corner moves up by the
-   * overlap plus a little air. `:global` because the map is a React island with
-   * no scoping of its own, and scoped under `.board-map` so /map is untouched.
+   * overlap plus the credit's own measured height.
+   *
+   * `--map-attrib-h` is published by MapView's ResizeObserver and is the real
+   * height of the credit, which wraps to two lines on a narrow phone; the old
+   * fixed `--space-2` of air cleared it by exactly 8px at every width, which is
+   * a clearance that holds only while the string does. `:global` because the map
+   * is a React island with no scoping of its own, and scoped under `.board-map`
+   * so /map is untouched.
    */
   .board-map :global(.leaflet-bottom) {
-    bottom: calc(var(--board-overlap) + var(--space-2));
+    bottom: calc(var(--board-overlap) + var(--map-attrib-h, var(--space-6)));
   }
 
   /*
-   * The map's own "Loading map…" placeholder writes `color: var(--text-muted)`
-   * as an inline style in MapPreview.tsx. `--text-muted` inverts to a light grey
-   * in dark mode while `--map-canvas` under it stays light in both themes, so
-   * the placeholder measured 2.03:1 there. An inline style cannot be beaten
-   * without `!important`, and the accessibility floor outranks the tidier fix —
-   * which is a fixed ink in the component, requested in the wave report.
+   * The `!important` override that used to sit here is gone.
+   *
+   * It pinned every `[role="status"]` inside the board to `--ink-700`, to beat
+   * an inline `--text-muted` in MapPreview's loading placeholder that measured
+   * 2.03:1 on the light map ground. MapPreview writes the fixed ink itself now,
+   * so the sledgehammer had nothing left to hit except the map's own status
+   * panels — which sit on `--bg-panel` and would have been dark ink on a dark
+   * card in dark mode.
    */
-  .board-map :global([role='status']) {
-    color: var(--ink-700) !important;
-  }
 
   .board-fallback {
     position: absolute;
@@ -1024,11 +1122,15 @@ function homeWhen(event: CalendarEvent): string {
     position: relative;
     z-index: var(--z-content);
     margin-top: calc(var(--board-overlap) * -1);
+    /* One step tighter than the default panel, and only here: this is the panel
+       whose contents have to clear a phone's fold, and 4px on each of four edges
+       is 8px of the budget for nothing the reader can name. */
+    --panel-pad: var(--space-4);
+  }
+  .board-panel .panel-head {
+    margin-bottom: var(--space-3);
   }
   @media (min-width: 768px) {
-    .board {
-      --board-overlap: var(--space-16);
-    }
     .board-panel {
       width: min(440px, 100%);
       margin-inline-start: auto;
@@ -1053,31 +1155,34 @@ function homeWhen(event: CalendarEvent): string {
     .board-panel .panel-head {
       grid-column: 1 / -1;
     }
-    .board-panel .board-lede {
-      grid-column: 1 / -1;
-    }
+    /* Explicit row placement, because the arrow now comes BEFORE the posts in
+       the markup: auto-placement would otherwise put them on two rows. */
     .board-panel .posts {
       grid-column: 1;
+      grid-row: 2;
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: var(--space-6);
     }
     .board-panel .actions {
       grid-column: 2;
-      align-self: end;
+      grid-row: 2;
+      align-self: start;
       flex-direction: column;
       align-items: stretch;
     }
   }
-  /* The board is the page's title plate, so its heading is the display size the
-     rest of the page steps down from. */
+  /*
+   * The board's title plate, one step down from the round-1 `--display-lg`.
+   *
+   * It is still the page's h1 and still the largest heading on it, but the plate
+   * is a name over a map that is already showing the park — spending 46px of a
+   * 812px screen saying "Spring Lake Park" above a picture of Spring Lake Park
+   * pushed the one post carrying a date and a button below the fold.
+   */
   .board-panel .panel-head h1 {
-    font-size: var(--display-lg);
-    line-height: var(--lh-display);
-  }
-  .board-lede {
-    margin: 0 0 var(--space-5);
-    color: var(--text-muted);
+    font-size: var(--display-md);
+    line-height: var(--lh-heading);
   }
 
   /* ---------------------------------------------------------------- posts --
@@ -1114,11 +1219,26 @@ function homeWhen(event: CalendarEvent): string {
     font-size: var(--text-md);
     line-height: var(--lh-ui);
   }
+  /* The date, under the name it belongs to: full ink rather than muted, because
+     it is the second thing the post is for and a grey date reads as a footnote.
+     Tabular, like every other number on the board. */
+  .post-when {
+    font-family: var(--font-sign);
+    font-weight: 700;
+    color: var(--text);
+  }
   .post-muted {
     color: var(--text-muted);
   }
   .post-action {
     margin: var(--space-3) 0 0;
+  }
+  /* Red, and only here: this link is only rendered when a flare is actually
+     burning, so the colour is answering "what is live" rather than "this is a
+     link". Every other link on the board is ink with its underline. */
+  .post-link--now {
+    color: var(--live-text);
+    text-decoration-color: currentColor;
   }
 
   /*
@@ -1134,18 +1254,25 @@ function homeWhen(event: CalendarEvent): string {
     align-items: center;
     gap: var(--space-2);
   }
+  /*
+   * One row, not two.
+   *
+   * At 375 the default `--space-5` inline padding made the pair 322px wide in a
+   * 309px box, so they stacked — 57px of the first screen spent on the wrap,
+   * which is the difference between post 1's RSVP button being above the fold
+   * and being 26px under it. Tightened through the primitive's own custom
+   * property rather than by restyling `.btn`; the 44px target height is
+   * untouched, and they still wrap if a narrower phone or a larger root font
+   * needs them to.
+   */
   .board-actions {
-    margin: var(--space-6) 0 0;
+    --btn-pad-inline: var(--space-3);
+    margin: 0 0 var(--space-4);
   }
 
   /* --------------------------------------------------------------- panels --
-   * `primitives.css` styles `.section-head .count` but not `.panel-head .count`,
-   * so the trailing caption in a panel head would otherwise set at body size and
-   * read as a second heading. Same treatment, one level down. */
-  .panel-head .count {
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-  }
+   * The trailing phrase in a panel head is `.caption` now, not `.count`: it is
+   * prose beside a heading rather than a tally, and the primitive sizes it. */
   .panel-subhead {
     margin: var(--space-5) 0 var(--space-2);
     font-size: var(--text-md);
@@ -1245,6 +1372,26 @@ function homeWhen(event: CalendarEvent): string {
   .rows :global(.event-blurb) {
     display: none;
   }
+  /*
+   * The name leads here too, matching post 1 on the board above.
+   *
+   * `/events` is a calendar and answers "when" first, which is why EventCard is
+   * built that way. The home rows are under a heading that has already answered
+   * it — "Happening now" — so a card headlining "Sat, Sep 6 · all day" spends
+   * its loudest line saying today. The class names are W1-B's contract and are
+   * untouched; only the two type sizes swap, so the DOM order, the reading order
+   * and the focus order are all unchanged.
+   */
+  .rows :global(.event-when) {
+    font-size: var(--text-md);
+    font-weight: 800;
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+  }
+  .rows :global(.event-title) {
+    font-size: var(--text-xl);
+    font-weight: 800;
+  }
   .rows-more {
     margin: var(--space-4) 0 0;
   }
@@ -1293,8 +1440,10 @@ function homeWhen(event: CalendarEvent): string {
       border-color var(--dur-2) var(--ease-out),
       box-shadow var(--dur-2) var(--ease-out);
   }
+  /* Ink on hover, not red: a news row is not "now", and red answering "this is
+     hoverable" is exactly the leak the rationed-red rule exists to stop. */
   .news-row:hover {
-    border-color: var(--accent);
+    border-color: var(--text);
     box-shadow: var(--shadow-sm);
   }
   .news-thumb {
@@ -1413,6 +1562,11 @@ function homeWhen(event: CalendarEvent): string {
    */
   .campsite p + p {
     margin-block-start: var(--space-4);
+  }
+  /* The drawn star sits on the text baseline in the middle of a sentence. */
+  .inline-star {
+    vertical-align: -2px;
+    color: var(--poi-campsite-text);
   }
 
   /* -------------------------------------------------------------- closing -- */

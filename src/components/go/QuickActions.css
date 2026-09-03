@@ -24,6 +24,30 @@
   -webkit-overflow-scrolling: touch;
   /* Respect the home indicator / notch on phones. */
   padding: var(--space-4) var(--gutter) calc(var(--space-8) + env(safe-area-inset-bottom, 0));
+
+  /*
+   * A cue that there is more below the fold.
+   *
+   * This panel scrolls inside itself rather than growing the page, which on a
+   * short phone hid roughly 135px of board under an edge with nothing to say so
+   * — an inner scroll region is invisible until you happen to drag it. The
+   * scroll-shadow is the classic four-layer trick: two fixed cover layers
+   * pinned to the ends of the scroll box, two shading layers that scroll with
+   * the content and are only revealed once the cover has moved away. It costs
+   * no element, it is not an animation, and it disappears on its own at both
+   * extremes.
+   *
+   * The two `rgb(0 0 0 / 0.14)` stops are a shadow tint rather than a colour —
+   * the same neutral black at low alpha the `--shadow-*` tokens are built from,
+   * per the Neutral-Shadow Rule, which is why no token names it.
+   */
+  background:
+    linear-gradient(var(--bg) 30%, transparent) top / 100% 22px no-repeat local,
+    linear-gradient(transparent, var(--bg) 70%) bottom / 100% 22px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 0.14), transparent) top / 100% 10px no-repeat
+      scroll,
+    radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 0.14), transparent) bottom / 100% 10px
+      no-repeat scroll;
 }
 
 /* ------------------------------------------------------------------- head -- */
@@ -296,6 +320,11 @@
   font-size: var(--text-sm);
   text-align: center;
 }
+/* The way out of an empty board. Outside the dashed box, because an empty state
+   here is a status and the offer belongs on the page beside it. */
+.go-exit {
+  margin: var(--space-3) 0 0;
+}
 
 .go-flare {
   display: flex;
@@ -490,6 +519,15 @@
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
   color: var(--text);
+}
+
+/* How this list is ordered, printed under the list it orders. Body face, not
+   the label's signage: it is a sentence about the field, not a second label. */
+.go-field-note {
+  font-family: var(--font-read);
+  font-weight: 400;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 .go-stepper {
