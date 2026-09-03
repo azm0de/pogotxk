@@ -629,6 +629,19 @@
 .map-locate:hover {
   background: var(--bg-sunken);
 }
+/*
+ * Wide screens: the legend is open by default and taller than the map, so
+ * "above the panel" clamps the button to the map's top-left corner, a long way
+ * from the panel it belongs with. Park it beside the panel's bottom corner
+ * instead: still bottom-left of the map, still clear of the zoom stack and the
+ * attribution on the right. 340px is the panel's own width at this breakpoint.
+ */
+@media (min-width: 641px) {
+  .map-locate {
+    left: calc(var(--space-3) + 340px + var(--space-3));
+    bottom: var(--map-panel-bottom);
+  }
+}
 /* Busy is a static ring, not a spinner: there is nothing to animate that would
    survive reduced motion, and the visible status row says the words anyway. */
 .map-locate[aria-busy='true'] {
