@@ -191,13 +191,12 @@
 
 .g-grid {
   display: grid;
-  /* auto-fit with a capped track: a tier with one boss (the 5-star rung, most
-     weeks) no longer sits beside three empty tracks, and no longer stretches
-     to 1,076px either — a sprite marooned in the middle of a card with its CP
-     value 740px from its label was the same void moved inside the card. The
-     lone card is a card-sized card at the panel's left edge. */
-  grid-template-columns: repeat(auto-fit, minmax(180px, 320px));
-  justify-content: start;
+  /* Narrow screens: as many 180px cards as fit. Wide screens below: exactly
+     four, so a four-boss tier stays on one line, and a one-boss tier gets its
+     own layout instead of a void — three attempts at a single grid rule each
+     moved the empty space somewhere else (beside the card, inside it, or into
+     a wrapped fourth boss). */
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
@@ -208,6 +207,40 @@
 .g-grid--wide {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   align-items: start;
+}
+
+@media (min-width: 1000px) {
+  .g-grid:not(.g-grid--wide) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  /*
+   * One boss in the tier (the 5-star rung most weeks): the card takes the
+   * whole panel and lays its content out as a row grouped at the left — the
+   * sprite in the first column, name / facts / badges stacked beside it — so
+   * the tier reads as a sign about one boss rather than a small card in a
+   * large empty field, or a large card with its contents flung to the edges.
+   */
+  .g-grid:has(> :only-child) > .g-card {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 128px minmax(0, 420px);
+    grid-auto-rows: auto;
+    column-gap: var(--space-6);
+    row-gap: var(--space-2);
+    justify-content: start;
+    align-items: start;
+  }
+  .g-grid:has(> :only-child) > .g-card > * {
+    grid-column: 2;
+    min-width: 0;
+  }
+  .g-grid:has(> :only-child) > .g-card > .g-art {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+    width: 128px;
+    height: 128px;
+    align-self: start;
+  }
 }
 
 /* ---------------------------------------------------------------- cards -- */
