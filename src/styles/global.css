@@ -462,8 +462,24 @@
     margin: 0 0 0.5em;
   }
 
+  /*
+   * Links are ink, underlined, not red. The site's rule is that red answers
+   * "where am I / what is live"; when every standalone link was `--accent` the
+   * home page carried twenty-one red words that answered "this is a link"
+   * instead, and the rule was broken by this one line. Prose links inside
+   * `.prose` keep the accent (primitives.css), because a red word inside a
+   * sentence is the convention readers expect; everywhere else the underline
+   * carries the affordance and the colour stays free for the board.
+   */
   a {
-    color: var(--accent);
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--border-strong);
+    text-decoration-thickness: from-font;
+    text-underline-offset: 0.16em;
+  }
+  a:hover {
+    text-decoration-color: currentColor;
   }
 
   img {

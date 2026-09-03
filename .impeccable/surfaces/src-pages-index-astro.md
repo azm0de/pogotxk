@@ -35,7 +35,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 ## Signature interaction and motion grammar
 
-The board stays; the panels move. On home the map is fixed behind the page and the white panels scroll up over it like signs bolted over a board (mobile first: this is the game's own bottom-sheet gesture). The You Are Here marker (red disc, black ring, caps label) is the one animated thing: it pulses on the map for the user's position and marks the current page in the nav. Panels arrive with one exponential ease-out (`--ease-out`, `--dur-4`); arrows nudge 2px on hover (`--lift`); under `prefers-reduced-motion` the map is static, panels do not slide and the marker does not pulse.
+The board is one object that fits one screen: the map plate with the white panel bolted over its lower edge, so the first viewport carries the real park, tonight's meetup and one arrow without scrolling (round 2 amended this: the earlier "map fixed behind the page, panels scroll over it" claim was never built and never felt, and a claimed signature that is not felt costs more than one never promised — deleted, 2026-09-03). The You Are Here marker (red disc, black ring, caps label) is the one animated thing: it pulses on the map for the user's position; in the nav it marks the current page as a printed, static disc. Red is rationed to it, to live flares and to the primary action; links are ink and underlined. Sheets and panels arrive with one exponential ease-out (`--ease-out`, `--dur-4`); arrows nudge 2px on hover (`--nudge`), buttons lift (`--lift`); under `prefers-reduced-motion` the marker does not pulse, nothing slides, and every transform goes through those tokens so the escape is structural.
 
 ## Cross-surface reach
 

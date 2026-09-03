@@ -363,6 +363,12 @@
   .section-head h3 {
     font-size: var(--text-xl);
   }
+  /* A short phrase beside a heading ("Raids, eggs and research"). Prose, not a
+     number: .count is for tabular counts and was being borrowed for this. */
+  .caption {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
   /* A count beside a heading, in a panel head, a section head or a summary. */
   .count {
     color: var(--text-muted);
