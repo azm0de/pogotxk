@@ -1,42 +1,52 @@
+/*
+ * The calendar row.
+ *
+ * Surface, border and padding come from the `.card` primitive — the element
+ * carries both classes and this file only lays the row out and prints its
+ * states. `--card-pad` is set here rather than a `padding` declaration so a
+ * consumer can retune the inset in one place.
+ */
+
 .event-card {
+  --card-pad: var(--space-4);
   position: relative;
-  padding: 16px 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-panel);
-  box-shadow: var(--shadow-sm);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
 }
 
-/* A left rule rather than a tinted background: it survives dark mode and does
-   not fight the POI colours the rest of the site uses. */
+/* The body column holds long text and a scrollable blurb, so it must be allowed
+   to shrink below its content — a grid child will not, and that is exactly how
+   169px of horizontal overflow shipped once already. */
+.event-body {
+  min-width: 0;
+}
+
+/* Now, and short enough to go and do. The word "Live" rides in the badge beside
+   the time; this edge is the second signal, never the only one. */
 .event-card[data-state='live'] {
   border-color: var(--live);
-  box-shadow: var(--shadow-md);
 }
-
-/* Running, but for weeks — present, not urgent. Carried by the section heading
-   ("Running now") and the badge rather than a coloured rule on the card: with
-   artwork on every card the extra edge was just noise. */
 
 .event-card[data-state='past'] {
   background: var(--bg-sunken);
-  box-shadow: none;
 }
 .event-card[data-state='past'] .event-title {
   color: var(--text-muted);
 }
 
 /* --- artwork (opt-in via showImage) ---------------------------------------
-   Bleeds to the card's inner edges by cancelling its padding. The fixed
-   aspect-ratio reserves the space before the image arrives, so a card does not
-   jump as artwork loads in — the layout is the same whether the CDN answers
-   in 20ms or never. */
+   A 64px thumbnail, not a banner. The fixed box reserves its space before the
+   image arrives, so a row does not jump as artwork loads in — the layout is the
+   same whether the CDN answers in 20ms or never, and it is also the fallback if
+   the image 404s: a flat panel, not a broken-icon box. */
 .event-image {
-  margin: -16px -18px 13px;
-  aspect-ratio: 16 / 9;
+  flex: none;
+  width: 64px;
+  height: 64px;
   overflow: hidden;
-  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
-  /* Also the fallback if the image 404s: a flat panel, not a broken-icon box. */
+  border-radius: var(--radius-sm);
   background: var(--bg-sunken);
 }
 
@@ -52,60 +62,32 @@
   opacity: 0.55;
 }
 
-.event-badges {
+/* --- the row's own hierarchy ---------------------------------------------
+   When first, because "when" is the question. The title used to be the largest
+   line under a banner larger still, which put the artwork top of a card whose
+   job is a time. */
+.event-when {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 8px;
-}
-
-.event-badge {
-  font-size: 0.66rem;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-sign);
+  font-size: var(--text-xl);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-}
-
-/*
- * Both of these carry white text, so both need a surface that stays dark in
- * *both* themes. `--accent` and `--poi-powerspot` each lighten in dark mode —
- * they exist to be read as text or as map markers on a dark basemap — and white
- * on the lightened values measured 3.0 and 3.18, under AA.
- */
-.event-badge--meetup {
-  background: var(--accent-solid);
-  border-color: var(--accent-solid);
-  color: #fff;
-}
-
-.event-badge--global {
-  /* The light-theme purple, pinned so it does not lift in dark: 4.87 with
-     white on it, against 3.18 for the dark-mode `--poi-powerspot`. */
-  background: #8257d9;
-  border-color: #8257d9;
-  color: #fff;
-}
-
-.event-badge--cancelled {
-  background: var(--live);
-  border-color: var(--live);
-  color: #fff;
-}
-
-.event-badge--repeat {
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 600;
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 .event-title {
-  margin: 0 0 6px;
-  font-size: 1.06rem;
+  margin: 0;
+  font-family: var(--font-sign);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-tight);
 }
 
 .event-card[data-cancelled] .event-title {
@@ -114,43 +96,40 @@
   color: var(--text-muted);
 }
 
-.event-when {
+.event-badges {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 8px;
-  font-size: 0.86rem;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+}
+
+/* A recurrence reads as a sentence fragment ("Every week"), not as a label. */
+.event-badge--repeat {
+  text-transform: none;
+  letter-spacing: 0;
   font-weight: 600;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The countdown is a badge that changes its mind. It ships with the `.badge`
+ * class and this only supplies the live variant, because the state is decided
+ * client-side and no server-rendered class can carry it.
+ */
 .countdown {
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 0.76rem;
-  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-
 .countdown[data-state='live'] {
-  background: var(--live);
-  border-color: var(--live);
-  color: #fff;
+  --badge-bg: var(--live);
+  --badge-fg: #fff; /* white on --live: 5.00:1 light, 5.99:1 dark — as .badge--live */
 }
 .countdown[data-state='live']::before {
   content: '';
   display: inline-block;
   width: 7px;
   height: 7px;
-  margin-right: 6px;
   border-radius: 50%;
   background: currentColor;
-  animation: countdown-pulse 1.4s ease-in-out infinite;
+  animation: countdown-pulse 1.4s var(--ease-in-out) infinite;
 }
 @keyframes countdown-pulse {
   0%,
@@ -162,59 +141,59 @@
   }
 }
 
-/* `hidden` loses to any display rule, and the countdown ships hidden. */
-.countdown[hidden] {
-  display: none;
-}
-
 .event-where {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 0 0 8px;
-  font-size: 0.84rem;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
+/* currentColor, not a POI hue: the map's colours mean POI types and stay on the
+   map. Here it is a location glyph beside its own words. */
 .event-where-icon {
   display: inline-flex;
-  color: var(--poi-gym);
   flex: none;
 }
 
 .event-blurb {
-  margin: 0;
-  font-size: 0.88rem;
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
   color: var(--text-muted);
   white-space: pre-line;
 }
 
 .event-actions {
-  margin: 12px 0 0;
-}
-
-.event-action {
-  display: inline-block;
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 0.82rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-.event-action:hover {
-  filter: brightness(1.08);
+  margin: var(--space-2) 0 0;
 }
 
 /*
- * The whole card is the link.
+ * Provenance, not a call to action.
  *
- * Stretched from `.event-action` with a pseudo-element rather than wrapping the
- * card in an `<a>`. Wrapping would put the location link — which points at our
- * own map, somewhere else entirely — inside another anchor, which is invalid
- * and gives screen readers two overlapping targets. This way there is still
- * exactly one link per card, and it already names the event through its
- * `sr-only` span, so "Details" does not read as an anonymous button.
+ * The 60 "Details" buttons this replaces were red controls that named nothing;
+ * this names the destination it opens and sits at the foot of the row where a
+ * source line belongs. `.target` gives it the 24px hit area without moving the
+ * text.
+ */
+.event-source {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.event-source-arrow {
+  flex: none;
+}
+
+/*
+ * The whole row is the link.
+ *
+ * Stretched from the title with a pseudo-element rather than wrapping the card
+ * in an `<a>`. Wrapping would put the location link — which points at our own
+ * map, somewhere else entirely — inside another anchor, which is invalid and
+ * gives screen readers two overlapping targets.
  *
  * For a Pokémon GO event that destination is the Leek Duck page the data came
  * from; for a meetup it is its Campfire page, when it has one. A card with
@@ -223,12 +202,12 @@
 .event-card--linked {
   cursor: pointer;
   transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease;
+    border-color var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
 }
 .event-card--linked:hover {
   border-color: var(--accent);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 .event-title-link {
   color: inherit;
@@ -244,18 +223,21 @@
   border-radius: inherit;
 }
 
-/* Both sit above the overlay. `.event-where` because it is a different
+/* Both sit above the stretched link. `.event-where` because it is a different
    destination — our own map — and would otherwise be swallowed, sending every
-   "where" link to Leek Duck. `.event-actions` because on /events it is still
-   visible, and a button you can see should be the thing you press. */
+   "where" link to Leek Duck. `.event-actions` because a link you can read is
+   the thing you should be able to press. */
 .event-where a,
 .event-actions a {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-content);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .event-card--linked {
     transition: none;
+  }
+  .countdown[data-state='live']::before {
+    animation: none;
   }
 }

@@ -1,21 +1,27 @@
 ---
 /**
- * The public events page.
+ * The public events page — today's board.
  *
- * Two sources arrive here and are rendered identically: community meetups out of
- * D1, and the global Pokémon GO calendar fetched from /api/game/events.json.
+ * Two sources arrive here and they are no longer rendered identically, because
+ * they are not the same thing. Community meetups out of D1 are the reason
+ * someone opens this page: they get the first panel, as posts with a date block
+ * and an RSVP. The global Pokémon GO calendar fetched from ScrapedDuck is
+ * reference material: 60 rows folded into a disclosure below them.
+ *
  * That route is owned by the ScrapedDuck module and may not be deployed yet, so
  * the page treats it as optional — if it is missing or slow, this still renders
  * the meetups and says so rather than failing.
  *
  * The page itself is server-rendered. The only client JavaScript is the
- * countdown ticker and the copy-link button.
+ * countdown ticker and the four lines that open the calendar on a wide screen.
  */
 
 import Base from '~/layouts/Base.astro';
 import EventCard from '~/components/events/EventCard.astro';
+import Attribution from '~/components/game/Attribution.astro';
+import FeedStatus from '~/components/game/FeedStatus.astro';
 import { env } from 'cloudflare:workers';
-import { listPublicMeetups, meetupToCalendarEvent } from '~/lib/db/meetups';
+import { describeRecurrence, listPublicMeetups, meetupToCalendarEvent } from '~/lib/db/meetups';
 import {
   allDayEndExclusive,
   gameEventsFromPayload,
@@ -34,30 +40,58 @@ export const prerender = false;
  */
 const base = new URL(Astro.url.origin);
 
+const DISCORD_INVITE = 'https://discord.com/invite/2sYR5YdRpH';
+
 // Independent sources, so they run together.
 //
 // Global events come straight from the data layer rather than over HTTP from
 // /api/game/events.json — a Worker fetching its own hostname is a loopback
 // through the edge, which works against `astro dev` and returns nothing in
 // production.
-const [meetups, global] = await Promise.all([
+//
+// The raw feed result is kept, not just its events: `fetchedAt` and `stale` are
+// what FeedStatus prints, and a calendar with no freshness on it asks the reader
+// to trust a date they cannot check.
+const [meetups, feed] = await Promise.all([
   listPublicMeetups(env.DB),
-  getFeed('events')
-    .then(gameEventsFromPayload)
-    .catch(() => null),
+  getFeed('events').catch(() => null),
 ]);
 
-const globalAvailable = global !== null;
+const global = feed ? gameEventsFromPayload(feed) : null;
+const globalEvents = global?.events ?? [];
+const globalAvailable = globalEvents.length > 0;
+
 const meetupEvents = meetups.map((meetup) => meetupToCalendarEvent(meetup, base));
 
-const grouped = groupEvents([...meetupEvents, ...(global?.events ?? [])]);
-// The past is context, not content — a dozen cards is plenty.
-const past = grouped.past.slice(0, 12);
+/*
+ * Two groupings, not one.
+ *
+ * The page used to merge both sources into a single `groupEvents` call, which is
+ * how a meetup ended up as card 41 of 60 in "Upcoming" with nothing to
+ * distinguish it. Grouping them separately is a page decision and stays here;
+ * `lib/events.ts` still does the bucketing.
+ */
+const meetupGroups = groupEvents(meetupEvents);
+const calendar = groupEvents(globalEvents);
+
+/*
+ * Everything a local can still turn up to, soonest first. Finished meetups are
+ * dropped: this panel answers "where do I go next", and last month's meetup is
+ * not an answer.
+ */
+const meetupBoard = [...meetupGroups.live, ...meetupGroups.ongoing, ...meetupGroups.upcoming];
+
+// The past is context, not content — a dozen rows is plenty.
+const past = calendar.past.slice(0, 12);
+const running = [...calendar.live, ...calendar.ongoing];
+const calendarCount = running.length + calendar.upcoming.length + past.length;
+
+const liveMeetups = new Set(meetupGroups.live);
 
 /* ------------------------------------------------------------ formatting -- */
 
-// Built once per request and reused across every card; constructing an
-// Intl.DateTimeFormat per event adds up over a 40-event calendar.
+// Built once per request and reused across every row; constructing an
+// Intl.DateTimeFormat per event adds up over a 60-event calendar.
 const dayFmt = new Intl.DateTimeFormat('en-US', {
   timeZone: DEFAULT_TZ,
   weekday: 'short',
@@ -73,6 +107,16 @@ const zoneFmt = new Intl.DateTimeFormat('en-US', {
   timeZone: DEFAULT_TZ,
   timeZoneName: 'short',
 });
+const monthFmt = new Intl.DateTimeFormat('en-US', { timeZone: DEFAULT_TZ, month: 'short' });
+const dateFmt = new Intl.DateTimeFormat('en-US', { timeZone: DEFAULT_TZ, day: 'numeric' });
+const weekdayFmt = new Intl.DateTimeFormat('en-US', { timeZone: DEFAULT_TZ, weekday: 'long' });
+// en-CA gives YYYY-MM-DD, which is what a `datetime` attribute wants.
+const isoDayFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: DEFAULT_TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 
 /** "CDT" or "CST" — resolved at the given instant, not at page-render time. */
 function zoneLabel(at: Date): string {
@@ -86,7 +130,7 @@ function formatWhen(event: CalendarEvent): string {
     const startDay = dayFmt.format(start);
     // Step back off the exclusive end so a one-day event reads as one day.
     const lastDay = dayFmt.format(new Date(allDayEndExclusive(event) - 86_400_000));
-    return lastDay === startDay ? `${startDay} · all day` : `${startDay} – ${lastDay}`;
+    return lastDay === startDay ? `${startDay} · all day` : `${startDay} to ${lastDay}`;
   }
 
   const zone = zoneLabel(start);
@@ -95,16 +139,37 @@ function formatWhen(event: CalendarEvent): string {
 
   const end = new Date(event.end);
   const endDay = dayFmt.format(end);
-  return endDay === startDay
-    ? `${startDay} · ${timeFmt.format(start)} – ${timeFmt.format(end)} ${zone}`
-    : `${startDay} ${timeFmt.format(start)} – ${endDay} ${timeFmt.format(end)} ${zone}`;
+  if (endDay === startDay) {
+    return `${startDay} · ${timeFmt.format(start)} to ${timeFmt.format(end)} ${zone}`;
+  }
+
+  // A season running from June to September has no useful clock time, and the
+  // hours pushed the line to three lines of the card's largest type. Past a day,
+  // the dates are the answer; the hours stay for anything that merely crosses
+  // midnight, where they still tell you whether to go tonight.
+  if (end.getTime() - start.getTime() > 86_400_000) return `${startDay} to ${endDay}`;
+  return `${startDay} ${timeFmt.format(start)} to ${endDay} ${timeFmt.format(end)} ${zone}`;
+}
+
+/**
+ * A meetup's time, with the weekday doing the work the date block already did.
+ * "Wednesday · 6:00 PM to 7:00 PM CDT" is how the community says it out loud.
+ */
+function meetupWhen(event: CalendarEvent): string {
+  const start = new Date(event.start);
+  const weekday = weekdayFmt.format(start);
+  if (event.allDay) return `${weekday} · all day`;
+
+  const zone = zoneLabel(start);
+  if (!event.end) return `${weekday} · ${timeFmt.format(start)} ${zone}`;
+
+  const end = new Date(event.end);
+  return dayFmt.format(end) === dayFmt.format(start)
+    ? `${weekday} · ${timeFmt.format(start)} to ${timeFmt.format(end)} ${zone}`
+    : `${weekday} · ${timeFmt.format(start)} to ${dayFmt.format(end)} ${timeFmt.format(end)} ${zone}`;
 }
 
 const nowZone = zoneLabel(new Date());
-
-// Leek Duck and ScrapedDuck both require visible credit wherever their data is
-// shown, so the credit line renders alongside the events, not in the footer.
-const credit = global?.attribution ?? null;
 ---
 
 <Base
@@ -112,272 +177,269 @@ const credit = global?.attribution ?? null;
   description="Pokémon GO meetups, raid hours and community days in Texarkana, plus the global in-game event calendar."
 >
   <div class="events">
-    <header class="events-hero">
-      {/*
-        Decorative: the `h1` right beside it already says what this is, and a
-        description of forty Pokémon walking down a road tells a screen-reader
-        user nothing about the events below.
-
-        1280x720 is the whole source, so `sizes` never asks for more than exists
-        — the card caps at 932px and the largest file is the original's width.
-        1073KB of JPEG became 182KB of WebP at that size, 62KB at 640.
-      */}
-      <picture class="events-hero-art">
-        <img
-          src="/hero/pokestop-1280.webp"
-          srcset="/hero/pokestop-640.webp 640w, /hero/pokestop-960.webp 960w, /hero/pokestop-1280.webp 1280w"
-          sizes="(min-width: 1010px) 932px, calc(100vw - 28px)"
-          width="1280"
-          height="720"
-          alt=""
-          decoding="async"
-        />
-      </picture>
-
-      <h1>Events</h1>
+    <header class="events-head">
+      <div class="panel-head">
+        <h1>Events</h1>
+      </div>
       <p class="events-lede">
         Community meetups around Texarkana alongside the global Pokémon GO calendar. All times
         are shown in Texarkana local time ({nowZone}).
       </p>
-
     </header>
 
+    {/* Announces an event flipping to live; the countdowns write into it. */}
+    <p class="events-live-status" id="events-status" role="status" aria-live="polite"></p>
+
+    <section class="panel meetups" aria-labelledby="meetups-heading">
+      <div class="panel-head">
+        <h2 id="meetups-heading">Meetups at the Campsite</h2>
+        {meetupBoard.length > 0 && <span class="count">{meetupBoard.length} coming up</span>}
+      </div>
+
+      {
+        meetupBoard.length > 0 ? (
+          <ul class="meet-list">
+            {meetupBoard.map((event) => {
+              const start = new Date(event.start);
+              const anchor = event.uid.split('@')[0];
+              const cancelled = event.status === 'CANCELLED';
+              const recurrence = describeRecurrence(event.rrule ?? null);
+              const rsvp = event.url && !event.url.includes('/events#') ? event.url : null;
+              const isLive = liveMeetups.has(event);
+
+              return (
+                <li class="post meet" id={anchor} data-cancelled={cancelled ? '' : undefined}>
+                  <time class="meet-date" datetime={isoDayFmt.format(start)}>
+                    <span class="meet-month">{monthFmt.format(start)}</span>
+                    <span class="meet-day">{dateFmt.format(start)}</span>
+                  </time>
+
+                  <div class="meet-body">
+                    {isLive && <p class="here meet-here">Happening now</p>}
+                    <p class="meet-when">{meetupWhen(event)}</p>
+                    <h3 class="meet-title">{event.summary}</h3>
+
+                    {event.location && (
+                      <p class="meet-where">
+                        <span class="meet-where-icon" aria-hidden="true">
+                          <svg viewBox="0 0 16 16" width="14" height="14">
+                            <path
+                              fill="currentColor"
+                              d="M8 0a5 5 0 0 0-5 5c0 3.6 4.4 10.4 4.6 10.7a.5.5 0 0 0 .8 0C8.6 15.4 13 8.6 13 5a5 5 0 0 0-5-5Zm0 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"
+                            />
+                          </svg>
+                        </span>
+                        {event.locationUrl ? (
+                          <a class="target" href={event.locationUrl}>
+                            {event.location}
+                          </a>
+                        ) : (
+                          <span>{event.location}</span>
+                        )}
+                      </p>
+                    )}
+
+                    {(cancelled || recurrence || (!isLive && meetupGroups.ongoing.includes(event))) && (
+                      <p class="meet-badges">
+                        {cancelled && <span class="badge badge--outline">Cancelled</span>}
+                        {!isLive && meetupGroups.ongoing.includes(event) && (
+                          <span class="badge badge--live">Running now</span>
+                        )}
+                        {recurrence && <span class="badge badge--outline">{recurrence}</span>}
+                      </p>
+                    )}
+
+                    {rsvp && !cancelled && (
+                      <p class="meet-actions">
+                        <a
+                          class="btn btn--primary btn--arrow"
+                          href={rsvp}
+                          rel="noopener noreferrer"
+                          target="_blank"
+                        >
+                          RSVP on Campfire
+                          <span class="sr-only"> for {event.summary} (opens in a new tab)</span>
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <>
+            <p class="empty-state empty-art-bg">
+              No meetup is on the calendar right now. Meetups are announced in the Discord first,
+              and the regular slot is Wednesday evenings at the Campsite.
+            </p>
+            <p class="meet-actions">
+              <a
+                class="btn btn--discord btn--arrow"
+                href={DISCORD_INVITE}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Join the Discord
+                <span class="sr-only"> (opens in a new tab)</span>
+              </a>
+            </p>
+          </>
+        )
+      }
+    </section>
+
+    <FeedStatus
+      fetchedAt={feed?.fetchedAt ?? null}
+      stale={feed?.stale ?? true}
+      label="game calendar"
+      error={feed?.error ?? null}
+    />
+
     {
-      !globalAvailable && (
-        <p class="events-note">
-          The global Pokémon GO event calendar is unavailable right now, so this page is showing
+      globalAvailable ? (
+        <details class="panel calendar" id="game-calendar">
+          <summary class="panel-head calendar-head">
+            <h2>The game calendar</h2>
+            <span class="count">{calendarCount} events</span>
+          </summary>
+
+          <div class="calendar-body">
+            {running.length > 0 && (
+              <section class="event-group" aria-labelledby="running-heading">
+                <div class="section-head">
+                  <h3 id="running-heading">Running now</h3>
+                  <span class="count">{running.length}</span>
+                </div>
+                <div class="event-grid">
+                  {running.map((event) => (
+                    <EventCard
+                      event={event}
+                      when={formatWhen(event)}
+                      state={calendar.live.includes(event) ? 'live' : 'ongoing'}
+                      showImage
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section class="event-group" aria-labelledby="upcoming-heading">
+              <div class="section-head">
+                <h3 id="upcoming-heading">Upcoming</h3>
+                {calendar.upcoming.length > 0 && (
+                  <span class="count">{calendar.upcoming.length}</span>
+                )}
+              </div>
+              {calendar.upcoming.length > 0 ? (
+                <div class="event-grid">
+                  {calendar.upcoming.map((event) => (
+                    <EventCard event={event} when={formatWhen(event)} state="upcoming" showImage />
+                  ))}
+                </div>
+              ) : (
+                <p class="empty-state">
+                  Nothing further on the global calendar yet. Leek Duck posts in-game events as
+                  Niantic announces them.
+                </p>
+              )}
+            </section>
+
+            {past.length > 0 && (
+              <section class="event-group" aria-labelledby="past-heading">
+                <div class="section-head">
+                  <h3 id="past-heading">Recently finished</h3>
+                  <span class="count">{past.length}</span>
+                </div>
+                <div class="event-grid">
+                  {past.map((event) => (
+                    <EventCard event={event} when={formatWhen(event)} state="past" showImage />
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        </details>
+      ) : (
+        <p class="empty-state">
+          The global Pokémon GO calendar is not loading right now, so this page is showing
           community meetups only. Try again shortly.
         </p>
       )
     }
 
-    {/* Announces an event flipping to live; the countdowns write into it. */}
-    <p class="events-live-status" id="events-status" role="status" aria-live="polite"></p>
+    {/*
+      Open on a screen wide enough to hold the calendar under the meetups,
+      closed on anything narrower, where 60 rows would bury the panel they sit
+      beneath. The element ships closed and this opens it, so a reader with no
+      JavaScript gets the safe version rather than the buried one.
 
-    {
-      grouped.live.length > 0 && (
-        <section class="event-group" aria-labelledby="live-heading">
-          <h2 class="group-heading group-heading--live" id="live-heading">
-            <span class="group-dot" aria-hidden="true"></span>Live now
-          </h2>
-          <div class="event-grid">
-            {grouped.live.map((event) => (
-              <EventCard event={event} when={formatWhen(event)} state="live" showImage />
-            ))}
-          </div>
-        </section>
-      )
-    }
-
-    {
-      grouped.ongoing.length > 0 && (
-        <section class="event-group" aria-labelledby="ongoing-heading">
-          <h2 class="group-heading" id="ongoing-heading">Running now</h2>
-          <div class="event-grid">
-            {grouped.ongoing.map((event) => (
-              <EventCard event={event} when={formatWhen(event)} state="ongoing" showImage />
-            ))}
-          </div>
-        </section>
-      )
-    }
-
-    <section class="event-group" aria-labelledby="upcoming-heading">
-      <h2 class="group-heading" id="upcoming-heading">Upcoming</h2>
-      {
-        grouped.upcoming.length > 0 ? (
-          <div class="event-grid">
-            {grouped.upcoming.map((event) => (
-              <EventCard event={event} when={formatWhen(event)} state="upcoming" showImage />
-            ))}
-          </div>
-        ) : (
-          <p class="events-empty">
-            Nothing on the calendar yet. Meetups are announced in{' '}
-            <a href="https://discord.com/invite/2sYR5YdRpH" rel="noopener noreferrer" target="_blank">
-              the Discord
-            </a>{' '}
-            first and show up here as soon as they are posted.
-          </p>
-        )
+      `is:inline` keeps it here rather than in the bundle, so it runs before
+      paint and the desktop calendar never flashes shut.
+    */}
+    <script is:inline>
+      if (window.matchMedia('(min-width: 900px)').matches) {
+        var calendar = document.getElementById('game-calendar');
+        if (calendar) calendar.open = true;
       }
-    </section>
+    </script>
 
-    {
-      past.length > 0 && (
-        <section class="event-group" aria-labelledby="past-heading">
-          <h2 class="group-heading" id="past-heading">Recently finished</h2>
-          <div class="event-grid">
-            {past.map((event) => (
-              <EventCard event={event} when={formatWhen(event)} state="past" showImage />
-            ))}
-          </div>
-        </section>
-      )
-    }
-
-    {
-      credit && (
-        <p class="events-credit">
-          Global Pokémon GO event data from{' '}
-          {credit.sourceUrl ? (
-            <a href={credit.sourceUrl} rel="noopener noreferrer" target="_blank">
-              {credit.source}
-            </a>
-          ) : (
-            credit.source
-          )}
-          {credit.scraper && ' via '}
-          {credit.scraper &&
-            (credit.scraperUrl ? (
-              <a href={credit.scraperUrl} rel="noopener noreferrer" target="_blank">
-                {credit.scraper}
-              </a>
-            ) : (
-              credit.scraper
-            ))}
-          .
-        </p>
-      )
-    }
+    {/*
+      Outside every conditional, on purpose: the licence attaches to the data, so
+      a failed fetch must not be able to take the credit down with it.
+    */}
+    <Attribution />
   </div>
 </Base>
 
 <style>
   .events {
-    max-width: 980px;
-    margin: 0 auto;
-    padding: clamp(20px, 4vw, 40px) clamp(14px, 3vw, 24px) 56px;
-    display: grid;
-    gap: 24px;
-  }
-
-  /* --- the hero card -------------------------------------------------------
-   *
-   * `isolation: isolate` matters here. The art sits at z-index −2 and the scrim
-   * at −1; without a stacking context on the card those escape to the root and
-   * paint behind the page itself, which is the same trap the home page's hero
-   * video hit.
-   */
-  .events-hero {
-    position: relative;
-    isolation: isolate;
-    overflow: hidden;
-    border-radius: var(--radius-lg);
-    /* Symmetric now. The bottom was the short side because the credit line sat
-       in it; with that gone an uneven pad just reads as the text having slipped
-       upward. */
-    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px);
-    color: #fff;
-    /* Bottom, not centred — see the matching note on `.raids-hero`. */
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-  }
-
-  /*
-   * Taller from 760px up, so more of the artwork survives the crop.
-   *
-   * At the natural content height the card was 932x199 — a 4.7:1 slot for a
-   * 16:9 image, which threw away most of it. This gives it closer to 3:1.
-   * Height rather than aspect-ratio: the text still sets the floor on a narrow
-   * screen, where a fixed ratio would leave a very tall card with four lines in
-   * it.
-   */
-  @media (min-width: 760px) {
-    .events-hero {
-      min-height: clamp(260px, 30vw, 380px);
-    }
-  }
-  .events-hero-art {
-    display: block;
-    position: absolute;
-    inset: 0;
-    z-index: -2;
-  }
-  .events-hero-art img {
+    font-family: var(--font-read);
     width: 100%;
-    height: 100%;
-    object-fit: cover;
-    /* High: the card is far wider than the 16:9 source, so `cover` keeps a
-       horizontal band, and the trainers and Pokémon are in the upper half. */
-    object-position: center 34%;
-  }
-  /*
-   * Never lighter than 0.70 anywhere, and that is measured rather than chosen.
-   * The artwork contains pure white cloud, so at 0.62 the credit line came out
-   * at 4.23:1 — under AA. At 0.70 the worst case is h1 7.8:1, lede 6.9:1 and
-   * the credit 5.6:1.
-   */
-  .events-hero::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    /* Was 105deg at 0.84 -> 0.70, which tinted the whole card: nowhere on this
-       hero was the photograph showing at less than 70% black. With the copy
-       moved to the foot, the tint goes with it — same bottom-anchored ramp as
-       `.raids-hero::before`, and the same reason for pixel stops there. This
-       is the hero that gains most from the change, because it had no light
-       end at all. */
-    background: linear-gradient(
-      to top,
-      rgb(6 8 12 / 0.66) 0px,
-      rgb(6 8 12 / 0.62) 160px,
-      rgb(6 8 12 / 0.20) 300px,
-      rgb(6 8 12 / 0.04) 100%
-    );
+    max-width: var(--container-narrow);
+    margin-inline: auto;
+    padding: var(--space-section) var(--gutter) var(--space-16);
+    display: grid;
+    gap: var(--space-6);
   }
 
-  /*
-   * Phones keep the heavier tint, and that is not an oversight.
-   *
-   * Below 760px the card has no min-height, so it collapses to its content and
-   * the copy covers essentially all of it — there is no top half of a
-   * photograph to uncover, which is the entire thing the lighter ramp buys.
-   * What the lighter ramp does cost there is real: measured against the actual
-   * artwork the lede fell from 7.15:1 to 5.49:1 on /raids. Both clear AA, but
-   * spending legibility on a phone to reveal an image the text is already
-   * sitting on top of is a bad trade, and phones are most of this audience.
-   *
-   * So the reduction lands where the complaint actually was — the large desktop
-   * cards, where more than half the picture was under black for no reason.
-   */
-  @media (max-width: 759px) {
-    .events-hero::before {
-      background: linear-gradient(
-        to top,
-        rgb(6 8 12 / 0.74) 0px,
-        rgb(6 8 12 / 0.70) 100%
-      );
-    }
+  /* --- the page head -------------------------------------------------------
+     No key-art hero. The heading is the sign; the lede is a plain line under
+     the rule, not a second deck inside a photograph. */
+  .events-head {
+    display: grid;
+    gap: var(--space-3);
   }
-
-  .events-hero h1 {
-    margin: 0 0 6px;
-    font-size: clamp(1.7rem, 4vw, 2.3rem);
-    color: #fff;
+  .events-head .panel-head {
+    margin-bottom: 0;
+  }
+  .events-head h1 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--display-lg);
+    font-weight: 800;
+    line-height: var(--lh-display);
+    letter-spacing: var(--tracking-display);
   }
   .events-lede {
     margin: 0;
-    max-width: 62ch;
-    color: rgb(255 255 255 / 0.92);
-  }
-  .events-note {
-    margin: 0;
-    padding: 12px 16px;
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--poi-campsite);
-    border-radius: var(--radius-sm);
-    background: var(--bg-sunken);
+    max-width: var(--measure);
     color: var(--text-muted);
-    font-size: 0.86rem;
+    line-height: var(--lh-body);
+  }
+
+  /* PROMOTE: .count — primitives defines it only as `.section-head .count`, and
+     a panel head needs the same counter beside its title. */
+  .count {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
   }
 
   /* Empty until a countdown announces something, so it must not reserve space. */
   .events-live-status {
     margin: 0;
-    font-size: 0.86rem;
+    font-size: var(--text-md);
     font-weight: 600;
     color: var(--live-text);
   }
@@ -385,73 +447,166 @@ const credit = global?.attribution ?? null;
     display: none;
   }
 
-  .event-group {
+  /* --- meetups -------------------------------------------------------------
+     The panel this page exists for. Posts, not cards: a date block, then the
+     time as the loudest line, then what and where. */
+  .meet-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
     display: grid;
-    gap: 12px;
+    gap: var(--space-5);
+  }
+  .meet-list li + li {
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--border);
   }
 
-  .group-heading {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.82rem;
+  .meet-date {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: var(--space-1);
+    width: 60px;
+    padding: var(--space-2) var(--space-1);
+    border: 2px solid var(--text);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sign);
+    line-height: 1;
+  }
+  .meet-month {
+    font-size: var(--text-2xs);
     font-weight: 700;
+    letter-spacing: var(--tracking-caps);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+  }
+  .meet-day {
+    font-size: var(--display-sm);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .meet-body {
+    min-width: 0;
+  }
+  .meet-here {
+    margin: 0 0 var(--space-2);
+  }
+  .meet-when {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    line-height: var(--lh-heading);
+    letter-spacing: var(--tracking-tight);
+    font-variant-numeric: tabular-nums;
+  }
+  .meet-title {
+    margin: var(--space-1) 0 0;
+    font-family: var(--font-sign);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    line-height: var(--lh-heading);
+  }
+  .meet[data-cancelled] .meet-title {
+    text-decoration: line-through;
+    text-decoration-color: var(--live);
     color: var(--text-muted);
   }
+  .meet-where {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+  }
+  .meet-where-icon {
+    display: inline-flex;
+    flex: none;
+  }
+  .meet-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: var(--space-3) 0 0;
+  }
+  .meet-actions {
+    margin: var(--space-4) 0 0;
+  }
 
-  .group-heading--live {
-    color: var(--live-text);
-    border-bottom-color: var(--live-text);
+  /* --- the game calendar ---------------------------------------------------
+     Reference material, folded. Open at 900px and up (set by the inline script
+     above), closed on a phone so the meetups above it stay the page. */
+  .calendar-head {
+    cursor: pointer;
+    list-style: none;
+    margin-bottom: 0;
   }
-  .group-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
+  .calendar-head::-webkit-details-marker {
+    display: none;
+  }
+  .calendar[open] .calendar-head {
+    margin-bottom: var(--space-4);
+  }
+  .calendar-head h2 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--display-sm);
+    font-weight: 800;
+    line-height: var(--lh-heading);
+    letter-spacing: var(--tracking-tight);
+  }
+  /* Drawn, not a glyph: the same stroke weight as the arrow on every button. */
+  .calendar-head::after {
+    content: '';
+    flex: none;
+    width: 1em;
+    height: 1em;
+    margin-inline-start: auto;
     background: currentColor;
-    animation: group-dot-pulse 1.6s ease-in-out infinite;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    transition: transform var(--dur-2) var(--ease-out);
   }
-  @keyframes group-dot-pulse {
-    0%,
-    100% {
-      opacity: 1;
+  .calendar[open] .calendar-head::after {
+    transform: rotate(180deg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .calendar-head::after {
+      transition: none;
     }
-    50% {
-      opacity: 0.3;
-    }
+  }
+
+  .calendar-body {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .event-group {
+    display: grid;
+    gap: var(--space-3);
+  }
+  /* The primitive sizes `.section-head h2`; inside the calendar these sit under
+     its own h2, so they are h3s and need the same weight. */
+  .event-group .section-head h3 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--display-sm);
+    font-weight: 800;
+    line-height: var(--lh-heading);
+    letter-spacing: var(--tracking-tight);
+  }
+  .event-group:first-child .section-head {
+    margin-block-start: 0;
   }
 
   .event-grid {
     display: grid;
-    gap: 12px;
+    gap: var(--space-3);
   }
   @media (min-width: 760px) {
     .event-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-  }
-
-  .events-credit {
-    margin: 0;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
-    font-size: 0.78rem;
-    color: var(--text-muted);
-  }
-
-  .events-empty {
-    margin: 0;
-    padding: 22px;
-    border: 1px dashed var(--border-strong);
-    border-radius: var(--radius);
-    background: var(--bg-sunken);
-    color: var(--text-muted);
-    text-align: center;
-    max-width: 60ch;
-    justify-self: center;
   }
 </style>

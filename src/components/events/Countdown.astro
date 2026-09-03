@@ -25,8 +25,14 @@ interface Props {
 const { start, end = null, title } = Astro.props;
 ---
 
+{/*
+  `badge` is the primitive: a small printed label. The countdown only adds
+  tabular numerals and, once it is running, the live variant — which has to be
+  set from CSS on `[data-state]` because the state is decided in the browser and
+  no server-rendered class can carry it.
+*/}
 <span
-  class="countdown"
+  class="countdown badge"
   role="timer"
   data-countdown
   data-start={start}
