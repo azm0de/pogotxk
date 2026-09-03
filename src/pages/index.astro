@@ -557,7 +557,7 @@ function homeWhen(event: CalendarEvent): string {
                 flaresLive > 0 ? (
                   <>
                     <p class="post-lead tnum">
-                      {flaresLive} {flaresLive === 1 ? 'flare' : 'flares'}
+                      {flaresLive} {flaresLive === 1 ? 'flare' : 'flares'} lit
                     </p>
                     <p class="post-line">
                       <span class="here">Live now</span>
@@ -572,7 +572,15 @@ function homeWhen(event: CalendarEvent): string {
                   </>
                 ) : (
                   <>
-                    <p class="post-lead post-lead--quiet">Nothing burning right now</p>
+                    {/* Says what a flare is, because "nothing burning" only
+                        meant something to people who already knew. The owner's
+                        wording: it is about flares, the Campfire-style call-outs
+                        on the live board. */}
+                    <p class="post-lead post-lead--quiet">No flares lit right now</p>
+                    <p class="post-line post-muted">
+                      Flares are live call-outs for raids and meetups at the park. Raise one from
+                      the live board.
+                    </p>
                     <p class="post-action">
                       <a class="target" href="/live">Open the live board</a>
                     </p>
