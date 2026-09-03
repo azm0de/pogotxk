@@ -4,7 +4,8 @@
  *
  * The body is Markdown rendered by `~/lib/markdown`, which escapes everything
  * before it emits a tag — so `set:html` here is handling HTML this codebase
- * built, never HTML an author typed.
+ * built, never HTML an author typed. It emits bare elements, which is why
+ * `.prose` styles it with no `:global()` beyond the one noted below.
  */
 
 import { env } from 'cloudflare:workers';
@@ -82,364 +83,359 @@ const jsonLd = post
     {!post && <meta name="robots" content="noindex, follow" />}
   </Fragment>
 
-  {
-    post ? (
-      <article class="post">
-        <nav class="post-back" aria-label="Breadcrumb">
-          <a href="/blog">← All news</a>
-        </nav>
-
-        <header class="post-header">
-          {post.pinned && <p class="post-pin">Pinned</p>}
-          <h1>{post.title}</h1>
-          <p class="post-byline">
-            {post.author?.avatarUrl && (
-              <img class="post-avatar" src={post.author.avatarUrl} alt="" width="28" height="28" />
-            )}
-            {post.author && <span class="post-author">{post.author.name}</span>}
-            <time datetime={publishedIso ?? undefined}>
-              {publishedIso ? dateFormat.format(new Date(publishedIso)) : 'Unpublished'}
-            </time>
-            <span class="post-read">{readingMinutes(post.bodyMd)} min read</span>
-          </p>
-
-          {post.tags.length > 0 && (
-            <p class="post-taglist">
-              {post.tags.map((tag) => (
-                <a href={`/blog?tag=${encodeURIComponent(tag)}`}>#{tag}</a>
-              ))}
-            </p>
-          )}
-        </header>
-
-        {post.hero && (
-          <figure class="post-hero">
-            <img
-              src={`/media/${post.hero.key}`}
-              alt={post.hero.alt ?? ''}
-              width={post.hero.width ?? undefined}
-              height={post.hero.height ?? undefined}
-              decoding="async"
-            />
-            {post.hero.credit && <figcaption>{post.hero.credit}</figcaption>}
-          </figure>
-        )}
-
-        <div class="post-body" set:html={bodyHtml} />
-
-        {(neighbours.newer || neighbours.older) && (
-          <nav class="post-nav" aria-label="More posts">
-            {neighbours.newer ? (
-              <a class="post-nav-link" rel="prev" href={`/blog/${neighbours.newer.slug}`}>
-                <span>← Newer</span>
-                <strong>{neighbours.newer.title}</strong>
-              </a>
-            ) : (
-              <span aria-hidden="true" />
-            )}
-            {neighbours.older ? (
-              <a class="post-nav-link post-nav-link--older" rel="next" href={`/blog/${neighbours.older.slug}`}>
-                <span>Older →</span>
-                <strong>{neighbours.older.title}</strong>
-              </a>
-            ) : (
-              <span aria-hidden="true" />
-            )}
+  <div class="post-page">
+    {
+      post ? (
+        <article class="post-article container">
+          <nav class="post-back" aria-label="Breadcrumb">
+            <a class="target" href="/blog">← All news</a>
           </nav>
-        )}
 
-        {jsonLd && (
-          <script
-            type="application/ld+json"
-            is:inline
-            set:html={JSON.stringify(jsonLd).replace(/</g, '\\u003c')}
-          />
-        )}
-      </article>
-    ) : (
-      <div class="post post-missing">
-        <h1>Post not found</h1>
-        <p>
-          That link is either wrong or points at a post that has not gone live yet. Scheduled posts
-          appear on their own at the time they were set for.
-        </p>
-        <p>
-          <a href="/blog">Browse all news</a>
-        </p>
-      </div>
-    )
-  }
+          <header class="post-header">
+            {post.pinned && <p class="badge post-pin">Pinned</p>}
+            <h1>{post.title}</h1>
+            <p class="post-byline">
+              {post.author && (
+                <span class="post-author">
+                  {post.author.avatarUrl && (
+                    <img class="post-avatar" src={post.author.avatarUrl} alt="" width="28" height="28" />
+                  )}
+                  {post.author.name}
+                </span>
+              )}
+              <time datetime={publishedIso ?? undefined}>
+                {publishedIso ? dateFormat.format(new Date(publishedIso)) : 'Unpublished'}
+              </time>
+              <span class="post-read">{readingMinutes(post.bodyMd)} min read</span>
+            </p>
+
+            {post.tags.length > 0 && (
+              <p class="post-taglist">
+                {post.tags.map((tag) => (
+                  <a
+                    class="badge badge--outline target"
+                    href={`/blog?tag=${encodeURIComponent(tag)}`}
+                  >
+                    #{tag}
+                  </a>
+                ))}
+              </p>
+            )}
+          </header>
+
+          {post.hero && (
+            <figure class="figure post-hero">
+              <img
+                src={`/media/${post.hero.key}`}
+                alt={post.hero.alt ?? ''}
+                width={post.hero.width ?? undefined}
+                height={post.hero.height ?? undefined}
+                decoding="async"
+              />
+              {/* The credit rides on the photograph, never beneath it: a crop or
+                  a screenshot must not be able to separate the two. */}
+              {post.hero.credit && <p class="credit">{post.hero.credit}</p>}
+            </figure>
+          )}
+
+          <div class="post-body prose" set:html={bodyHtml} />
+
+          {(neighbours.newer || neighbours.older) && (
+            <nav class="post-nav" aria-label="More posts">
+              <div class="post-nav-side">
+                <p class="post-nav-label">Newer</p>
+                {neighbours.newer ? (
+                  <a
+                    class="btn btn--outline btn--arrow-back"
+                    rel="prev"
+                    href={`/blog/${neighbours.newer.slug}`}
+                  >
+                    {neighbours.newer.title}
+                  </a>
+                ) : (
+                  <p class="post-nav-none">This is the newest post.</p>
+                )}
+              </div>
+              <div class="post-nav-side post-nav-side--older">
+                <p class="post-nav-label">Older</p>
+                {neighbours.older ? (
+                  <a
+                    class="btn btn--outline btn--arrow"
+                    rel="next"
+                    href={`/blog/${neighbours.older.slug}`}
+                  >
+                    {neighbours.older.title}
+                  </a>
+                ) : (
+                  <p class="post-nav-none">This is the oldest post.</p>
+                )}
+              </div>
+            </nav>
+          )}
+
+          {jsonLd && (
+            <script
+              type="application/ld+json"
+              is:inline
+              set:html={JSON.stringify(jsonLd).replace(/</g, '\\u003c')}
+            />
+          )}
+        </article>
+      ) : (
+        <div class="post-article post-missing container">
+          <h1>Post not found</h1>
+          <p>
+            That link is either wrong or points at a post that has not gone live yet. Scheduled posts
+            appear on their own at the time they were set for.
+          </p>
+          <p>
+            <a class="btn btn--outline btn--arrow" href="/blog">
+              Browse all news
+            </a>
+          </p>
+        </div>
+      )
+    }
+  </div>
 </Base>
 
 <style>
-  .post {
-    max-width: 74ch;
-    margin: 0 auto;
-    padding: clamp(20px, 4vw, 40px) clamp(16px, 4vw, 32px) 80px;
+  /* The same 940px board as the index. The reading measure inside it comes from
+     `.prose`, not from the container. */
+  .post-page {
+    --container: 940px;
+    font-family: var(--font-read);
+    padding-block: var(--space-section) var(--space-20);
+  }
+
+  /* `.btn` pins `var(--font)` in the primitives layer; the kiosk world's UI face
+     is `--font-read`. Set here because nobody edits the primitive. */
+  .post-page .btn {
+    font-family: var(--font-read);
+  }
+
+  /* `post-article`, not `post`: `.post` is the numbered-post primitive — a
+     two-column grid — and it laid the header out beside the body. */
+  .post-article {
+    /* A flex child in the column that `body` lays out, and it holds a scrolling
+       table. Without this the table's intrinsic width can win. */
+    min-width: 0;
+    /* `--measure`'s 68ch measured 77-93 characters a line in this face: `ch` is
+       the width of a zero, and Atkinson draws a wide one. Counted back down to
+       ~72 characters, inside the 65-75 the craft floor asks for. */
+    --prose-measure: 58ch;
   }
 
   .post-back {
-    margin-bottom: 18px;
-    font-size: 0.85rem;
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-md);
   }
   .post-back a {
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 700;
   }
   .post-back a:hover {
     text-decoration: underline;
   }
 
+  /* --- the head ------------------------------------------------------------ */
+
+  /* The head shares the body's measure so the title, byline and tags line up
+     with the text under them; only the photograph runs the full board width. */
+  .post-header {
+    max-width: var(--prose-measure);
+  }
   .post-header h1 {
-    font-size: clamp(1.8rem, 5vw, 2.6rem);
-    margin: 0 0 12px;
+    font-family: var(--font-sign);
+    font-size: var(--display-lg);
+    font-weight: 800;
+    line-height: var(--lh-display);
+    letter-spacing: var(--tracking-display);
+    margin: 0 0 var(--space-3);
+    text-wrap: balance;
   }
 
   .post-pin {
-    display: inline-block;
-    margin: 0 0 10px;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: var(--accent);
-    color: var(--accent-contrast);
-    font-size: 0.66rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    margin: 0 0 var(--space-3);
+    --badge-bg: var(--text);
+    --badge-fg: var(--bg);
   }
 
   .post-byline {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 6px 10px;
+    gap: var(--space-2) var(--space-3);
     margin: 0;
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: var(--text-md);
+  }
+  .post-author {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 700;
+    color: var(--text);
   }
   .post-avatar {
     border-radius: 50%;
   }
-  .post-author {
-    font-weight: 600;
-    color: var(--text);
-  }
-  .post-read::before,
-  .post-byline time::before {
+  /* The separator belongs *between* two items, not in front of one. It used to
+     be pinned to `time` and to `.post-read` unconditionally, so a post with no
+     author opened with a stray `·`. */
+  .post-byline > * + *::before {
     content: '·';
-    margin-right: 10px;
-    opacity: 0.6;
+    margin-right: var(--space-3);
+    color: var(--border-strong);
+  }
+  .post-read {
+    font-variant-numeric: tabular-nums;
   }
 
   .post-taglist {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    margin: 12px 0 0;
-    font-size: 0.8rem;
+    gap: var(--space-2) var(--space-3);
+    margin: var(--space-4) 0 0;
   }
   .post-taglist a {
     text-decoration: none;
-    font-weight: 600;
+    /* `.badge`'s padding is declared after `.target`'s inside the primitives
+       layer, so the block padding that lifts the hit area to the 24px floor has
+       to be restored here. Measured 25px tall. */
+    padding-block: var(--space-1);
+    margin-block: calc(var(--space-1) * -1);
   }
   .post-taglist a:hover {
-    text-decoration: underline;
+    background: var(--bg-sunken);
   }
+
+  /* --- the hero ------------------------------------------------------------ */
 
   .post-hero {
-    margin: 26px 0 0;
+    margin: var(--space-8) 0 0;
+    border-radius: var(--radius);
+    background: var(--bg-sunken);
   }
   .post-hero img {
+    display: block;
     width: 100%;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-  }
-  .post-hero figcaption {
-    margin-top: 6px;
-    font-size: 0.74rem;
-    color: var(--text-muted);
   }
 
-  /* -------------------------------------------------------------- prose -- */
-  /* `set:html` content carries no scope attribute, so these descendants have
-     to be addressed globally from the scoped parent. */
-
+  /* --- the body ------------------------------------------------------------
+   * `.prose` carries the typography now; the forty `:global()` rules that used
+   * to live here are gone. The one below stays because the global `h1–h4` rule
+   * is unlayered and pins `--font-display`, and `set:html` output carries no
+   * scope attribute for a plain selector to reach.
+   */
   .post-body {
-    margin-top: 28px;
-    font-size: 1.02rem;
-    line-height: 1.7;
+    margin-top: var(--space-8);
+    min-width: 0;
   }
-  .post-body :global(h2) {
-    margin: 1.8em 0 0.4em;
-    font-size: 1.4rem;
-  }
-  .post-body :global(h3) {
-    margin: 1.5em 0 0.35em;
-    font-size: 1.15rem;
-  }
-  .post-body :global(h4),
-  .post-body :global(h5),
-  .post-body :global(h6) {
-    margin: 1.4em 0 0.3em;
-    font-size: 1rem;
-  }
-  .post-body :global(p) {
-    margin: 0 0 1.05em;
-  }
-  .post-body :global(ul),
-  .post-body :global(ol) {
-    margin: 0 0 1.05em;
-    padding-left: 1.35em;
-  }
-  .post-body :global(li) {
-    margin-bottom: 0.35em;
-  }
-  .post-body :global(li > ul),
-  .post-body :global(li > ol) {
-    margin: 0.35em 0 0;
-  }
-  .post-body :global(a) {
-    color: var(--accent);
-  }
-  .post-body :global(blockquote) {
-    margin: 1.4em 0;
-    padding: 2px 0 2px 18px;
-    border-left: 3px solid var(--accent);
-    color: var(--text-muted);
-  }
-  .post-body :global(blockquote p:last-child) {
-    margin-bottom: 0;
-  }
-  /* The renderer wraps every table in .table-scroll so a wide one scrolls
-     inside the article rather than widening the page — the same rule the rest
-     of the site follows, and the reason /raids does not scroll sideways. */
-  .post-body :global(.table-scroll) {
-    margin: 0 0 1.2em;
-    overflow-x: auto;
-    /* Momentum scrolling, and a hint that there is more to the right. */
-    -webkit-overflow-scrolling: touch;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-  }
-  .post-body :global(table) {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.92em;
-  }
-  .post-body :global(th),
-  .post-body :global(td) {
-    padding: 9px 13px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-    /* Numbers in a column should line up; tabular figures do that for free. */
-    font-variant-numeric: tabular-nums;
-  }
-  .post-body :global(th) {
-    background: var(--bg-sunken);
-    font-weight: 700;
-    white-space: nowrap;
-  }
-  .post-body :global(tbody tr:last-child td) {
-    border-bottom: 0;
+  .post-body :global(:is(h2, h3, h4)) {
+    font-family: var(--font-sign);
+    font-weight: 800;
   }
 
-  .post-body :global(code) {
-    padding: 2px 6px;
-    border-radius: 5px;
-    background: var(--bg-sunken);
-    border: 1px solid var(--border);
-    font-size: 0.86em;
-  }
-  .post-body :global(pre) {
-    margin: 0 0 1.2em;
-    padding: 14px 16px;
-    overflow-x: auto;
-    background: var(--bg-sunken);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-  }
-  .post-body :global(pre code) {
-    padding: 0;
-    border: 0;
-    background: none;
-    font-size: 0.86rem;
-  }
-  .post-body :global(hr) {
-    margin: 2em 0;
-    border: 0;
-    border-top: 1px solid var(--border);
-  }
-  .post-body :global(figure) {
-    margin: 1.6em 0;
-  }
-  .post-body :global(img) {
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-  }
-  .post-body :global(figcaption) {
-    margin-top: 6px;
-    font-size: 0.78rem;
-    color: var(--text-muted);
-    text-align: center;
-  }
-  .post-body :global(del) {
-    color: var(--text-muted);
-  }
-
-  /* --------------------------------------------------------------- nav -- */
+  /* --- newer / older ------------------------------------------------------- */
 
   .post-nav {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-top: 44px;
-    padding-top: 24px;
-    border-top: 1px solid var(--border);
+    gap: var(--space-5);
+    margin-top: var(--space-12);
+    padding-top: var(--space-6);
+    border-top: 2px solid var(--text);
   }
-  .post-nav-link {
-    display: grid;
-    gap: 3px;
-    padding: 12px 14px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg-panel);
-    text-decoration: none;
-    color: inherit;
+  .post-nav-side {
+    min-width: 0;
   }
-  .post-nav-link:hover {
-    border-color: var(--border-strong);
-    box-shadow: var(--shadow-sm);
-  }
-  .post-nav-link span {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+  /* Both sides are always labelled and always drawn, so an empty column reads as
+     "there is nothing older" rather than as a layout that fell over. */
+  .post-nav-label {
+    margin: 0 0 var(--space-2);
+    font-family: var(--font-sign);
+    font-size: var(--text-xs);
+    font-weight: 800;
+    letter-spacing: var(--tracking-caps);
     text-transform: uppercase;
     color: var(--text-muted);
   }
-  .post-nav-link strong {
-    font-size: 0.92rem;
+  .post-nav-none {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-md);
   }
-  .post-nav-link--older {
+  .post-nav-side .btn {
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+    font-size: var(--text-md);
+    line-height: var(--lh-ui);
+  }
+  .post-nav-side--older {
+    text-align: right;
+  }
+  .post-nav-side--older .btn {
+    justify-content: flex-end;
     text-align: right;
   }
 
+  /* PROMOTE: .btn--arrow-back — the mirrored signage arrow, for the actions that
+     go the other way (Newer posts, the previous page). Same drawn mark as
+     `.btn--arrow`, so the two sides of a nav match. */
+  .btn--arrow-back::before {
+    content: '';
+    flex: none;
+    width: 1em;
+    height: 1em;
+    background: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12h15'/%3E%3Cpath d='M13 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transform: scaleX(-1);
+    transition: transform var(--dur-1) var(--ease-out);
+  }
+  .btn--arrow-back:hover::before {
+    transform: scaleX(-1) translateX(2px);
+  }
+  /* The mirror is a transform too, so this cannot go through `--lift`; it gets
+     its own escape instead, and keeps the mirror while dropping the nudge. */
+  @media (prefers-reduced-motion: reduce) {
+    .btn--arrow-back:hover::before {
+      transform: scaleX(-1);
+    }
+  }
+
+  /* --- not found ----------------------------------------------------------- */
+
   .post-missing {
-    text-align: center;
-    padding-top: 64px;
+    padding-top: var(--space-12);
+  }
+  .post-missing h1 {
+    font-family: var(--font-sign);
+    font-size: var(--display-md);
+    font-weight: 800;
+    margin: 0 0 var(--space-4);
   }
   .post-missing p {
     color: var(--text-muted);
-    max-width: 50ch;
-    margin: 0 auto 14px;
+    max-width: var(--measure);
+    margin: 0 0 var(--space-4);
+  }
+  .post-missing p:last-child {
+    margin-bottom: 0;
   }
 
   @media (max-width: 560px) {
     .post-nav {
       grid-template-columns: 1fr;
+      gap: var(--space-6);
     }
-    .post-nav-link--older {
+    .post-nav-side--older,
+    .post-nav-side--older .btn {
       text-align: left;
+    }
+    .post-nav-side--older .btn {
+      justify-content: flex-start;
     }
   }
 </style>
