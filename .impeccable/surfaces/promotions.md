@@ -54,6 +54,7 @@ Owner: main thread. **Applied 2026-09-02 (during W2, files disjoint from W2 owne
 - [x] `.prose` rhythm: the `:where(p)` reset now precedes the rhythm rule (source order decides a specificity tie); measured 16px between paragraphs. `legal.css`'s local workaround can go at the next touch.
 - [ ] `DESIGN.md`: links-are-ink Don't; CARTO → Protomaps at L180; the new primitives; admin now in-world (documenter rerun).
 - [ ] Admin: real-session confirmation of PATCH on drag/lat-lng, media upload, markdown preview with real posts (Justin).
+- [ ] **Owner question:** the home board's post 1 shows "Street A" as the meetup's place — the Discord scheduled event's `entity_metadata.location` string, trimmed for display in `index.astro` (`placeLabel`). `src/lib/discord-events-map.ts:177` passes it straight through. The proper fix is a resolver there that matches the Discord location against the surveyed POI names and hands back the POI (name + map deep link). How do organisers fill that field — a POI name, an address, free text? The answer decides the matcher.
 
 ## Finish reviewer's open items — resolved 2026-09-03
 - `/map` locate placement on wide screens: **fixed** (`b38382f`) — sits beside the legend's bottom corner at ≥641px, measured clear of zoom and attribution at 1280.
