@@ -34,8 +34,11 @@ const next = '/account/delete';
       already happened as something about to happen.
     */}
     <div class="panel acct-warning" data-warning>
+      {/* Ink, not red. Red on this site answers "where am I" and "what is live";
+          lending it to "irreversible" as well leaves it meaning nothing in
+          particular. `.badge--warn` is the ink-filled plate for this. */}
       <p class="acct-warning-head">
-        <span class="badge badge--live">Permanent</span>
+        <span class="badge badge--warn">Permanent</span>
       </p>
       <p>
         <strong>
@@ -101,8 +104,10 @@ const next = '/account/delete';
           </section>
         ) : (
           <section class="acct-delete">
+            {/* The Discord button, in Discord's colour, everywhere it appears —
+                it was the red primary here and blurple on every other page. */}
             <a
-              class="btn btn--primary btn--arrow"
+              class="btn btn--discord btn--arrow"
               href={`/auth/login?next=${encodeURIComponent(next)}`}
             >
               Sign in with Discord

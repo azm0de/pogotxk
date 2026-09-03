@@ -28,14 +28,28 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
       </p>
     </div>
 
+    {/* The contents list its siblings carry. Five sections is short for a
+        policy and long for a phone: this is the page a moderator opens to
+        point somebody at one paragraph, and it had no way in. */}
+    <nav class="panel legal-toc" aria-label="Contents">
+      <p class="legal-toc-title">Contents</p>
+      <ol>
+        <li><a class="target" href="#pledge">The Pledge</a></li>
+        <li><a class="target" href="#standards">The Standards</a></li>
+        <li><a class="target" href="#reporting">Reporting</a></li>
+        <li><a class="target" href="#disputes">Disputes</a></li>
+        <li><a class="target" href="#safety">Safety at meetups</a></li>
+      </ol>
+    </nav>
+
     <div class="legal-body prose">
-      <h2>The Pledge</h2>
+      <h2 id="pledge">The Pledge</h2>
       <blockquote class="panel pledge">
         In the interest of fostering an open and welcoming environment, we pledge to make
         participation in our project and our community a harassment-free experience for everyone.
       </blockquote>
 
-      <h2>The Standards</h2>
+      <h2 id="standards">The Standards</h2>
       <h3>Behaviour that contributes to a positive environment</h3>
       <ul>
         <li>Using welcoming and inclusive language</li>
@@ -71,7 +85,7 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
         </li>
       </ul>
 
-      <h2>Reporting</h2>
+      <h2 id="reporting">Reporting</h2>
       <p>
         Make an official report by messaging <strong>“Yanja”</strong> on Campfire. All reports will
         be reviewed and investigated and will result in a response that is deemed necessary and
@@ -84,13 +98,13 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
         behaviors that they deem inappropriate, threatening, offensive, or harmful.
       </p>
 
-      <h2>Disputes</h2>
+      <h2 id="disputes">Disputes</h2>
       <p>
         Any dispute, controversy or claim arising out of or relating to this contract, or the
         breach, termination or invalidity thereof, shall be settled by arbitration.
       </p>
 
-      <h2>Safety at meetups</h2>
+      <h2 id="safety">Safety at meetups</h2>
       <p>
         Beyond the Code of Conduct: meetups happen in a public park, next to roads. Watch where you
         are walking, obey park hours and signage, never trespass, and do not play while driving.

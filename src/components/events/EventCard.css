@@ -68,9 +68,12 @@
 }
 
 /* --- the row's own hierarchy ---------------------------------------------
-   When first, because "when" is the question. The title used to be the largest
-   line under a banner larger still, which put the artwork top of a card whose
-   job is a time. */
+   When first in the DOM, because "when" is the question and it should be the
+   first thing read out. Not the loudest, though: at 21/700 over an 18/700 title
+   the date outshouted the thing it was the date of, and a reader scanning
+   sixty rows for "Community Day" met sixty identical Wednesdays instead. The
+   title is now the largest line on the card and the time is the data line under
+   it — tabular, full ink, and still first. */
 .event-when {
   display: flex;
   flex-wrap: wrap;
@@ -78,7 +81,7 @@
   gap: var(--space-2);
   margin: 0 0 var(--space-1);
   font-family: var(--font-sign);
-  font-size: var(--text-xl);
+  font-size: var(--text-base);
   font-weight: 700;
   line-height: var(--lh-heading);
   letter-spacing: var(--tracking-tight);
@@ -89,8 +92,8 @@
 .event-title {
   margin: 0;
   font-family: var(--font-sign);
-  font-size: var(--text-lg);
-  font-weight: 700;
+  font-size: var(--text-xl);
+  font-weight: 800;
   line-height: var(--lh-heading);
   letter-spacing: var(--tracking-tight);
 }
@@ -174,19 +177,16 @@
 }
 
 /*
- * Provenance, not a call to action.
+ * Provenance, not a call to action, and no longer a control at all.
  *
- * The 60 "Details" buttons this replaces were red controls that named nothing;
- * this names the destination it opens and sits at the foot of the row where a
- * source line belongs. `.target` gives it the 24px hit area without moving the
- * text.
+ * It was an anchor pointing where the title already points, which is how this
+ * page came to carry two links per card to one URL. As a `.badge--outline` it
+ * says the same thing — where the row came from, and that following it leaves
+ * the site — and stops competing for the tap.
  */
 .event-source {
-  display: inline-flex;
-  align-items: center;
   gap: var(--space-1);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  color: var(--text-muted);
 }
 .event-source-arrow {
   flex: none;
@@ -215,6 +215,12 @@
   box-shadow: var(--shadow-sm);
 }
 .event-title-link {
+  /* Inline text at 21px measures 23px tall, which clears 2.5.8 only through
+     the spacing exception. One pixel each side, given straight back as margin,
+     puts it over the 24px floor outright without moving a thing on the card. */
+  display: inline-block;
+  padding-block: 1px;
+  margin-block: -1px;
   color: inherit;
   text-decoration: none;
 }
@@ -228,12 +234,10 @@
   border-radius: inherit;
 }
 
-/* Both sit above the stretched link. `.event-where` because it is a different
+/* `.event-where` sits above the stretched link because it is a different
    destination — our own map — and would otherwise be swallowed, sending every
-   "where" link to Leek Duck. `.event-actions` because a link you can read is
-   the thing you should be able to press. */
-.event-where a,
-.event-actions a {
+   "where" link to Leek Duck. Nothing else on the card is a link any more. */
+.event-where a {
   position: relative;
   z-index: var(--z-content);
 }

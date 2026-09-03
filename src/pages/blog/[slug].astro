@@ -382,30 +382,6 @@ const jsonLd = post
     text-align: right;
   }
 
-  /* PROMOTE: .btn--arrow-back — the mirrored signage arrow, for the actions that
-     go the other way (Newer posts, the previous page). Same drawn mark as
-     `.btn--arrow`, so the two sides of a nav match. */
-  .btn--arrow-back::before {
-    content: '';
-    flex: none;
-    width: 1em;
-    height: 1em;
-    background: currentColor;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12h15'/%3E%3Cpath d='M13 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
-    transform: scaleX(-1);
-    transition: transform var(--dur-1) var(--ease-out);
-  }
-  .btn--arrow-back:hover::before {
-    transform: scaleX(-1) translateX(2px);
-  }
-  /* The mirror is a transform too, so this cannot go through `--lift`; it gets
-     its own escape instead, and keeps the mirror while dropping the nudge. */
-  @media (prefers-reduced-motion: reduce) {
-    .btn--arrow-back:hover::before {
-      transform: scaleX(-1);
-    }
-  }
-
   /* --- not found ----------------------------------------------------------- */
 
   .post-missing {

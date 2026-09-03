@@ -287,4 +287,45 @@ const DISCORD = 'https://discord.com/invite/2sYR5YdRpH';
       </p>
     </div>
   </article>
+
+  {/*
+    A scroll region that has nothing to scroll is a tab stop that goes nowhere.
+    Both tables here fit at 375 and at every width above it, so the wrappers
+    were two dead stops in the keyboard order of the quietest page on the site.
+
+    The markup ships `tabindex="0"` and this takes it away, never the other way
+    round: with no JavaScript the region stays reachable, which is the safe
+    half of the trade. Re-checked whenever the wrapper's box changes, so a
+    table that overflows after a font loads or a window narrows gets it back.
+  */}
+  <script is:inline>
+    (() => {
+      const regions = Array.from(document.querySelectorAll('.table-scroll'));
+      if (regions.length === 0) return;
+
+      const sync = (el) => {
+        if (el.scrollWidth > el.clientWidth + 1) el.setAttribute('tabindex', '0');
+        else el.removeAttribute('tabindex');
+      };
+
+      if ('ResizeObserver' in window) {
+        const ro = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const el = entry.target.closest('.table-scroll');
+            if (el) sync(el);
+          }
+        });
+        for (const el of regions) {
+          sync(el);
+          ro.observe(el);
+          const table = el.querySelector('table');
+          if (table) ro.observe(table);
+        }
+      } else {
+        const all = () => regions.forEach(sync);
+        all();
+        window.addEventListener('resize', all);
+      }
+    })();
+  </script>
 </Base>

@@ -70,10 +70,25 @@
   line-height: var(--lh-display);
   letter-spacing: var(--tracking-display);
 }
+/*
+ * The document ramp, and it has to be a ramp.
+ *
+ * `.prose` sizes h3 at --text-xl and h4 at --text-lg, and the reset sets every
+ * heading to 800; `.legal h3` then dropped h3 alone to 700. At 375 that
+ * measured h2 22.15 / h3 21 / h4 18-at-800 — three steps inside 4px with the
+ * deepest one the heaviest, which is what made /conduct unskimmable. With
+ * --display-sm's floor now at 1.55rem the steps are 24.8 / 18 / 16, and weight
+ * falls with size instead of rising.
+ */
 .legal h2 {
   font-weight: 800;
 }
 .legal h3 {
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+.legal h4 {
+  font-size: var(--text-base);
   font-weight: 700;
 }
 
@@ -87,12 +102,18 @@
 /* ------------------------------------------------------------- body column -- */
 
 /*
- * PROMOTE: `.prose` paragraph rhythm — in primitives.css `.prose p { margin-block: 0 }`
- * (0,2,0) out-ranks `.prose > * + * { margin-block-start: var(--space-4) }`
- * (0,1,0), so direct-child paragraphs come out with no spacing at all and the
- * prose runs together. Restored here at (0,4,0) for these five pages only;
- * primitives should scope its reset (`.prose :where(p)`) so every consumer gets
- * the rhythm the file intends.
+ * PROMOTE: `.prose` paragraph rhythm — STILL OPEN after the `:where()` change.
+ *
+ * primitives.css now writes the reset as `.prose :where(p) { margin-block: 0 }`,
+ * which is (0,1,0) — the same specificity as `.prose > * + * { margin-block-start:
+ * var(--space-4) }` above it, so the tie goes to source order and the reset,
+ * being later in the file, still wins. Measured on /conduct with this rule
+ * deleted at runtime: every direct-child paragraph computes `margin-block-start:
+ * 0px` and the prose runs together.
+ *
+ * The fix in primitives is to put the reset BEFORE the rhythm rule, or to write
+ * the rhythm as `.prose > :where(* + *)` and the reset as a bare `p`. Until then
+ * this restores it at (0,4,0) for these five pages only.
  */
 .legal .legal-body.prose > p:not(:first-child) {
   margin-block-start: var(--space-4);

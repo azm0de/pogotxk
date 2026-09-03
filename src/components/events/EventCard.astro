@@ -28,9 +28,16 @@ interface Props {
    * request per card by accident.
    */
   showImage?: boolean;
+  /**
+   * The group this card sits in already names its state in its heading
+   * ("Running now", "Recently finished"), so the card drops the word. Eight
+   * RUNNING badges under a heading that says Running now is the heading typed
+   * out eight more times.
+   */
+  stateNamedByGroup?: boolean;
 }
 
-const { event, when, state, showImage = false } = Astro.props;
+const { event, when, state, showImage = false, stateNamedByGroup = false } = Astro.props;
 
 /*
  * Leek Duck artwork, served through our own origin — see lib/game-image.ts.
@@ -78,9 +85,17 @@ function categoryLabel(): string | null {
 
 const category = categoryLabel();
 
-/** The state as a word, because colour is never the only signal here. */
+/**
+ * The state as a word, because colour is never the only signal here.
+ *
+ * "Live" rides with the time and is never suppressed: a heading of "Running
+ * now" covers a season that started in June as well as an hour that started at
+ * six, and only the badge separates them. The quieter words are the ones the
+ * heading really does say twice.
+ */
 const stateWord =
   state === 'live' ? 'Live' : state === 'ongoing' ? 'Running' : state === 'past' ? 'Finished' : null;
+const badgeState = stateWord && state !== 'live' && !stateNamedByGroup ? stateWord : null;
 
 const summary = event.description?.split('\n\n')[0]?.trim() ?? '';
 const blurb = summary.length > 240 ? `${summary.slice(0, 237).trimEnd()}…` : summary;
@@ -90,19 +105,22 @@ const blurb = summary.length > 240 ? `${summary.slice(0, 237).trimEnd()}…` : s
 const externalUrl = event.url && !event.url.includes('/events#') ? event.url : null;
 
 /*
- * Where the row came from, named.
+ * Where the row came from, named — as a label, not a second link.
  *
- * This replaces the "Details" button — 60 of them shipped on this page, each a
- * red control saying nothing about its destination. The source link says where
- * it goes and reads as provenance, which is the honest description of an
- * outbound link on data we did not write.
+ * This started as a "Details" button, 60 red controls naming nothing, and
+ * became an anchor naming its destination. It was still the title link's
+ * destination: two of the three links on every card went to the same URL, which
+ * is how /events came to carry 120 links, 60 of them called "On Leek Duck".
+ * The card is already that link end to end. What was missing was never a second
+ * target, only the provenance, so this is now a printed plate: where the row
+ * came from, and the arrow saying the card leaves the site.
  */
 function sourceLabel(): string | null {
   if (!externalUrl) return null;
   try {
     const host = new URL(externalUrl).hostname;
-    if (host.endsWith('leekduck.com')) return 'On Leek Duck';
-    if (host.endsWith('nianticlabs.com')) return 'On Campfire';
+    if (host.endsWith('leekduck.com')) return 'Leek Duck';
+    if (host.endsWith('nianticlabs.com')) return 'Campfire';
   } catch {
     return null;
   }
@@ -192,10 +210,10 @@ const source = sourceLabel();
     </h3>
 
     {
-      (category || cancelled || recurrence || (stateWord && state !== 'live')) && (
+      (category || cancelled || recurrence || badgeState) && (
         <p class="event-badges">
           {category && <span class="badge">{category}</span>}
-          {stateWord && state !== 'live' && <span class="badge badge--outline">{stateWord}</span>}
+          {badgeState && <span class="badge badge--outline">{badgeState}</span>}
           {cancelled && <span class="badge badge--outline">Cancelled</span>}
           {recurrence && <span class="badge badge--outline event-badge--repeat">{recurrence}</span>}
         </p>
@@ -229,12 +247,9 @@ const source = sourceLabel();
     {
       source && (
         <p class="event-actions">
-          <a
-            class="target event-source"
-            href={externalUrl}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
+          {/* Not a link: the title above it already goes here, and it carries
+              the "(opens in a new tab)" note for both of them. */}
+          <span class="badge badge--outline event-source">
             {source}
             <svg class="event-source-arrow" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
               <path
@@ -246,8 +261,7 @@ const source = sourceLabel();
                 stroke-linejoin="round"
               />
             </svg>
-            <span class="sr-only"> (opens in a new tab)</span>
-          </a>
+          </span>
         </p>
       )
     }

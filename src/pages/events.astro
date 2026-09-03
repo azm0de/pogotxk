@@ -215,9 +215,13 @@ const nowZone = zoneLabel(new Date());
                   </time>
 
                   <div class="meet-body">
-                    {isLive && <p class="here meet-here">Happening now</p>}
-                    <p class="meet-when">{meetupWhen(event)}</p>
+                    {isLive && <p class="here meet-here">Live now</p>}
+                    {/* The meetup, then when it is. The time sat above the
+                        title at a size larger than it, which made every post
+                        on the board open on a weekday and read as a kicker
+                        over its own heading. */}
                     <h3 class="meet-title">{event.summary}</h3>
+                    <p class="meet-when">{meetupWhen(event)}</p>
 
                     {event.location && (
                       <p class="meet-where">
@@ -289,13 +293,6 @@ const nowZone = zoneLabel(new Date());
       }
     </section>
 
-    <FeedStatus
-      fetchedAt={feed?.fetchedAt ?? null}
-      stale={feed?.stale ?? true}
-      label="game calendar"
-      error={feed?.error ?? null}
-    />
-
     {
       globalAvailable ? (
         <details class="panel calendar" id="game-calendar">
@@ -305,6 +302,17 @@ const nowZone = zoneLabel(new Date());
           </summary>
 
           <div class="calendar-body">
+            {/* Inside the disclosure, directly under its summary: this line
+                describes how fresh the game calendar is, and it sat above the
+                meetups panel where it read as the freshness of the meetups —
+                which come from our own database and are never stale. */}
+            <FeedStatus
+              fetchedAt={feed?.fetchedAt ?? null}
+              stale={feed?.stale ?? true}
+              label="game calendar"
+              error={feed?.error ?? null}
+            />
+
             {running.length > 0 && (
               <section class="event-group" aria-labelledby="running-heading">
                 <div class="section-head">
@@ -318,6 +326,7 @@ const nowZone = zoneLabel(new Date());
                       when={formatWhen(event)}
                       state={calendar.live.includes(event) ? 'live' : 'ongoing'}
                       showImage
+                      stateNamedByGroup
                     />
                   ))}
                 </div>
@@ -353,7 +362,13 @@ const nowZone = zoneLabel(new Date());
                 </div>
                 <div class="event-grid">
                   {past.map((event) => (
-                    <EventCard event={event} when={formatWhen(event)} state="past" showImage />
+                    <EventCard
+                      event={event}
+                      when={formatWhen(event)}
+                      state="past"
+                      showImage
+                      stateNamedByGroup
+                    />
                   ))}
                 </div>
               </section>
@@ -428,14 +443,6 @@ const nowZone = zoneLabel(new Date());
     line-height: var(--lh-body);
   }
 
-  /* PROMOTE: .count — primitives defines it only as `.section-head .count`, and
-     a panel head needs the same counter beside its title. */
-  .count {
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-    font-variant-numeric: tabular-nums;
-  }
-
   /* Empty until a countdown announces something, so it must not reserve space. */
   .events-live-status {
     margin: 0;
@@ -492,21 +499,26 @@ const nowZone = zoneLabel(new Date());
   .meet-here {
     margin: 0 0 var(--space-2);
   }
-  .meet-when {
+  /* The meetup is the loudest line on its post; the time is the meta line
+     under it. It was the other way round, so a board of three meetups read as
+     three weekdays with the events themselves a size smaller. The date block
+     to the left already answers "when" at a glance. */
+  .meet-title {
     margin: 0;
     font-family: var(--font-sign);
-    font-size: var(--text-xl);
-    font-weight: 700;
+    font-size: var(--display-sm);
+    font-weight: 800;
     line-height: var(--lh-heading);
     letter-spacing: var(--tracking-tight);
-    font-variant-numeric: tabular-nums;
   }
-  .meet-title {
+  .meet-when {
     margin: var(--space-1) 0 0;
     font-family: var(--font-sign);
-    font-size: var(--text-lg);
+    font-size: var(--text-sm);
     font-weight: 700;
-    line-height: var(--lh-heading);
+    line-height: var(--lh-ui);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
   }
   .meet[data-cancelled] .meet-title {
     text-decoration: line-through;
@@ -582,6 +594,12 @@ const nowZone = zoneLabel(new Date());
     display: grid;
     gap: var(--space-2);
   }
+  /* FeedStatus is a child component, so its own class is out of reach of a
+     scoped selector. It carries a top margin for the pages that stack it under
+     a running head; directly under this summary the grid gap is the spacing. */
+  .calendar-body > :global(.g-status) {
+    margin-top: 0;
+  }
   .event-group {
     display: grid;
     gap: var(--space-3);
@@ -596,8 +614,8 @@ const nowZone = zoneLabel(new Date());
     line-height: var(--lh-heading);
     letter-spacing: var(--tracking-tight);
   }
-  .event-group:first-child .section-head {
-    margin-block-start: 0;
+  .event-group:first-of-type .section-head {
+    margin-block-start: var(--space-4);
   }
 
   .event-grid {

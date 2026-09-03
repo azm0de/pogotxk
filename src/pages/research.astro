@@ -14,6 +14,7 @@ import Base from '~/layouts/Base.astro';
 import Attribution from '~/components/game/Attribution.astro';
 import GameNav from '~/components/game/GameNav.astro';
 import FeedStatus from '~/components/game/FeedStatus.astro';
+import JumpRow from '~/components/game/JumpRow.astro';
 import ResearchCard from '~/components/game/ResearchCard.astro';
 import '~/components/game/game.css';
 import {
@@ -64,6 +65,16 @@ const shinyTasks = feed.data.filter((task) =>
       stale={feed.stale}
       error={feed.error}
       label="research list"
+    />
+
+    <JumpRow
+      label="Jump to a task type"
+      noun={['task', 'tasks']}
+      items={categories.map((group) => ({
+        key: researchCategoryLabel(group.key),
+        id: `task-${slugifyLabel(group.key)}`,
+        count: group.items.length,
+      }))}
     />
 
     {

@@ -1,0 +1,58 @@
+---
+/**
+ * The wayfinding rail for the three game-data pages.
+ *
+ * Lifted verbatim out of `/raids`, where it was the one thing that made a
+ * 5,000px page navigable — `/eggs` (18,729px at 375) and `/research` (21,110px)
+ * shipped without it, which is 23 screenfuls with no marker on them.
+ *
+ * It stays on screen. A jump row that scrolls away is only useful in the first
+ * viewport, which is the one place nobody needs it; bolted under the header it
+ * is the board's legend strip, readable from anywhere on the page.
+ *
+ * One row, always: the chips scroll sideways rather than wrapping, so the rail
+ * is the same 56px tall whether a page has three sections or seven and never
+ * eats a third of a phone screen. The chips are links, so the row is reachable
+ * from the keyboard without a `tabindex` on the scroller.
+ */
+import './game.css';
+
+export interface JumpItem {
+  /** The visible label, e.g. "5-Star" or "1 km". */
+  key: string;
+  /** The id of the section it jumps to. */
+  id: string;
+  count: number;
+}
+
+interface Props {
+  items: JumpItem[];
+  /** Names the nav for a screen reader, e.g. "Jump to a tier". */
+  label: string;
+  /** What is being counted, singular then plural: `['boss', 'bosses']`. */
+  noun: [string, string];
+}
+
+const { items, label, noun } = Astro.props;
+---
+
+{
+  items.length > 1 && (
+    <nav class="g-jump" aria-label={label}>
+      <ul>
+        {items.map((item) => (
+          <li data-jump-for={item.id}>
+            <a
+              class="chip"
+              href={`#${item.id}`}
+              aria-label={`${item.key}, ${item.count} ${item.count === 1 ? noun[0] : noun[1]}`}
+            >
+              {item.key}
+              <span class="count">{item.count}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}

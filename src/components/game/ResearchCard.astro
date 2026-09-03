@@ -23,6 +23,16 @@ const rewards = (task.rewards ?? []).map((reward) => ({
   image: proxiedImageUrl(reward.image),
 }));
 const anyShiny = rewards.some((reward) => reward.canBeShiny);
+
+/*
+ * The same rule /eggs applies to its pools: a mark that says the same thing on
+ * every tile is not a mark, it is wallpaper. Most tasks reward one encounter, so
+ * "✦ SHINY REWARD" in the card head and "✦ SHINY" on the tile under it were the
+ * same sentence twice, 33 times down the page. Where the card agrees with
+ * itself the head says it once; where only some rewards can be shiny the tiles
+ * are the only thing saying which, so they stay.
+ */
+const everyShiny = rewards.length > 0 && rewards.every((reward) => reward.canBeShiny);
 ---
 
 <li class="card g-card" data-shiny={anyShiny ? 'true' : 'false'}>
@@ -51,7 +61,7 @@ const anyShiny = rewards.some((reward) => reward.canBeShiny);
           )}
           <span class="g-reward-name">{reward.name}</span>
           <span class="g-reward-cp">CP {formatCp(reward.combatPower)}</span>
-          {reward.canBeShiny && <ShinyMark />}
+          {reward.canBeShiny && !everyShiny && <ShinyMark />}
         </li>
       ))
     }

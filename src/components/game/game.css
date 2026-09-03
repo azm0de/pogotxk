@@ -72,18 +72,45 @@
 }
 
 /* ------------------------------------------------------------- jump row -- */
-/* One tap from the top to the tier you actually came for. */
+/*
+ * One tap from the top to the tier, pool or category you came for — and it is
+ * still there at 6,000px down, which is where /eggs and /research actually get
+ * read. A white rail bolted under the red header: the panel ground carries it
+ * so page content passes behind rather than through it.
+ *
+ * The rail bleeds to the page gutters so the chips scroll off a clean edge; the
+ * `.g-page` padding is given back as its own inline padding.
+ */
 
 .g-jump {
+  position: sticky;
+  /* Under the header, plus a hairline of air. */
+  top: calc(var(--header-public-h) + var(--space-1));
+  z-index: var(--z-content);
   margin-top: var(--space-4);
+  margin-inline: calc(var(--gutter-lg) * -1);
+  padding: var(--space-2) var(--gutter-lg);
+  background: var(--bg-panel);
+  border-block: 1px solid var(--border);
 }
 .g-jump ul {
   display: flex;
-  flex-wrap: wrap;
+  /* One row that scrolls, not three rows that wrap: a sticky rail has to keep
+     a fixed height or it swallows the phone viewport it is meant to serve. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: var(--gutter-lg);
+  /* The scrollbar is a browser surface, so it gets the palette too. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
   gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.g-jump li {
+  flex: none;
 }
 .g-jump .chip {
   color: var(--text);
@@ -91,15 +118,23 @@
   font-family: var(--font-sign);
   font-weight: 700;
 }
-.g-jump-n {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
 
 /* ------------------------------------------------------------- sections -- */
 
 .g-section {
   margin-top: var(--space-6);
+  /*
+   * Anchored sections clear the header AND the sticky rail. `:target` in
+   * global.css only knows about the header, so a jump landed the section
+   * heading underneath the very row that sent you there.
+   *
+   * 68px is the rail at its tallest — a 36px chip between two 8px rails, its
+   * two hairlines, and the gutter a classic scrollbar reserves when the chips
+   * overflow (an overlay scrollbar reserves none, so the rail is 53px there and
+   * the jump simply lands with a little more air above the heading). Raw
+   * because it is a measurement of that component, not a step on any scale.
+   */
+  scroll-margin-top: calc(var(--header-public-h) + 68px + var(--space-3));
 }
 /* The post has to be able to shrink, or a long tier name pushes the count off
    the panel instead of wrapping. */
@@ -127,6 +162,10 @@
 .g-summary {
   margin: var(--space-4) 0 0;
 }
+/* The disc's legend: what the number in the disc is counting. */
+.g-pool-count {
+  margin: var(--space-1) 0 0;
+}
 
 /* ---------------------------------------------------------- tier ladder -- */
 /*
@@ -137,13 +176,11 @@
  * a legend on another page.
  */
 
+/* `--disc-size` is now on the primitive, so these set the property rather than
+   overriding the geometry. */
 .g-tier .disc,
 .g-pool .disc {
-  /* PROMOTE: --disc-size — `.disc` is fixed at 32px, which is a step small
-     beside a display-sm panel heading. A size custom property on the primitive
-     would replace these two rules. */
-  width: 40px;
-  height: 40px;
+  --disc-size: 40px;
   font-size: var(--text-lg);
 }
 .g-tier .disc.is-heavy {
@@ -365,15 +402,22 @@
 }
 
 /* --------------------------------------------------------- attribution -- */
-/* `.g-attribution` is a class-name contract: the home page styles it through
-   `:global`. The internals are ours; the name is not. */
+/*
+ * `.g-attribution` is a class-name contract: the home page styles it through
+ * `:global`. The internals are ours; the name is not.
+ *
+ * Both paragraphs and both links stay — the licence says visible credit, and
+ * this is the site keeping that promise properly. What goes is the weight: as a
+ * filled, bordered box it measured 235px at 375 and was the tallest element on
+ * an empty `/events`, which put the licence text above the freshest data on the
+ * page. It is now fine print under a hairline, the same treatment `.legal-note`
+ * gives the disclaimers on the legal pages.
+ */
 
 .g-attribution {
-  margin-top: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
+  margin-top: var(--space-8);
+  padding-block-start: var(--space-6);
+  border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: var(--text-sm);
 }

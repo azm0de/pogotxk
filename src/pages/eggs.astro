@@ -13,6 +13,7 @@ import Attribution from '~/components/game/Attribution.astro';
 import GameNav from '~/components/game/GameNav.astro';
 import EggCard from '~/components/game/EggCard.astro';
 import FeedStatus from '~/components/game/FeedStatus.astro';
+import JumpRow from '~/components/game/JumpRow.astro';
 import '~/components/game/game.css';
 import { eggDistanceRank, getFeed, groupSorted, slugifyLabel, type EggEntry } from '~/lib/scrapedduck';
 
@@ -82,6 +83,16 @@ function poolNote(eggType: string, adventureSync: number, gift: number): string 
       label="egg pool"
     />
 
+    <JumpRow
+      label="Jump to a pool"
+      noun={['species', 'species']}
+      items={pools.map((group) => ({
+        key: group.key,
+        id: `pool-${slugifyLabel(group.key)}`,
+        count: group.items.length,
+      }))}
+    />
+
     {
       total === 0 ? (
         <div class="empty-state g-empty">
@@ -121,24 +132,28 @@ function poolNote(eggType: string, adventureSync: number, gift: number): string 
 
           const id = `pool-${slugifyLabel(group.key)}`;
           const headingId = `${id}-name`;
-          const km = /(\d+)/.exec(group.key)?.[1] ?? '?';
 
           return (
             <section class="panel g-section" id={id} aria-labelledby={headingId}>
               <div class="panel-head g-section-head">
                 <div class="post g-pool">
+                  {/* The disc is the size of the pool, and the line under the
+                      heading spells out what that number counts. It used to
+                      carry the walking distance — "1", "2", "5" — which is the
+                      heading's own first word restated inside a shape whose
+                      whole job is to be a key to something. */}
                   <span class="disc" aria-hidden="true">
-                    {km}
+                    {count}
                   </span>
                   <div class="g-post-body">
                     <h2 id={headingId}>{group.key} eggs</h2>
+                    <p class="g-count g-pool-count">{count} species in this pool</p>
                     {note && <p class="g-note">{note}</p>}
                     <p class="g-note">
                       {shinyLine} {rarityLine}
                     </p>
                   </div>
                 </div>
-                <span class="g-count">{count} species</span>
               </div>
               <ul class="g-grid">
                 {group.items.map((egg) => (

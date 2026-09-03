@@ -100,6 +100,22 @@ const isPortrait = (p: Photo) => (p.width && p.height ? p.height > p.width * 1.1
  * decorative and the caption below carries the description. Only a photo with
  * neither gets a short generic alt, because then nothing else describes it.
  */
+/**
+ * What a "Where this was taken" link is the where *of*.
+ *
+ * There is no place column — the map link is a coordinate pair — so the short
+ * name comes from whatever the row already says about the picture: its caption
+ * first, its alt text second. Clipped at the first sentence and 70 characters,
+ * because this is a link name and not a description; a row with neither gets
+ * nothing appended rather than a made-up place.
+ */
+const photoPlace = (p: Photo) => {
+  const source = (p.caption ?? p.alt ?? '').trim().replace(/\s+/g, ' ');
+  if (!source) return '';
+  const first = source.split(/(?<=[.!?])\s/)[0] ?? source;
+  return first.length > 70 ? `${first.slice(0, 67).trimEnd()}…` : first;
+};
+
 const photoAlt = (p: Photo) => {
   const alt = p.alt?.trim() ?? '';
   const caption = p.caption?.trim() ?? '';
@@ -190,17 +206,25 @@ const description = tag
           </p>
         ) : (
           <ul class="blog-list">
-            {posts.map((post) => (
+            {posts.map((post, i) => (
               <li>
                 <article class={`card post-card${post.pinned ? ' post-card--pinned' : ''}`}>
                   {post.hero && (
                     <a class="post-card-media" href={`/blog/${post.slug}`} tabindex="-1" aria-hidden="true">
+                      {/*
+                        The first card's picture is above the fold and is this
+                        page's LCP element; deferring it makes the browser
+                        discover the one image that decides the score last.
+                        Everything below it stays lazy — nine eager fetches
+                        would just move the problem.
+                      */}
                       <img
                         src={`/media/${post.hero.key}`}
                         alt=""
                         width={post.hero.width ?? undefined}
                         height={post.hero.height ?? undefined}
-                        loading="lazy"
+                        loading={i === 0 ? 'eager' : 'lazy'}
+                        fetchpriority={i === 0 ? 'high' : undefined}
                         decoding="async"
                       />
                     </a>
@@ -310,8 +334,22 @@ const description = tag
                       {photo.caption && <p class="photo-caption">{photo.caption}</p>}
                       {photo.lat && photo.lng && (
                         <p class="photo-where">
-                          <a class="target" href={`/map?lat=${photo.lat}&lng=${photo.lng}`}>
+                          {/*
+                            Nine links reading "Where this was taken" is a link
+                            list with one name on it: out of context — which is
+                            how a screen reader's link list reads it — no two of
+                            them can be told apart. The visible words stay, and
+                            the accessible name names the picture they belong
+                            to. It is also an action now, so it looks like one.
+                          */}
+                          <a
+                            class="btn btn--sm btn--outline btn--arrow"
+                            href={`/map?lat=${photo.lat}&lng=${photo.lng}`}
+                          >
                             Where this was taken
+                            {photoPlace(photo) && (
+                              <span class="sr-only">: {photoPlace(photo)}</span>
+                            )}
                           </a>
                         </p>
                       )}
@@ -393,14 +431,6 @@ const description = tag
   }
   .blog-tags .chip {
     text-decoration: none;
-  }
-  /* PROMOTE: .chip[aria-current='page'] — the pressed state for a chip that is a
-     link. `aria-pressed` is invalid on an anchor, so the primitive's only
-     selected state cannot be used by any nav built from links. */
-  .blog-tags .chip[aria-current='page'] {
-    background: var(--text);
-    border-color: var(--text);
-    color: var(--bg);
   }
   /* Was `opacity: 0.7` on an already-muted colour, which measured 3.22:1. A real
      token instead, and it flips to the chip's own ink when the chip is on. */
@@ -561,30 +591,6 @@ const description = tag
     justify-self: end;
   }
 
-  /* PROMOTE: .btn--arrow-back — the mirrored signage arrow, for the actions that
-     go the other way (Newer posts, the previous page). Same drawn mark as
-     `.btn--arrow`, so the two sides of a nav match. */
-  .btn--arrow-back::before {
-    content: '';
-    flex: none;
-    width: 1em;
-    height: 1em;
-    background: currentColor;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12h15'/%3E%3Cpath d='M13 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
-    transform: scaleX(-1);
-    transition: transform var(--dur-1) var(--ease-out);
-  }
-  .btn--arrow-back:hover::before {
-    transform: scaleX(-1) translateX(2px);
-  }
-  /* The mirror is a transform too, so this cannot go through `--lift`; it gets
-     its own escape instead, and keeps the mirror while dropping the nudge. */
-  @media (prefers-reduced-motion: reduce) {
-    .btn--arrow-back:hover::before {
-      transform: scaleX(-1);
-    }
-  }
-
   /* --- the photographs -----------------------------------------------------
    * Was /gallery. A band on this page rather than a route of its own: two
    * published posts and nine photographs did not need two nav items between
@@ -649,12 +655,10 @@ const description = tag
     line-height: var(--lh-ui);
     color: var(--text);
   }
+  /* The link inside is a `.btn--sm` now and brings its own type and hit area,
+     so this only positions it. */
   .photo-where {
-    margin: var(--space-2) 0 0;
-    font-size: var(--text-sm);
-  }
-  .photo-where a {
-    font-weight: 700;
+    margin: var(--space-3) 0 0;
   }
 
   .photo-rights {

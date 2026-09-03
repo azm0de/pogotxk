@@ -10,12 +10,14 @@
  * The page used to open on a 375px-tall slab of Niantic key art that put the
  * 5-star tier at y=2169 — past two screenfuls of scrolling to reach the one
  * tier anybody plans an evening around. It now opens on its own heading, and
- * the jump row puts every tier one tap from the top.
+ * the jump row — shared with /eggs and /research, and sticky on all three —
+ * puts every tier one tap away from anywhere on the page.
  */
 import Base from '~/layouts/Base.astro';
 import Attribution from '~/components/game/Attribution.astro';
 import GameNav from '~/components/game/GameNav.astro';
 import FeedStatus from '~/components/game/FeedStatus.astro';
+import JumpRow from '~/components/game/JumpRow.astro';
 import RaidCard from '~/components/game/RaidCard.astro';
 import TierBadge from '~/components/game/TierBadge.astro';
 import '~/components/game/game.css';
@@ -110,31 +112,15 @@ function shortTier(tier: string): string {
       label="raid list"
     />
 
-    {
-      ladder.length > 1 && (
-        <nav class="g-jump" aria-label="Jump to a tier">
-          <ul>
-            {ladder.map((group) => {
-              const id = `tier-${slugifyLabel(group.key)}`;
-              const short = shortTier(group.key);
-              const count = group.items.length;
-              return (
-                <li data-jump-for={id}>
-                  <a
-                    class="chip"
-                    href={`#${id}`}
-                    aria-label={`${short}, ${count} ${count === 1 ? 'boss' : 'bosses'}`}
-                  >
-                    {short}
-                    <span class="g-jump-n">{count}</span>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-      )
-    }
+    <JumpRow
+      label="Jump to a tier"
+      noun={['boss', 'bosses']}
+      items={ladder.map((group) => ({
+        key: shortTier(group.key),
+        id: `tier-${slugifyLabel(group.key)}`,
+        count: group.items.length,
+      }))}
+    />
 
     {
       total > 0 &&
