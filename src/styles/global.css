@@ -111,7 +111,7 @@
   /*
    * The same POI hues, dark enough to put white label text on.
    *
-   * The pins above are tuned as *pins*: large silhouettes on the Voyager
+   * The pins above are tuned as *pins*: large silhouettes on the light
    * basemap, where WCAG's 3:1 non-text minimum is the bar they have to clear.
    * A map popup's type badge is a different problem — 11px white text on a
    * fill — and at that job two of them fail outright: white on `--poi-gym` is
@@ -195,14 +195,16 @@
    * The map's ground — the colour behind the tiles.
    *
    * Deliberately NOT theme-dependent, and deliberately not `--bg-sunken`, which
-   * is dark in dark mode. The basemap is pinned to CARTO Voyager (light) in both
-   * themes — see the note in MapView.tsx — so a tile still loading, or one
-   * Leaflet never receives, must fall back to something *map-toned* rather than
-   * to a dark hole punched in a light map. On a phone on park wifi that gap is
-   * routine, and against light neighbours a `--bg-sunken` fallback read as the
-   * map being broken. This is a warm pale grey close to Voyager's own land, so a
-   * gap reads as "still loading" and disappears as the tile paints over it. It
-   * is defined once here and never overridden in the dark block, on purpose. */
+   * is dark in dark mode. The basemap is the self-hosted Protomaps extract in
+   * its light flavor in both themes — see basemap.ts and vault/Basemap.md — so
+   * a tile still loading, or one Leaflet never receives, must fall back to
+   * something *map-toned* rather than to a dark hole punched in a light map. On
+   * a phone on park wifi that gap is routine, and against light neighbours a
+   * `--bg-sunken` fallback read as the map being broken. This is a warm pale
+   * grey close to the light flavor's own land colour (it was tuned on CARTO
+   * Voyager, whose land is near-identical), so a gap reads as "still loading"
+   * and disappears as the tile paints over it. It is defined once here and
+   * never overridden in the dark block, on purpose. */
   --map-canvas: #e9e6e0;
 
   /* Neutral rather than brand-tinted: a red-tinted shadow under a red button
@@ -365,9 +367,10 @@
      * the surface they sit on stopped changing.
      *
      * They used to go lighter here "so they hold up on a dark basemap". Since
-     * `MapView.tsx` pins CARTO Voyager unconditionally, the basemap is light in
-     * both themes, so lifting them would leave a pale pin on pale tiles —
-     * #55a2ec is ~2.5:1 on Voyager where #2f7fd4 is ~4.2:1.
+     * `basemap.ts` pins the light flavor unconditionally (first on CARTO
+     * Voyager, now on the self-hosted Protomaps extract), the basemap is light
+     * in both themes, so lifting them would leave a pale pin on pale tiles —
+     * #55a2ec measured ~2.5:1 on that land colour where #2f7fd4 is ~4.2:1.
      *
      * Two of the three surfaces these feed get better, not just the pins:
      *   - `.popup-badge--*` sets white text ON this colour, so the darker value

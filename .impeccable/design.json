@@ -1,51 +1,273 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-03T00:00:00Z",
+  "generatedAt": "2026-09-03T00:00:00.000Z",
   "title": "Design System: PoGo TXK",
   "extensions": {
     "colorMeta": {
-      "red-700": { "role": "primary", "displayName": "Signal Red", "canonical": "#c8071c", "note": "hue 353.5, 5.99:1 on white; --accent inverts to #ff5c6e in dark, --accent-solid stays this in both themes", "tonalRamp": ["#5c0210", "#7a0314", "#9e0417", "#b5051a", "#c8071c", "#d10a1e", "#e01329", "#f26b78"] },
-      "live": { "role": "secondary", "displayName": "Live Red", "canonical": "#d10a1e", "note": "filled surface under white (5.00:1); paired token --live-text #c8071c for text; both invert between themes", "tonalRamp": ["#5c0210", "#7a0314", "#9e0417", "#b5051a", "#c8071c", "#d10a1e", "#e01329", "#f26b78"] },
-      "ink-800": { "role": "neutral", "displayName": "Band Ink", "canonical": "#1d1d1f", "note": "--text, the Poke Ball's black band; 16.83:1 on white", "tonalRamp": ["#0f0f11", "#1d1d1f", "#2c2c31", "#3d3d44", "#5f5f68", "#a4a4ac", "#c7c7ce", "#e3e3e6"] },
-      "bg-panel": { "role": "neutral", "displayName": "Panel White", "canonical": "#ffffff", "note": "laminated panel; dark theme #1e1e22", "tonalRamp": ["#141416", "#191a1c", "#1e1e22", "#2c2c31", "#5f5f68", "#c7c7ce", "#efeff1", "#ffffff"] },
-      "map-canvas": { "role": "neutral", "displayName": "Map Ground", "canonical": "#e9e6e0", "note": "warm pale grey behind tiles; theme-independent, close to CARTO Voyager land" },
-      "discord": { "role": "secondary", "displayName": "Discord Blue", "canonical": "#5865f2", "note": "brand-only; the single 'go to Discord' button; white on it 4.61:1" },
-      "poi-pokestop": { "role": "tertiary", "displayName": "PokeStop Blue", "canonical": "#2f7fd4", "note": "map pin; badge form --poi-pokestop-badge #2c76c5 for white text" },
-      "poi-gym": { "role": "tertiary", "displayName": "Gym Orange", "canonical": "#e2703a", "note": "map pin; badge form --poi-gym-badge #b75b2f for white text" },
-      "poi-powerspot": { "role": "tertiary", "displayName": "Power Spot Purple", "canonical": "#8257d9", "note": "map pin; already passes as a badge (4.87:1)" },
-      "poi-campsite": { "role": "tertiary", "displayName": "Campsite Amber", "canonical": "#f2a33c", "note": "map pin; badge/text form #9e6a27; --poi-campsite-text inverts in dark" }
+      "red-700": {
+        "role": "primary",
+        "displayName": "Signal Red",
+        "canonical": "#c8071c",
+        "note": "hue 353.5, 5.99:1 on white; --accent inverts to #ff5c6e in dark, --accent-solid stays this in both themes",
+        "tonalRamp": [
+          "#5c0210",
+          "#7a0314",
+          "#9e0417",
+          "#b5051a",
+          "#c8071c",
+          "#d10a1e",
+          "#e01329",
+          "#f26b78"
+        ]
+      },
+      "live": {
+        "role": "secondary",
+        "displayName": "Live Red",
+        "canonical": "#d10a1e",
+        "note": "filled surface under white (5.00:1); paired token --live-text #c8071c for text; both invert between themes",
+        "tonalRamp": [
+          "#5c0210",
+          "#7a0314",
+          "#9e0417",
+          "#b5051a",
+          "#c8071c",
+          "#d10a1e",
+          "#e01329",
+          "#f26b78"
+        ]
+      },
+      "ink-800": {
+        "role": "neutral",
+        "displayName": "Band Ink",
+        "canonical": "#1d1d1f",
+        "note": "--text, the Poke Ball's black band; 16.83:1 on white",
+        "tonalRamp": [
+          "#0f0f11",
+          "#1d1d1f",
+          "#2c2c31",
+          "#3d3d44",
+          "#5f5f68",
+          "#a4a4ac",
+          "#c7c7ce",
+          "#e3e3e6"
+        ]
+      },
+      "bg-panel": {
+        "role": "neutral",
+        "displayName": "Panel White",
+        "canonical": "#ffffff",
+        "note": "laminated panel; dark theme #1e1e22",
+        "tonalRamp": [
+          "#141416",
+          "#191a1c",
+          "#1e1e22",
+          "#2c2c31",
+          "#5f5f68",
+          "#c7c7ce",
+          "#efeff1",
+          "#ffffff"
+        ]
+      },
+      "map-canvas": {
+        "role": "neutral",
+        "displayName": "Map Ground",
+        "canonical": "#e9e6e0",
+        "note": "warm pale grey behind tiles; theme-independent, close to CARTO Voyager land"
+      },
+      "discord": {
+        "role": "secondary",
+        "displayName": "Discord Blue",
+        "canonical": "#5865f2",
+        "note": "brand-only; the single 'go to Discord' button; white on it 4.61:1"
+      },
+      "poi-pokestop": {
+        "role": "tertiary",
+        "displayName": "PokeStop Blue",
+        "canonical": "#2f7fd4",
+        "note": "map pin; badge form --poi-pokestop-badge #2c76c5 for white text"
+      },
+      "poi-gym": {
+        "role": "tertiary",
+        "displayName": "Gym Orange",
+        "canonical": "#e2703a",
+        "note": "map pin; badge form --poi-gym-badge #b75b2f for white text"
+      },
+      "poi-powerspot": {
+        "role": "tertiary",
+        "displayName": "Power Spot Purple",
+        "canonical": "#8257d9",
+        "note": "map pin; already passes as a badge (4.87:1)"
+      },
+      "poi-campsite": {
+        "role": "tertiary",
+        "displayName": "Campsite Amber",
+        "canonical": "#f2a33c",
+        "note": "map pin; badge/text form #9e6a27; --poi-campsite-text inverts in dark"
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "Literal White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#141416",
+          "#2c2c31",
+          "#5f5f68",
+          "#9a9aa2",
+          "#c7c7ce",
+          "#e3e3e6",
+          "#efeff1",
+          "#ffffff"
+        ]
+      },
+      "black": {
+        "role": "neutral",
+        "displayName": "Shading Black",
+        "canonical": "#000000",
+        "tonalRamp": [
+          "#000000",
+          "#0f0f11",
+          "#1d1d1f",
+          "#2c2c31",
+          "#3d3d44",
+          "#5f5f68",
+          "#9a9aa2",
+          "#c7c7ce"
+        ]
+      },
+      "live-text": {
+        "role": "secondary",
+        "displayName": "Live Red (text)",
+        "canonical": "#c8071c",
+        "tonalRamp": [
+          "#3d0208",
+          "#5c030d",
+          "#7c0412",
+          "#9e0417",
+          "#b5051a",
+          "#c8071c",
+          "#e01329",
+          "#ff5c6e"
+        ]
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "Hero and largest panel titles; Overpass 800. --display-xl reserved for the home hero." },
-      "headline": { "displayName": "Headline", "purpose": "Panel and section heads (.panel-head, .section-head h2)." },
-      "title": { "displayName": "Title", "purpose": "Sub-section heads (.section-head h3, .prose h3)." },
-      "body": { "displayName": "Body", "purpose": "Paragraph and UI text; Atkinson Hyperlegible Next, capped 60ch." },
-      "label": { "displayName": "Label", "purpose": "Badges, You-Are-Here caps label, micro-labels; Overpass 700 uppercase, never a sentence." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero and largest panel titles; Overpass 800. --display-xl reserved for the home hero."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Panel and section heads. --display-sm floor is 1.55rem so h2 and h3 do not collapse on a phone."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Sub-section heads (.section-head h3, .prose h3)."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Paragraph and UI text; Atkinson Hyperlegible Next, capped 60ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Badges, You-Are-Here caps label, micro-labels; Overpass 700 uppercase, never a sentence."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Inline code and device-pairing codes. The OS mono stack, declared not shipped: no third webfont."
+      }
     },
     "shadows": [
-      { "name": "shadow-sm", "value": "0 1px 2px rgb(0 0 0 / 0.08)", "purpose": "Resting lift on small chrome. Dark: alpha 0.4." },
-      { "name": "shadow-md", "value": "0 4px 16px rgb(0 0 0 / 0.12)", "purpose": "The panel shadow — a sign bolted over the board. Dark: alpha 0.45." },
-      { "name": "shadow-lg", "value": "0 12px 40px rgb(0 0 0 / 0.18)", "purpose": "Sheets and overlays. Dark: alpha 0.55. Always neutral, never accent-tinted." }
+      {
+        "name": "shadow-sm",
+        "value": "0 1px 2px rgb(0 0 0 / 0.08)",
+        "purpose": "Resting lift on small chrome. Dark: alpha 0.4."
+      },
+      {
+        "name": "shadow-md",
+        "value": "0 4px 16px rgb(0 0 0 / 0.12)",
+        "purpose": "The panel shadow — a sign bolted over the board. Dark: alpha 0.45."
+      },
+      {
+        "name": "shadow-lg",
+        "value": "0 12px 40px rgb(0 0 0 / 0.18)",
+        "purpose": "Sheets and overlays. Dark: alpha 0.55. Always neutral, never accent-tinted."
+      }
     ],
     "motion": [
-      { "name": "dur-1", "value": "120ms", "purpose": "State transitions on buttons, chips, the arrow nudge." },
-      { "name": "dur-4", "value": "320ms", "purpose": "Panels arriving over the board." },
-      { "name": "ease-out", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Exponential ease-out; panel arrival and hover." },
-      { "name": "lift", "value": "translateY(-2px)", "purpose": "Hover lift; token so reduced-motion can zero it structurally." },
-      { "name": "press", "value": "scale(0.97)", "purpose": "Active press." },
-      { "name": "nudge", "value": "translateX(2px)", "purpose": "The signage arrow on button hover." }
+      {
+        "name": "dur-1",
+        "value": "120ms",
+        "purpose": "State transitions on buttons, chips, the arrow nudge."
+      },
+      {
+        "name": "dur-4",
+        "value": "320ms",
+        "purpose": "Panels arriving over the board."
+      },
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Exponential ease-out; panel arrival and hover."
+      },
+      {
+        "name": "lift",
+        "value": "translateY(-2px)",
+        "purpose": "Hover lift; token so reduced-motion can zero it structurally."
+      },
+      {
+        "name": "press",
+        "value": "scale(0.97)",
+        "purpose": "Active press."
+      },
+      {
+        "name": "nudge",
+        "value": "translateX(2px)",
+        "purpose": "The signage arrow on button hover."
+      }
     ],
     "breakpoints": [
-      { "name": "nav-collapse", "value": "820px" },
-      { "name": "header-step", "value": "430px" },
-      { "name": "no-overflow-floor", "value": "375px" }
+      {
+        "name": "nav-collapse",
+        "value": "820px"
+      },
+      {
+        "name": "header-step",
+        "value": "430px"
+      },
+      {
+        "name": "no-overflow-floor",
+        "value": "375px"
+      },
+      {
+        "name": "home-banner-step",
+        "value": "900px"
+      },
+      {
+        "name": "fold-budget",
+        "value": "812px"
+      }
     ],
     "zIndex": [
-      { "name": "z-art", "value": "-1" },
-      { "name": "z-sticky-header", "value": "900" },
-      { "name": "z-overlay", "value": "1000" },
-      { "name": "z-sheet", "value": "1100" },
-      { "name": "z-skip-link", "value": "2000" }
+      {
+        "name": "z-art",
+        "value": "-1"
+      },
+      {
+        "name": "z-sticky-header",
+        "value": "900"
+      },
+      {
+        "name": "z-overlay",
+        "value": "1000"
+      },
+      {
+        "name": "z-sheet",
+        "value": "1100"
+      },
+      {
+        "name": "z-skip-link",
+        "value": "2000"
+      }
     ]
   },
   "components": [
@@ -112,45 +334,133 @@
       "description": "A press credit that rides on its photograph over a five-stop scrim (a licensing obligation).",
       "html": "<figure class=\"ds-figure\"><img src=\"#\" alt=\"\" /><figcaption class=\"ds-credit\">Photo: Texarkana Gazette</figcaption></figure>",
       "css": ".ds-figure { position: relative; overflow: hidden; border-radius: 14px; } .ds-figure img { display: block; width: 100%; height: auto; } .ds-credit { position: absolute; inset: auto 0 0 0; margin: 0; padding: 1.5rem 0.75rem 0.5rem; color: #fff; font-size: 0.75rem; line-height: 1.3; text-shadow: 0 1px 2px rgb(0 0 0 / 0.55); background: linear-gradient(to top, rgb(0 0 0 / 0.93) 0%, rgb(0 0 0 / 0.89) 38%, rgb(0 0 0 / 0.74) 62%, rgb(0 0 0 / 0.36) 84%, transparent 100%); }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive or irreversible action. Outlined in the live red; only fills red on hover.",
+      "html": "<button class=\"ds-btn ds-btn-danger\">Archive this POI</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:44px;padding:.75rem 1.25rem;border:2px solid transparent;border-radius:var(--radius-sm,8px);background:transparent;font-family:var(--font-read,system-ui);font-weight:700;font-size:1rem;line-height:1;cursor:pointer;transition:background-color 120ms cubic-bezier(.22,1,.36,1),border-color 120ms cubic-bezier(.22,1,.36,1),color 120ms cubic-bezier(.22,1,.36,1),transform 120ms cubic-bezier(.22,1,.36,1)}.ds-btn-danger{background:transparent;border-color:currentColor;color:var(--live-text,#c8071c)}.ds-btn-danger:hover{background:var(--red-800,#b5051a);border-color:var(--red-800,#b5051a);color:#fff;transform:translateY(-2px)}.ds-btn-danger:focus-visible{outline:3px solid var(--accent,#c8071c);outline-offset:2px}.ds-btn-danger:active{transform:scale(.97)}"
+    },
+    {
+      "name": "Warning Badge",
+      "kind": "chip",
+      "refersTo": "badge-warn",
+      "description": "An ink plate for irreversible things, and its retired sibling for a status that is over. Never red.",
+      "html": "<span class=\"ds-badge ds-badge-warn\">Permanent</span> <span class=\"ds-badge ds-badge-retired\">Archived</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;padding:2px .5rem;border-radius:var(--radius-xs,4px);background:var(--bg-sunken,#efeff1);color:var(--text,#1d1d1f);font-family:var(--font-sign,system-ui);font-weight:700;font-size:.6875rem;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}.ds-badge-warn{background:var(--text,#1d1d1f);color:var(--bg,#f7f7f8)}.ds-badge-retired{background:transparent;border:1.5px solid currentColor;color:var(--text-muted,#5f5f68)}"
+    },
+    {
+      "name": "Ink Link",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The global link reset: links are ink with a border-strong underline. Red is not a link colour.",
+      "html": "<p class=\"ds-inkcopy\">Meet at the <a href=\"#\">Bramble Trailhead</a> at seven.</p>",
+      "css": ".ds-inkcopy{font-family:var(--font-read,system-ui);font-size:1rem;line-height:1.55;color:var(--text,#1d1d1f)}.ds-inkcopy a{color:inherit;text-decoration:underline;text-decoration-color:var(--border-strong,#c7c7ce);text-decoration-thickness:from-font;text-underline-offset:.16em}.ds-inkcopy a:hover{text-decoration-color:currentColor}.ds-inkcopy a:focus-visible{outline:3px solid var(--accent,#c8071c);outline-offset:2px;border-radius:2px}"
+    },
+    {
+      "name": "Jump Row",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "The sticky wayfinding rail on /raids, /eggs and /research. One 56px row of chips that scrolls sideways rather than wrapping.",
+      "html": "<nav class=\"ds-jump\" aria-label=\"Jump to a tier\"><a class=\"ds-chip\" aria-current=\"true\" href=\"#t5\">5-Star <span>6</span></a><a class=\"ds-chip\" href=\"#t3\">3-Star <span>4</span></a><a class=\"ds-chip\" href=\"#t1\">1-Star <span>8</span></a></nav>",
+      "css": ".ds-jump{display:flex;gap:.5rem;align-items:center;height:56px;padding:0 .75rem;overflow-x:auto;background:var(--bg-panel,#fff);border-bottom:2px solid var(--text,#1d1d1f)}.ds-chip{display:inline-flex;align-items:center;gap:.5rem;flex:none;min-height:36px;padding:.5rem .75rem;border:1.5px solid var(--border-strong,#c7c7ce);border-radius:999px;background:var(--bg-panel,#fff);color:var(--text,#1d1d1f);text-decoration:none;font-family:var(--font-read,system-ui);font-size:.875rem;font-weight:600;line-height:1}.ds-chip span{font-variant-numeric:tabular-nums;color:var(--text-muted,#5f5f68)}.ds-chip:hover{border-color:var(--text,#1d1d1f)}.ds-chip[aria-current]{background:var(--text,#1d1d1f);border-color:var(--text,#1d1d1f);color:var(--bg,#f7f7f8)}.ds-chip[aria-current] span{color:inherit}"
     }
   ],
   "narrative": {
     "northStar": "The Park's Wayfinding Board",
-    "overview": "The site is the physical kiosk sign at the trailhead, rebuilt for a phone. The live map is the ground; everything else is a white laminated panel bolted over it, ruled in black ink, typeset in road-sign gothic. It is read one-handed, outdoors, in a glance. The palette is a Poke Ball taken literally: a red top, a white bottom, a black band. White panels carry the content, ink carries the type and the rules, and red is rationed to here, now and active. Because the whole brand is red, red alone is never allowed to carry meaning; every state also carries a word or a shape. Overpass (Highway Gothic heritage) carries all signage; Atkinson Hyperlegible Next carries all body and UI text. The accessibility floor is worn as a face, not bolted on.",
+    "overview": "The site is the physical kiosk sign at the trailhead, rebuilt for a phone. The live map is the ground; everything else is a white laminated panel bolted over it, ruled in black ink, typeset in road-sign gothic. It is read one-handed, outdoors, in daylight, in a glance — so contrast is a floor, targets are large, numerals are tabular, and every action carries a drawn arrow that points somewhere. It refuses the two shapes a Pokémon fan site defaults to: the key-art poster hub and the stat-row hero. There is no marketing key-art wall and no game logo anywhere.\n\nThe palette is a Poké Ball taken literally: a red top, a white bottom, a black band. White panels carry the content, ink carries the type and the rules, and red is rationed. Red never decorates — it appears only for *here, now and active*: the You-Are-Here marker, a live flare, the current page in the nav, an RSVP you have pressed. Links are part of the ink, not part of the red: the global reset sets every `a` to `color: inherit` with a `--border-strong` underline, so a page of links reads as a printed page, and red keeps its one job. Because the whole brand is now red, red alone is never allowed to carry meaning; every state also carries a word or a shape, so the board survives greyscale, colour blindness, and a cracked screen in sunlight.\n\nThe two typefaces are chosen as materials, not decoration. Overpass descends from the Highway Gothic on every US road and park sign — it is the object this design is built from — and carries all signage: headings, numerals, labels, the running head. Atkinson Hyperlegible Next was drawn by the Braille Institute for low-vision reading and carries all body and UI text. The accessibility floor is worn as a face, not bolted on. Both are preloaded from our own origin in `Base.astro`, so the first paint is already in the world's own type.\n\nThe world now covers the whole site, not just its public face. `Admin.astro` imports `primitives.css`, and the editors are built from `.btn`, `.badge`, `.chip`, `.panel` and `.prose` on a 60px ink bar; the two primitives the admin islands used to hand-roll (`.btn--danger`, `.badge--retired`) have been promoted into the shared vocabulary.",
     "keyCharacteristics": [
       "White panels on a warm-grey map ground; a soft real shadow lifts each panel off the board.",
-      "Poke Ball red reserved for here / now / active; ink for structure; never red as decoration.",
+      "Poké Ball red reserved for here / now / active; ink for structure; links underlined in ink, never red.",
       "Road-sign display type (Overpass 800) over hyperlegible body type (Atkinson Hyperlegible Next).",
       "Counts rendered as black-ringed white discs; tabular numerals everywhere numbers line up.",
       "An arrow drawn (never a glyph) on every action; the board reads at arm's length in daylight.",
-      "Accessibility is the material: 4.5:1 in both themes, 24px targets, a reduced-motion escape on every animation."
+      "Accessibility is the material: 4.5:1 in both themes, 24px targets, a reduced-motion escape on every animation.",
+      "One vocabulary front and back: the admin editors are built from the same primitives as the board."
     ],
     "rules": [
-      { "name": "The Rationed Red Rule", "body": "Red is reserved for here, now and active — the You-Are-Here marker, a live flare, the current nav page, a pressed RSVP. It is never a decorative fill, a section accent, or a hover colour on something that is not 'now'.", "section": "colors" },
-      { "name": "The --accent-solid Rule", "body": "Any filled surface carrying white text uses --accent-solid (or --live, or a -badge POI token), never --accent and never a raw pin hue. --accent inverts to a light red in dark mode; background:var(--accent)+color:#fff is a 3.0:1 failure there.", "section": "colors" },
-      { "name": "The Second-Signal Rule", "body": "Colour is never the only signal. Every state that has a hue also has a word or a shape: flares carry a spelled-out badge, POI types differ in silhouette, the live disc carries a pulse and the word 'Live'.", "section": "colors" },
-      { "name": "The Tabular Numerals Rule", "body": "Anything that is a count, a time, or a tally is set font-variant-numeric: tabular-nums. Numbers on this site line up in columns and do not jitter as they change.", "section": "typography" },
-      { "name": "The Signage-Heading Rule", "body": "Headings are signage: Overpass at 800 with tight tracking, never the body face and never a lighter weight.", "section": "typography" },
-      { "name": "The Neutral-Shadow Rule", "body": "Shadows are always neutral black at low alpha, never tinted with the accent. A red-tinted shadow under a red button reads as a glow, not a shadow.", "section": "elevation" },
-      { "name": "The Ink-Rule Rule", "body": "Structure inside a panel is a 2px solid ink bottom border — under panel heads, section heads, and prose h2. Depth lifts the panel; ink divides its contents.", "section": "elevation" }
+      {
+        "name": "The Rationed Red Rule",
+        "body": "Red is reserved for here, now and active — the You-Are-Here marker, a live flare, the current nav page, a pressed RSVP. **A link is not \"now.\"** Links are ink: the global reset gives every `a` `color: inherit` and a `--border-strong` underline that darkens to `currentColor` on hover. `--accent` as a text colour survives in exactly three places — `.prose` links inside long-form copy, `.btn--primary`'s fill, and `.btn--ghost` — and any new use has to argue it is answering \"where am I / what is live\".",
+        "section": "colors"
+      },
+      {
+        "name": "The `--accent-solid` Rule",
+        "body": "Any filled surface carrying white text uses `--accent-solid` (or `--live`, or `--red-800`, or a `-badge` POI token), never `--accent` and never a raw pin hue. `--accent` inverts to a light red in dark mode; `background: var(--accent)` + `color: #fff` is a 3.0:1 failure there — a trap six components (the header among them) shipped once.",
+        "section": "colors"
+      },
+      {
+        "name": "The Second-Signal Rule",
+        "body": "Colour is never the only signal. Every state that has a hue also has a word or a shape: flares carry a spelled-out badge, POI types differ in silhouette, the live disc carries a pulse and the word \"Live\", the `/live` connection pill spells out Connected / Live / Reconnecting rather than changing colour alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink-Plate Warning Rule",
+        "body": "Irreversible and destructive things wear ink, not red. `.badge--warn` is an ink fill with page-colour text; `.btn--danger` is an outline in `--live-text` that only fills red on hover. A fourth meaning for red would blunt the three it already carries.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Numerals Rule",
+        "body": "Anything that is a count, a time, or a tally is set `font-variant-numeric: tabular-nums` (discs, counts, meta). Numbers on this site line up in columns and do not jitter as they change.",
+        "section": "typography"
+      },
+      {
+        "name": "The Signage-Heading Rule",
+        "body": "Headings are signage: Overpass at 800 with tight tracking, never the body face and never a lighter weight. If it is an `h1`–`h4` it is set in `--font-sign`.",
+        "section": "typography"
+      },
+      {
+        "name": "The Caption-Is-Not-A-Count Rule",
+        "body": "Prose beside a heading is `.caption` (muted, `--text-sm`); a number beside a heading is `.count` (muted, `--text-sm`, 600, tabular). They look similar and are not interchangeable — `.count` was being borrowed for phrases, which put tabular figures on running words.",
+        "section": "typography"
+      },
+      {
+        "name": "The Neutral-Shadow Rule",
+        "body": "Shadows are always neutral black at low alpha, never tinted with the accent, and always soft. Depth is a shadow; a coloured glow is a different, unwanted thing.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Ink-Rule Rule",
+        "body": "Structure inside a panel is a 2px solid `--text` (ink) bottom border — under panel heads, section heads, and `.prose h2`. Depth lifts the panel; ink divides its contents. A hairline `--border` rule is the quieter form, used above fine print such as the Attribution block.",
+        "section": "elevation"
+      }
     ],
     "dos": [
-      "Do reserve red for here / now / active, and pair every stateful colour with a word or a shape.",
-      "Do use --accent-solid (or --live, or a --poi-*-badge token) for any filled surface under white text.",
-      "Do add any new colour to global.css as a token with its measured contrast ratio; never a raw hex in a component.",
-      "Do write hover/press transforms as the motion tokens (var(--lift), var(--press), var(--nudge)) so reduced-motion zeroes them structurally.",
-      "Do put an arrow (.btn--arrow) on an action that goes somewhere, and set counts as .discs with tabular numerals.",
-      "Do keep the basemap light in both themes and never cover the map attribution; render Attribution.astro outside every empty-state conditional.",
-      "Do keep primitives.css imported by Base.astro only, so the admin editors stay out of the redesign."
+      "**Do** reserve red for here / now / active, and pair every stateful colour with a word or a shape (the Second-Signal Rule).",
+      "**Do** let links be ink: `color: inherit` with a `--border-strong` underline that darkens on hover. A red link is a claim that the link is \"now\".",
+      "**Do** use `--accent-solid` (or `--live`, `--red-800`, or a `--poi-*-badge` token) for any filled surface under white text; `--accent` and raw pin hues invert or fail in one theme.",
+      "**Do** dress destructive and irreversible things in ink and outline — `.badge--warn`, `.btn--danger` — and let red stay the \"now\" colour.",
+      "**Do** add any new colour to `global.css` as a token with its measured contrast ratio in a comment; the only literals allowed in a component are `#fff` on a measured fill, `#fff` on a pin ring, and black as a mask stop or shadow alpha.",
+      "**Do** write hover/press transforms as the motion tokens (`var(--lift)`, `var(--press)`, `var(--nudge)`, `var(--nudge-back)`) so the `prefers-reduced-motion` block — which sets each to `none` — zeroes them structurally; a scoped `:hover { transform }` survives the blanket duration reset and still jumps.",
+      "**Do** put an arrow (`.btn--arrow`, or `.btn--arrow-back` for a return) on an action that goes somewhere, and set counts as `.disc`s with tabular numerals.",
+      "**Do** give a long game-data page the sticky `JumpRow`; a page over a few screenfuls with no rail is 23 screens with no marker on them.",
+      "**Do** lead a card, post or event with the thing's own name, not its category.",
+      "**Do** measure a \"fits one screen\" claim against the 812px fold with real element heights, the way the home board's banner / map / panel budget is written down in its own comment.",
+      "**Do** keep the basemap light in both themes and never cover the map's OSM attribution; render `Attribution.astro` outside every empty-state conditional on any page using Leek Duck data.",
+      "**Do** write a missing primitive locally with a `PROMOTE:` comment and batch it into `primitives.css`; both the public board and the admin editors now draw from that one file."
     ],
     "donts": [
-      "Don't 'correct' the reds toward the brand reds (#ff0000, #ee1515, #e3350d) — they fail AA; and don't let green rise above blue in a new red.",
-      "Don't use red as decoration, a section accent, or a non-'now' hover colour.",
-      "Don't collapse --live/--live-text or --accent/--accent-solid into one token, or lift the POI pin hues in dark mode.",
-      "Don't use the Pokemon GO logo, game key-art as a marker, or a font CDN; map markers are original SVGs.",
-      "Don't put a press photograph anywhere a credit cannot ride on the image; use the .empty-art-bg map-pin motif instead.",
-      "Don't reorder the home sections with CSS order; move them in markup so reading and focus order match the screen.",
-      "Don't write new work against --font-display (a deprecated migration alias for --font-sign) or reach for :global(.btn); set a wrapper custom property instead."
+      "**Don't** \"correct\" the reds toward the brand reds (`#ff0000`, `#ee1515`, `#e3350d`) — they fail AA and were deliberately excluded; and don't let green rise above blue in a new red (it drifts orange).",
+      "**Don't** use red as decoration, a section accent, a link colour, or a non-\"now\" hover colour.",
+      "**Don't** collapse `--live`/`--live-text` or `--accent`/`--accent-solid` into one token, or lift the POI pin hues in dark mode (the basemap is light in both themes).",
+      "**Don't** confuse the two header tokens: `--header-public-h` is the red public bar, `--header-h` is the admin bar's 60px.",
+      "**Don't** use `.count` for a phrase or `.caption` for a number.",
+      "**Don't** write the `.prose` paragraph reset after the rhythm rule; equal specificity means source order decides and the copy loses all its spacing.",
+      "**Don't** let `--display-sm` fall below 1.55rem — on a phone the h2 and the 1.3125rem h3 collapse into each other.",
+      "**Don't** use the Pokémon GO logo, game key-art as a marker, or a font CDN; map markers are original SVGs and both webfonts are self-hosted and preloaded.",
+      "**Don't** put a press photograph anywhere a credit cannot ride on the image (no faded backgrounds, no decorative collages) — use the `.empty-art-bg` map-pin motif instead.",
+      "**Don't** reorder the home sections with CSS `order`; move them in markup so reading and focus order match the screen.",
+      "**Don't** make the home map preview interactive — no wheel zoom, no keyboard, no photo layer, no auto-opening panel. It is a picture of the park with a tap-through.",
+      "**Don't** write new work against `--font-display` (a deprecated migration alias for `--font-sign`) or reach for `:global(.btn)` to restyle a primitive — set a wrapper custom property (`--btn-pad-inline`, `--card-pad`, `--panel-pad`, `--disc-size`) instead."
+    ],
+    "deviations": [
+      "**The arrow row sits above the three posts on the home board.** A signpost normally carries its arrow after what it names, but this is the only arrangement in which both the arrow *and* the first post's RSVP clear the 812px fold on the target phone. Documented at the call site.",
+      "**The home preview draws ~100 unclustered pins.** Clustering is a control, and `compact` is a picture; a cluster bubble in a non-interactive strip is a button that does nothing.",
+      "**The current-nav disc does not pulse.** Only the live map marker animates. Two pulsing reds would make neither mean \"now\".",
+      "**`/live` keeps the Leek Duck attribution even when the log is empty**, because the board fetches boss sprites on load — the licence obligation is incurred before there is anything to show.",
+      "**Two exclusions from the design-system detector**, recorded in `.impeccable/config.json`: `src/pages/auth/login.ts` and `src/pages/api/admin/import-legacy.ts`. Both are self-contained diagnostic pages that ship their own inline styles and are deliberately outside the world."
     ]
   }
 }
