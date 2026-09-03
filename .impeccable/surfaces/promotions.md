@@ -49,7 +49,9 @@ Owner: main thread. **Applied 2026-09-02 (during W2, files disjoint from W2 owne
 - [x] `.badge--warn` (ink plate for irreversible), `.caption` (prose beside a heading), `.btn--danger` and `.badge--retired` (from W4 admin) promoted into `primitives.css`. W4's local copies in `Admin.astro`'s `is:global` block can be deleted at the next admin touch.
 - [x] Links are ink + underline site-wide (`global.css` reset); `--accent` only in `.prose`, `.btn--primary`, and deliberate "now" affordances.
 - [x] `--display-sm` floor 1.55rem. `--z-skip-link` used. Icons resized to their declared sizes. `auth/login.ts` declared an exclusion.
-- [ ] Font preload for Overpass + Atkinson roman in `Base.astro` (after W5-operate releases the file).
+- [x] Font preload for Overpass + Atkinson roman in `Base.astro` `<head>` (2026-09-03).
+- [x] W5-read reported "eleven hidden-but-focusable header elements at 375" — **dismissed**: real Tab presses at 375 stop at skip link → brand → Menu → Sign in → page content; the collapsed nav is `display: none` (`Base.astro` ≤820px) and so are the socials (≤1024px). The probe counted `display:none` anchors as focusable.
+- [x] `.prose` rhythm: the `:where(p)` reset now precedes the rhythm rule (source order decides a specificity tie); measured 16px between paragraphs. `legal.css`'s local workaround can go at the next touch.
 - [ ] `DESIGN.md`: links-are-ink Don't; CARTO → Protomaps at L180; the new primitives; admin now in-world (documenter rerun).
 - [ ] Admin: real-session confirmation of PATCH on drag/lat-lng, media upload, markdown preview with real posts (Justin).
 
