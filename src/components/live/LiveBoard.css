@@ -1,394 +1,501 @@
+/*
+ * The live board.
+ *
+ * The kiosk's now-panel, and the one surface on the site that is a *log*: a
+ * timestamped column where flares and the board's own condition print
+ * themselves as lines, newest first. Everything visual here comes from
+ * `primitives.css` — `.panel`, `.card`, `.badge`, `.chip`, `.btn`, `.here`,
+ * `.stack`, `.empty-state` — and this file only carries what the log itself
+ * needs. React islands have no scoped styles, so every class that is not a
+ * primitive is namespaced `live-` or `flare-` to keep it out of the global
+ * vocabulary.
+ */
+
+/* ------------------------------------------------------------ the column -- */
+
 .live {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 24px clamp(12px, 3vw, 20px) 64px;
+  max-width: var(--container-narrow);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+  padding-block: var(--space-6) var(--space-6);
   display: grid;
-  gap: 18px;
+  gap: var(--space-5);
 }
 
 /* ------------------------------------------------------------------ head -- */
 
+/* `.panel-head` supplies the rule and the signage h1; the board only needs to
+   drop its bottom margin, because the column's grid gap already spaces it. */
 .live-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  margin-bottom: 0;
 }
-.live-head h1 {
-  margin: 0 0 4px;
-  font-size: 1.6rem;
-}
-.live-head p {
+
+.live-lede {
   margin: 0;
   max-width: 54ch;
   color: var(--text-muted);
-  font-size: 0.86rem;
+  font-size: var(--text-base);
+  line-height: var(--lh-body);
 }
 
+/*
+ * The connection pill. Three named states, unchanged: Live, Reconnecting, and
+ * the polling fallback. It is the head's answer to "is this thing on"; the log
+ * below carries the same states with the time they happened.
+ */
 .live-status {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
-  padding: 6px 13px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  padding: var(--space-1) var(--space-3);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
   background: var(--bg-panel);
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.live-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  flex: none;
-}
-.live-status--live {
   color: var(--text);
-  border-color: var(--border-strong);
-}
-.live-status--live .live-dot {
-  background: var(--live);
-  /* The pulse is the only motion on the page; reduced-motion callers get a
-     static dot via the global media query in global.css. */
-  animation: live-pulse 1.8s ease-in-out infinite;
-}
-.live-status--connecting .live-dot,
-.live-status--reconnecting .live-dot {
-  background: var(--poi-campsite);
-}
-.live-status--polling {
-  white-space: normal;
+  font-family: var(--font-sign);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  line-height: var(--lh-ui);
 }
 
+/* The dot is ink by default, so a degraded board is not colour-coded at all —
+   the word carries it. Only the live state earns the red. */
+.live-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* The You-Are-Here disc at pill scale: the red inside a black ring. Same
+   object as `.here::before`, same meaning — this board is on, now. */
+.live-status--live .live-dot {
+  background: var(--live);
+  box-shadow:
+    0 0 0 1.5px var(--bg-panel),
+    0 0 0 3px var(--text);
+  animation: live-pulse 1.6s var(--ease-out) infinite;
+}
 @keyframes live-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgb(232 69 60 / 0.55);
+    transform: scale(1);
   }
-  70% {
-    box-shadow: 0 0 0 7px rgb(232 69 60 / 0);
+  50% {
+    transform: scale(1.18);
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-status--live .live-dot {
+    animation: none;
+  }
+}
+
+/* The polling sentence is a sentence, so it wraps rather than pushing the row
+   wider than the column. */
+.live-status--polling {
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: var(--font-read);
 }
 
 /* ----------------------------------------------------------------- toast -- */
 
+/*
+ * Success is inverted ink, not red. Red on this board means "now", and a
+ * confirmation is not an event on the board; only the failure is loud.
+ */
 .live-toast {
   margin: 0;
-  padding: 10px 14px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
-  font-weight: 600;
-  font-size: 0.86rem;
+  font-weight: 700;
+  font-size: var(--text-md);
 }
 .live-toast--ok {
-  background: var(--accent-solid);
-  color: #fff;
+  background: var(--text);
+  color: var(--bg); /* inverted pair, measured 15.7:1 in both themes */
 }
 .live-toast--err {
   background: var(--live);
-  color: #fff;
+  color: #fff; /* white on --live, measured 5.57:1 light, 5.99:1 dark */
 }
 
-.live-signin,
-.live-empty {
+/* ------------------------------------------------------------------ gate -- */
+
+/*
+ * The sign-in gate is a solid panel with a real button, not the dashed box the
+ * empty state uses. They used to be the same card, which told a signed-out
+ * reader that being signed out was a kind of emptiness.
+ */
+.live-gate {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+}
+.live-gate p {
   margin: 0;
-  padding: 16px 18px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  color: var(--text-muted);
-  font-size: 0.88rem;
+  max-width: 48ch;
+  line-height: var(--lh-body);
 }
 
 /* --------------------------------------------------------------- compose -- */
 
-.live-compose form {
+.live-form {
   display: grid;
-  gap: 12px;
-  padding: 18px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  gap: var(--space-4);
 }
-.live-compose h2 {
+/* The heading takes focus when the disclosure opens, so it is sized to its own
+   words: a full-width ring on a block heading reads as an empty text field. */
+.live-form h2 {
   margin: 0;
-  font-size: 1.05rem;
+  justify-self: start;
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: var(--text-xl);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-tight);
 }
-.live-compose label {
+.live-form h2:focus-visible {
+  outline-offset: 4px;
+}
+
+.live-field {
   display: grid;
-  gap: 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Full-contrast ink, not muted: a form label is the question, and this one is
+   read outdoors. */
+.live-label {
+  font-family: var(--font-sign);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.live-input,
+.live-select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-family: var(--font-read);
+  font-size: var(--text-base);
+  line-height: var(--lh-ui);
+}
+.live-input::placeholder {
   color: var(--text-muted);
 }
-.live-compose input,
-.live-compose select {
-  width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
-  color: var(--text);
-  font: inherit;
-  font-weight: 400;
-}
 
-.form-grid {
+/* Two-up where there is room, one-up where there is not — no breakpoint, so it
+   also holds inside a narrowed window and at a large root font size. */
+.live-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: var(--space-4);
 }
 
-.form-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.kind-row {
+.live-kinds,
+.live-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-}
-
-.btn {
-  padding: 9px 16px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.btn--ghost {
-  background: var(--bg-sunken);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-.btn--big {
-  width: 100%;
-  padding: 14px 18px;
-  font-size: 0.95rem;
-  border-radius: var(--radius);
-}
-
-/* ----------------------------------------------------------------- chips -- */
-
-.live .chip {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-sunken);
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-}
-.live .chip:hover:not(:disabled) {
-  border-color: var(--border-strong);
-}
-.live .chip:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-/* aria-pressed is the source of truth for the active state — the styling
-   follows the semantics rather than a parallel class, exactly as the map
-   filters do. */
-.live .chip[aria-pressed='true'] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-}
-.live .chip--close {
-  margin-left: auto;
-  color: var(--live-text);
-  border-color: color-mix(in srgb, var(--live) 45%, transparent);
-  background: transparent;
+  gap: var(--space-2);
 }
 
-/* ----------------------------------------------------------------- cards -- */
+/* ------------------------------------------------------------------- log -- */
 
-.flare-list {
+.live-log {
+  --stack-gap: var(--space-3);
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 10px;
 }
 
 /*
- * The boss sprite floats top-right rather than taking a grid row, so adding it
- * does not reflow a card that has no sprite — most kinds never do, and a
- * layout that shifts depending on whether a name matched would be worse than
- * no picture at all.
+ * A system line. Not a card, because the board did this rather than a person:
+ * it prints flush in the column at the same left edge as a card's text, so the
+ * timestamps line up down the whole log.
+ *
+ * No live region of its own. The connection pill above is already the page's
+ * `role="status"` for these words, and a second one would say them twice.
  */
-.flare-boss-art {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  width: 52px;
-  height: 52px;
-  object-fit: contain;
-  pointer-events: none;
+.live-sys {
+  /* Grid, not a wrapping flex row: a long line ("Live updates unavailable,
+     refreshing every 20 seconds") has to wrap *under itself*, keeping the
+     timestamp column intact down the whole log. */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+  /* Matches `.card`'s own `--card-pad` default so the two align. */
+  padding-inline: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-ui);
+}
+.live-sys .flare-time {
+  color: var(--text-muted);
 }
 
-/* Keeps the title and time clear of the sprite. */
-.flare:has(.flare-boss-art) .flare-title,
-.flare:has(.flare-boss-art) .flare-head {
-  padding-right: 58px;
-}
+/* ----------------------------------------------------------------- lines -- */
 
+/*
+ * A flare is a `.card`: a 1px border and nothing else.
+ *
+ * The 4px coloured left edge this used to carry is gone. It was doing the job
+ * the kind badge now does — say what this is at a glance — and it did it in
+ * colour alone, at a width the world's own rule bans. The badge is a word.
+ */
 .flare {
   position: relative;
   display: grid;
-  gap: 4px;
-  padding: 14px 16px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  /* A hairline in the kind's colour down the left edge: the card is
-     identifiable at a glance while scrolling, without colour being the only
-     signal — the kind is spelled out in the badge too. */
-  border-left: 4px solid var(--flare-color, var(--accent));
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.flare--raid {
-  --flare-color: var(--poi-gym);
-}
-.flare--gym_takedown {
-  --flare-color: var(--team-valor);
-}
-.flare--meetup_here {
-  --flare-color: var(--poi-campsite);
-}
-.flare--remote_invites {
-  --flare-color: var(--poi-powerspot);
-}
-.flare--trade {
-  --flare-color: var(--poi-pokestop);
-}
-.flare--help {
-  --flare-color: var(--ink-600);
-}
-
-.flare-head {
+.flare-line {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
 }
 
+/* The log's spine. Signage numerals, tabular so 19:42 and 09:07 sit on the
+   same columns down the page. */
+.flare-time {
+  flex: none;
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: var(--text-sm);
+  letter-spacing: var(--tracking-caps);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/*
+ * The kind, as a printed label.
+ *
+ * Every fill here is a token whose measured white-text ratio is on record, and
+ * never a raw `--poi-*` (those are tuned against map tiles, not against text).
+ * The mapping is not decorative: a takedown wears the Gym colour, "meet me
+ * here" the Campsite colour that marks the meetup spots on the map, a trade the
+ * PokéStop blue. `help` is ink because asking for a hand is not a place.
+ */
 .flare-kind {
-  font-size: 0.64rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: var(--flare-color, var(--accent));
-  color: #fff;
+  /* Every fill below is measured against white, in both themes, so the label
+     colour is fixed rather than theme-dependent. */
+  --badge-fg: #fff; /* fixed, not theme-dependent: every fill below is measured against white */
+}
+.flare-kind--raid {
+  --badge-bg: var(--live); /* measured 5.57:1 light, 5.99:1 dark */
+}
+.flare-kind--gym_takedown {
+  --badge-bg: var(--poi-gym-badge); /* measured 4.61:1, both themes */
+}
+.flare-kind--meetup_here {
+  --badge-bg: var(--poi-campsite-badge); /* measured 4.62:1, both themes */
+}
+.flare-kind--remote_invites {
+  --badge-bg: var(--poi-powerspot-badge); /* measured 4.87:1, both themes */
+}
+.flare-kind--trade {
+  --badge-bg: var(--poi-pokestop-badge); /* measured 4.66:1, both themes */
+}
+.flare-kind--help {
+  --badge-bg: var(--ink-600); /* measured 10.77:1, both themes */
 }
 
 .flare-left {
-  font-size: 0.74rem;
+  margin-inline-start: auto;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .flare-title {
-  margin: 2px 0 0;
-  font-size: 1.05rem;
+  margin: 0;
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: var(--text-lg);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-tight);
+}
+
+/* A place name is a link to its own pin on the map, whether it is carrying the
+   heading or standing on its own line under one. */
+.flare-place {
+  color: var(--accent);
+  text-underline-offset: 0.15em;
+  text-decoration-thickness: from-font;
 }
 
 .flare-where {
   margin: 0;
-  font-size: 0.86rem;
+  font-size: var(--text-base);
 }
 .flare-where--none {
   color: var(--text-muted);
 }
 
 .flare-note {
-  margin: 2px 0 0;
-  font-size: 0.88rem;
-  color: var(--text);
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--lh-body);
 }
 
 .flare-meta {
-  margin: 4px 0 0;
-  font-size: 0.76rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 .flare-author {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-weight: 700;
   color: var(--text);
 }
-.flare-author--valor {
-  color: var(--team-valor);
+
+/*
+ * Team is a dot beside the name, never the name's colour. Two of the three team
+ * hues cannot carry text at 4.5:1, and a coloured name reads as a link. The ink
+ * ring is what makes the dot a shape rather than a hue, so it survives
+ * greyscale; the team is also spelled out for screen readers.
+ */
+.flare-team {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text);
+  background: var(--bg-sunken);
 }
-.flare-author--mystic {
-  color: var(--team-mystic);
+.flare-team--valor {
+  background: var(--team-valor);
 }
-.flare-author--instinct {
-  /* The instinct yellow fails contrast on the cream background, so it darkens
-     rather than being used raw. */
-  color: color-mix(in srgb, var(--team-instinct) 70%, #4a3a00);
+.flare-team--mystic {
+  background: var(--team-mystic);
+}
+.flare-team--instinct {
+  background: var(--team-instinct);
+}
+
+/*
+ * The boss sprite floats in the card's top-right rather than taking a grid row,
+ * so adding it does not reflow a card that has no sprite — most kinds never do,
+ * and a layout that shifts depending on whether a name matched would be worse
+ * than no picture at all. Leek Duck's image, served from our own origin via
+ * `proxiedImageUrl()`.
+ */
+.flare-boss-art {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  pointer-events: none;
+}
+.flare:has(.flare-boss-art) .flare-line,
+.flare:has(.flare-boss-art) .flare-title {
+  padding-inline-end: 60px;
 }
 
 .flare-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
-.flare-edit {
-  display: grid;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
-}
-.flare-edit label {
-  display: grid;
-  gap: 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.flare-edit input {
-  width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
-  color: var(--text);
-  font: inherit;
-  font-weight: 400;
+/*
+ * PROMOTE: `.btn[aria-pressed='true']` — a button that is a two-state toggle.
+ * `.chip` already has this rule; a `.btn` that carries `aria-pressed` has no
+ * pressed appearance at all, so the RSVP row would look identical whether or
+ * not you had said you were coming. Same inversion as the chip, so the two
+ * read as one idea.
+ */
+.live-toggle[aria-pressed='true'] {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
 }
 
-@media (max-width: 640px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  .live-head {
-    flex-direction: column-reverse;
-    align-items: flex-start;
+.live-close {
+  margin-inline-start: auto;
+  color: var(--live-text); /* on the card, measured 5.99:1 light, 6.63:1 dark */
+}
+
+.live-edit {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+/* ----------------------------------------------------------- empty state -- */
+
+.live-empty {
+  gap: var(--space-4);
+  justify-items: start;
+}
+.live-empty p {
+  margin: 0;
+  max-width: 38ch;
+  font-size: var(--text-base);
+  line-height: var(--lh-body);
+}
+.live-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * The pin motif, clamped to the top-right corner — and only where there is a
+ * top-right corner to put it in.
+ *
+ * `global.css` draws it at `contain` / `right center`, which fills the whole
+ * box. At 375 that puts three pins directly under the wrapped sentence, where
+ * they read as stray marks on the text rather than as a surface (backlog P2,
+ * `global.css:463-469`). That file is not ours to edit, so the clamp is written
+ * here.
+ *
+ * Below 640px the copy runs the full width of the box and there is no clean
+ * ground anywhere in it, at any size — so the motif is not drawn at all. That
+ * is the same call this page already made about the Moltres art: a decoration
+ * that collides with the content is worse than no decoration. Above 640px the
+ * copy stops at 38ch and the corner is genuinely empty, so the pins get it.
+ */
+.live-empty.empty-art-bg::before {
+  content: none;
+}
+@media (min-width: 640px) {
+  .live-empty.empty-art-bg::before {
+    content: '';
+    mask-size: min(32%, 190px) auto;
+    mask-position: right top;
   }
 }
