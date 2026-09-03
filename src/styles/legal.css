@@ -1,135 +1,213 @@
-/* Shared styling for the Terms and Privacy pages. Long-form reading: generous
-   measure, clear hierarchy, no decoration competing with the text. */
+/*
+ * The plain documents — /about, /conduct, /privacy, /terms, /account/delete.
+ *
+ * A page bolted to the board: a running head with the document's name under a
+ * black rule, then the reading column, then the fine print.
+ *
+ * Reading typography is NOT here. It is `.prose` in primitives.css, which every
+ * one of these pages wears on its body column; this file carries only what a
+ * *document* adds on top — the running head, the muted meta line, the contents
+ * panel, and the two-column layout the long policies get on a wide screen.
+ *
+ * Deleting the duplicate p/li/table/code/h2/h3 block also removes the bug it
+ * shipped: `.legal p, .legal li { color: var(--text) }` (0,1,1) out-ranked
+ * `.legal-eyebrow`, `.legal-updated` and `.legal-note` (0,1,0), so nothing on
+ * these five pages ever rendered muted. `.prose` now sets the reading colour
+ * and the muted classes are the only rules that set another.
+ *
+ * The eyebrow is gone with it. It said `PoGo TXK` on five pages, 40px under a
+ * header that says the same, and the craft floor bans kickers outright: the
+ * document's class and date belong *below* the H1 as a plain line.
+ */
 
 .legal {
-  max-width: 68ch;
-  margin: 0 auto;
-  padding: clamp(28px, 6vw, 64px) 20px 80px;
+  /*
+   * `--measure` is 68ch, and a `ch` in Atkinson is far wider than its average
+   * letter: measured on /privacy, 68ch is a 705px column carrying ~96
+   * characters a line, well past the 65–75 the reading floor asks for. The
+   * `min()` caps it at the 58–60ch the promotions list is retuning the token
+   * to, and keeps following the token if it lands lower still.
+   */
+  --prose-measure: min(var(--measure), 60ch);
+  padding-block: var(--space-section) var(--space-16);
+  font-family: var(--font-read);
+}
+/*
+ * One column, the width of the words. `.container` caps at 1100, which on a
+ * desktop left a photograph and a panel running 350px wider than the prose
+ * under them. Only the two long policies use the extra width, and they use it
+ * for the contents rail.
+ */
+.legal:not(.legal--policy) {
+  max-width: calc(var(--prose-measure) + var(--gutter) * 2);
+}
+.legal > * + * {
+  margin-block-start: var(--space-6);
 }
 
-.legal-eyebrow {
-  margin: 0;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+/* ------------------------------------------------------------ running head -- */
+
+.legal-head {
+  display: grid; /* not margins: `.prose p` would out-rank a margin on .legal-meta */
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--text);
 }
 
+/* The global reset points h1–h4 at `--font-display` (Baloo 2). The kiosk world
+   signs in Overpass, and inheritance cannot beat a rule that names the element,
+   so each heading level is pointed at the signage face here. */
+.legal h1,
+.legal h2,
+.legal h3,
+.legal h4 {
+  font-family: var(--font-sign);
+}
 .legal h1 {
-  margin: 8px 0 4px;
-  font-size: clamp(1.7rem, 5vw, 2.4rem);
+  margin: 0;
+  font-size: var(--display-lg);
+  font-weight: 800;
+  line-height: var(--lh-display);
+  letter-spacing: var(--tracking-display);
 }
-
-.legal-updated {
-  margin: 0 0 8px;
-  color: var(--text-muted);
-  font-size: 0.86rem;
-}
-
-.legal-summary {
-  margin: 20px 0 32px;
-  padding: 16px 20px;
-  border-left: 3px solid var(--accent);
-  background: var(--bg-sunken);
-  border-radius: 0 var(--radius) var(--radius) 0;
-}
-.legal-summary p {
-  margin: 0 0 8px;
-}
-.legal-summary p:last-child {
-  margin-bottom: 0;
-}
-.legal-summary strong {
-  color: var(--text);
-}
-
 .legal h2 {
-  margin: 36px 0 10px;
-  font-size: 1.18rem;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
+  font-weight: 800;
 }
-
 .legal h3 {
-  margin: 22px 0 6px;
-  font-size: 1rem;
+  font-weight: 700;
 }
 
-.legal p,
-.legal li {
-  color: var(--text);
-}
-
-.legal ul,
-.legal ol {
-  padding-left: 1.3em;
-}
-.legal li {
-  margin-bottom: 6px;
-}
-
-.legal table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 14px 0 18px;
-  font-size: 0.9rem;
-  display: block;
-  overflow-x: auto;
-}
-.legal table thead th {
-  text-align: left;
-  padding: 8px 12px;
-  background: var(--bg-sunken);
-  border-bottom: 2px solid var(--border);
-  white-space: nowrap;
-}
-.legal table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-
-.legal code {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--bg-sunken);
-  font-size: 0.9em;
-}
-
-.legal-note {
-  margin: 32px 0 0;
-  padding: 14px 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-sunken);
-  font-size: 0.88rem;
+/* The document's class and date. One plain muted line, under the H1. */
+.legal-meta {
+  margin: 0;
   color: var(--text-muted);
+  font-size: var(--text-sm);
 }
+
+/* ------------------------------------------------------------- body column -- */
+
+/*
+ * PROMOTE: `.prose` paragraph rhythm — in primitives.css `.prose p { margin-block: 0 }`
+ * (0,2,0) out-ranks `.prose > * + * { margin-block-start: var(--space-4) }`
+ * (0,1,0), so direct-child paragraphs come out with no spacing at all and the
+ * prose runs together. Restored here at (0,4,0) for these five pages only;
+ * primitives should scope its reset (`.prose :where(p)`) so every consumer gets
+ * the rhythm the file intends.
+ */
+.legal .legal-body.prose > p:not(:first-child) {
+  margin-block-start: var(--space-4);
+}
+
+/* Wide content scrolls inside its own region rather than widening the page.
+   The wrapper is `.table-scroll` from primitives and carries tabindex/role/
+   aria-label in the markup, so the scroll area is reachable from the keyboard —
+   the tables themselves stay tables. */
+
+/* --------------------------------------------------------------- callouts -- */
+
+/* Was a coloured `border-left` box. Now a panel: white, ruled, bolted on. */
+.legal-summary {
+  display: grid;
+  gap: var(--space-3);
+}
+.legal-summary > p {
+  margin: 0;
+}
+
+/* Fine print. A plain muted paragraph under a hairline, not a grey box. */
+.legal-note {
+  padding-block-start: var(--space-6);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* --------------------------------------------------------------- contents -- */
 
 .legal-toc {
-  margin: 0 0 32px;
-  padding: 14px 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  display: grid;
+  gap: var(--space-3);
+  align-self: start;
 }
-.legal-toc p {
-  margin: 0 0 8px;
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+.legal-toc-title {
+  margin: 0;
+  font-family: var(--font-sign);
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
-  color: var(--text-muted);
 }
 .legal-toc ol {
   margin: 0;
-  padding-left: 1.2em;
-  font-size: 0.9rem;
+  padding-inline-start: var(--space-6);
+  font-size: var(--text-sm);
   columns: 2;
-  column-gap: 28px;
+  column-gap: var(--space-8);
+}
+.legal-toc li {
+  break-inside: avoid;
+}
+/* Each link carries `.target` in the markup for the 24px floor; the list-item
+   spacing has to make room for the padding it adds. */
+.legal-toc li + li {
+  margin-block-start: var(--space-1);
 }
 @media (max-width: 560px) {
   .legal-toc ol {
     columns: 1;
+  }
+}
+
+/* ----------------------------------------------------- the policy layout -- */
+
+/*
+ * /privacy and /terms are 11 and 13 sections long, and the contents list is the
+ * only way to steer them. On a screen wide enough to hold the reading measure
+ * and a rail beside it, the list stops being a preamble and becomes a sticky
+ * aside; below that it stays where it was, above the text.
+ */
+@media (min-width: 1000px) {
+  .legal--policy {
+    display: grid;
+    /* the reading column, then a rail wide enough for the longest entry
+       ("Safety and the real world") on two lines */
+    grid-template-columns: minmax(0, var(--prose-measure)) 15rem;
+    justify-content: center;
+    align-items: start;
+    column-gap: var(--space-10);
+    row-gap: var(--space-6);
+  }
+  .legal--policy > * + * {
+    margin-block-start: 0; /* the grid's row-gap owns the rhythm now */
+  }
+  .legal--policy .legal-head {
+    grid-area: 1 / 1 / 2 / -1;
+  }
+  .legal--policy .legal-summary {
+    grid-area: 2 / 1 / 3 / -1;
+    max-width: none;
+  }
+  .legal--policy .legal-toc {
+    grid-area: 3 / 2 / 4 / 3;
+    position: sticky;
+    /* clear of the 72px sticky header */
+    top: var(--space-20);
+  }
+  .legal--policy .legal-toc ol {
+    columns: 1;
+  }
+  .legal--policy .legal-body {
+    grid-area: 3 / 1 / 4 / 2;
+  }
+}
+
+/* Below the two-column breakpoint every block is a measure-wide column in the
+   middle of the page. */
+@media (max-width: 999.98px) {
+  .legal-summary,
+  .legal-toc,
+  .legal-body {
+    max-width: var(--prose-measure);
+    margin-inline: auto;
   }
 }

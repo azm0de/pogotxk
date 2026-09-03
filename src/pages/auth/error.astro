@@ -1,10 +1,10 @@
 ---
 import Base from '~/layouts/Base.astro';
+import { DISCORD_INVITE } from '~/lib/socials';
 
 export const prerender = false;
 
-const reason = Astro.url.searchParams.get('reason') ?? 'Something went wrong';
-const status = Number(Astro.url.searchParams.get('status')) || 400;
+const reason = Astro.url.searchParams.get('reason') ?? '';
 
 // Discord's own error codes are terse; translate the ones people actually hit.
 const EXPLANATIONS: Record<string, string> = {
@@ -19,67 +19,93 @@ const EXPLANATIONS: Record<string, string> = {
 };
 
 const explanation = EXPLANATIONS[reason];
+
+/*
+ * The page used to lead with `Error 400` and print the raw reason louder than
+ * the help. The HTTP status told nobody anything they could act on, so it is
+ * gone from the page entirely; the explanation is the lede, and the raw string
+ * only survives when we have nothing better to say about it.
+ *
+ * The recovery follows the reason: a banned account cannot try again, a
+ * cancelled sign-in was deliberate, and a misconfigured deployment is not the
+ * reader's problem to retry.
+ */
+const banned = reason === 'This account is banned';
+const cancelled = reason === 'access_denied';
+const misconfigured = reason === 'Discord sign-in is not configured';
+const canRetry = !banned && !misconfigured;
+
+const lede =
+  explanation ?? 'The sign-in did not finish, so nothing was changed and you are not signed in.';
 ---
 
 <Base title="Sign-in problem">
-  <section class="auth-error">
-    <p class="eyebrow">Error {status}</p>
-    <h1>Could not sign you in</h1>
-    <p class="reason">{reason}</p>
-    {explanation && <p class="explanation">{explanation}</p>}
+  <section class="auth-error container">
+    <div class="panel">
+      <div class="panel-head">
+        <h1>Could not sign you in</h1>
+      </div>
 
-    <div class="actions">
-      <a class="btn" href="/auth/login">Try again</a>
-      <a class="btn btn--ghost" href="/">Back to the map</a>
+      <p class="lede">{lede}</p>
+
+      {/* Only when the reason is one we cannot explain: it is a detail, not the message. */}
+      {!explanation && reason && <p class="detail">Discord reported: {reason}</p>}
+
+      <div class="actions cluster">
+        {
+          banned && (
+            <a
+              class="btn btn--discord btn--arrow"
+              href={DISCORD_INVITE}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Contact an ambassador on Discord
+            </a>
+          )
+        }
+        {canRetry && <a class="btn btn--primary btn--arrow" href="/auth/login">Try again</a>}
+        {
+          cancelled ? (
+            <a class="btn btn--outline btn--arrow" href="/">Back home</a>
+          ) : (
+            <a class="btn btn--outline btn--arrow" href="/map">Back to the map</a>
+          )
+        }
+      </div>
     </div>
   </section>
 </Base>
 
 <style>
   .auth-error {
-    max-width: 52ch;
-    margin: 0 auto;
-    padding: clamp(32px, 8vw, 80px) 20px;
+    /* `--measure` (68ch) reads ~96 characters a line in Atkinson; capped at the
+       58-60ch the token is being retuned to, and still follows it downward. */
+    --read-measure: min(var(--measure), 60ch);
+    padding-block: var(--space-section) var(--space-16);
+    font-family: var(--font-read);
+    max-width: var(--container-narrow);
   }
-  .eyebrow {
+  .auth-error h1 {
+    font-family: var(--font-sign);
+    font-size: var(--display-lg);
+    font-weight: 800;
+    line-height: var(--lh-display);
+    letter-spacing: var(--tracking-display);
+  }
+  .lede {
     margin: 0;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    max-width: var(--read-measure);
+    font-size: var(--text-lg);
+    line-height: var(--lh-body);
+  }
+  .detail {
+    margin: var(--space-3) 0 0;
     color: var(--text-muted);
-  }
-  h1 {
-    margin: 6px 0 16px;
-    font-size: clamp(1.6rem, 5vw, 2.2rem);
-  }
-  .reason {
-    padding: 12px 16px;
-    border-left: 3px solid var(--live);
-    background: var(--bg-sunken);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    font-weight: 600;
-  }
-  .explanation {
-    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
   .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 24px;
-  }
-  .btn {
-    padding: 10px 18px;
-    border-radius: var(--radius-sm);
-    background: var(--accent);
-    color: var(--accent-contrast);
-    font-weight: 600;
-    text-decoration: none;
-  }
-  .btn--ghost {
-    background: var(--bg-sunken);
-    color: var(--text);
-    border: 1px solid var(--border);
+    margin-top: var(--space-6);
+    --cluster-gap: var(--space-3);
   }
 </style>

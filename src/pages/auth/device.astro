@@ -29,16 +29,17 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
 ---
 
 <Base title="Approve sign-in">
-  <section class="device" data-device data-next={next}>
-    <p class="eyebrow">Sign in</p>
-    <h1>Approve in Discord</h1>
+  <section class="device container" data-device data-next={next}>
+    <header class="device-head">
+      <h1>Approve in Discord</h1>
+    </header>
 
     <p class="lede">
-      No password, no typing — your Discord app opens with everything filled in, and you tap
+      No password, no typing — your Discord app opens with everything filled in, and you tap{' '}
       <strong>Approve</strong>.
     </p>
 
-    <div class="code-panel" data-panel hidden>
+    <div class="panel code-panel" data-panel hidden>
       {/*
         No target="_blank". From a home-screen app, _blank forces the in-app
         browser sheet — the same empty cookie jar this page exists to escape,
@@ -49,7 +50,12 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
         carries on underneath. The script re-adds _blank only for ordinary
         desktop browsers, where a new tab keeps this page visible.
       */}
-      <a class="btn btn--approve" data-open href="https://discord.com/activate" rel="noopener noreferrer">
+      <a
+        class="btn btn--discord btn--arrow"
+        data-open
+        href="https://discord.com/activate"
+        rel="noopener noreferrer"
+      >
         Open Discord to approve
       </a>
       <p class="code-line">
@@ -57,23 +63,37 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
         filled in for you. It only needs typing if you approve from a different device.
       </p>
       <p class="hint">
-        If a login page opens instead of your Discord app, close it — then open
-        <strong> discord.com/activate</strong> inside the Discord app (or any signed-in
-        Discord) and enter the code above.
+        If a login page opens instead of your Discord app, close it — then open{' '}
+        <strong>discord.com/activate</strong> inside the Discord app (or any signed-in Discord)
+        and enter the code above.
       </p>
     </div>
 
-    <p class="status" data-status role="status" aria-live="polite">Getting your code…</p>
-
-    <div class="actions">
-      <button class="btn btn--ghost" data-restart type="button" hidden>Get a new code</button>
-      <a class="btn btn--ghost" href={browserHref} data-browser>Sign in in this browser instead</a>
+    {/*
+      Two lines, deliberately. The status is the live region and speaks only
+      when something changes; the countdown ticks every second and is kept out
+      of it, or a screen reader would read the clock aloud sixty times a minute.
+    */}
+    <div class="panel device-status">
+      <p class="status-msg" data-status role="status" aria-live="polite">Getting your code…</p>
+      <p class="countdown" data-countdown hidden></p>
     </div>
 
+    <div class="actions cluster">
+      <button class="btn btn--outline btn--arrow" data-restart type="button" hidden>
+        Get a new code
+      </button>
+    </div>
+
+    <p class="fallback">
+      Cannot approve from the Discord app?{' '}
+      <a class="target" href={browserHref} data-browser>Sign in in this browser instead</a>.
+    </p>
+
     <noscript>
-      <p class="status">
+      <p class="fallback">
         This page needs JavaScript to poll for your approval. You can still{' '}
-        <a href={browserHref}>sign in in this browser</a>.
+        <a class="target" href={browserHref}>sign in in this browser</a>.
       </p>
     </noscript>
   </section>
@@ -88,12 +108,16 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
     const codeEl = root.querySelector('[data-code]');
     const openEl = root.querySelector('[data-open]');
     const statusEl = root.querySelector('[data-status]');
+    const clockEl = root.querySelector('[data-countdown]');
     const restartEl = root.querySelector('[data-restart]');
     const next = root.getAttribute('data-next') || '/';
 
     let interval = 5;
     let deadline = 0;
     let timer = 0;
+    let ticker = 0;
+    let warned60 = false;
+    let warned30 = false;
 
     const say = (text) => {
       statusEl.textContent = text;
@@ -105,6 +129,43 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
     };
 
     /*
+     * The 300 seconds were invisible: the page waited in silence and then
+     * snapped to "expired". The clock is visible text, updated every second,
+     * and the live region is spoken to only twice before the end.
+     */
+    const two = (n) => String(n).padStart(2, '0');
+
+    const stopClock = () => {
+      if (ticker) clearInterval(ticker);
+      ticker = 0;
+      clockEl.hidden = true;
+    };
+
+    const renderClock = () => {
+      const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+      clockEl.textContent = `Code expires in ${Math.floor(left / 60)}:${two(left % 60)}`;
+      if (left <= 0) {
+        stopClock();
+        return;
+      }
+      if (left <= 30 && !warned30) {
+        warned30 = true;
+        say('Thirty seconds left to approve this code.');
+      } else if (left <= 60 && !warned60) {
+        warned60 = true;
+        say('One minute left to approve this code.');
+      }
+    };
+
+    const startClock = () => {
+      warned60 = false;
+      warned30 = false;
+      clockEl.hidden = false;
+      renderClock();
+      ticker = setInterval(renderClock, 1000);
+    };
+
+    /*
      * The device grant can be unavailable — Discord down, or the grant gated
      * for this app. The page's whole fallback story is that the browser link
      * below is always there, so unavailability demotes the device UI rather
@@ -112,6 +173,7 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
      */
     const unavailable = () => {
       stop();
+      stopClock();
       panel.hidden = true;
       restartEl.hidden = true;
       say('Approving from Discord is not available right now — use the browser sign-in below.');
@@ -119,6 +181,7 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
 
     const finished = (text, canRestart) => {
       stop();
+      stopClock();
       restartEl.hidden = !canRestart;
       say(text);
     };
@@ -139,7 +202,7 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
       }
 
       if (out.status === 'ok') {
-        say('Approved. Signing you in…');
+        finished('Approved. Signing you in…', false);
         window.location.href = out.next || next;
         return;
       }
@@ -162,6 +225,7 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
 
     const start = async () => {
       stop();
+      stopClock();
       restartEl.hidden = true;
       panel.hidden = true;
       say('Getting your code…');
@@ -200,11 +264,13 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
       if (!standalone && !iOS) openEl.target = '_blank';
       panel.hidden = false;
       say('Waiting for you to approve…');
+      startClock();
       timer = setTimeout(tick, interval * 1000);
     };
 
     // Coming back from the Discord app is the moment the approval usually just
-    // landed — poll immediately instead of waiting out the interval.
+    // landed — poll immediately instead of waiting out the interval. The clock
+    // keeps running; only the poll timer is reset.
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && timer) {
         stop();
@@ -219,36 +285,36 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
 
 <style>
   .device {
-    max-width: 52ch;
-    margin: 0 auto;
-    padding: clamp(32px, 8vw, 80px) 20px;
+    /* `--measure` (68ch) reads ~96 characters a line in Atkinson; capped at the
+       58-60ch the token is being retuned to, and still follows it downward. */
+    --read-measure: min(var(--measure), 60ch);
+    max-width: var(--container-narrow);
+    padding-block: var(--space-section) var(--space-16);
+    font-family: var(--font-read);
   }
-  .eyebrow {
-    margin: 0;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-  h1 {
-    margin: 6px 0 16px;
-    font-size: clamp(1.6rem, 5vw, 2.2rem);
-  }
-  .lede {
-    color: var(--text-muted);
-    margin: 0 0 20px;
+  .device > * + * {
+    margin-block-start: var(--space-5);
   }
 
-  .code-panel {
-    display: grid;
-    gap: 14px;
-    padding: 18px 16px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg-sunken);
-    text-align: center;
+  .device-head {
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--text);
   }
+  .device h1 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--display-lg);
+    font-weight: 800;
+    line-height: var(--lh-display);
+    letter-spacing: var(--tracking-display);
+  }
+  .lede {
+    margin: 0;
+    max-width: var(--read-measure);
+    font-size: var(--text-lg);
+    line-height: var(--lh-body);
+  }
+
   /*
    * The button is the hero; the code is a verification detail. It used to be
    * the loudest thing on the page, which read as "copy this somewhere" — a
@@ -256,64 +322,58 @@ const browserHref = `/auth/login?retry=1${next !== '/' ? `&next=${encodeURICompo
    * letter spacing, because O/0 confusion in the fallback case is a support
    * thread.
    */
-  .code-line {
+  .code-panel {
+    display: grid;
+    gap: var(--space-4);
+    justify-items: start;
+  }
+  .code-line,
+  .hint {
     margin: 0;
-    font-size: 0.85rem;
+    max-width: var(--read-measure);
+    font-size: var(--text-sm);
     color: var(--text-muted);
   }
   .code {
     font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-    font-size: 1.05rem;
+    font-size: var(--text-lg);
     font-weight: 700;
-    letter-spacing: 0.14em;
+    letter-spacing: var(--tracking-caps);
     color: var(--text);
   }
-  .hint {
-    margin: 0;
-    font-size: 0.82rem;
-    color: var(--text-muted);
-  }
 
-  .status {
-    margin: 18px 0 0;
-    padding: 10px 14px;
-    border-left: 3px solid var(--poi-gym);
-    background: var(--bg-sunken);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    font-size: 0.9rem;
+  /* Was a gym-orange border-left callout. It is a status, so it is quiet: a
+     panel with the small shadow and no colour of its own. */
+  .device-status {
+    --panel-pad: var(--space-4);
+    display: grid;
+    gap: var(--space-1);
+    box-shadow: var(--shadow-sm);
+  }
+  .status-msg {
+    margin: 0;
+    font-size: var(--text-md);
+  }
+  .countdown {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
   }
 
   .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 24px;
+    --cluster-gap: var(--space-3);
   }
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    padding: 10px 18px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: var(--accent);
-    color: var(--accent-contrast);
-    font-size: 0.95rem;
-    font-weight: 600;
-    text-decoration: none;
-    cursor: pointer;
+  /* An empty flex row still takes its own margin; with the only button hidden
+     the page would carry a stray gap. */
+  .actions:not(:has(> *:not([hidden]))) {
+    display: none;
   }
-  /* Discord's own blurple, the same raw value .go-signin already uses — this
-     button IS "go to Discord", and borrowing their colour is the honest
-     affordance. White on #5865f2 measures 4.61:1, over the AA floor. */
-  .btn--approve {
-    background: #5865f2;
-    color: #fff;
-  }
-  .btn--ghost {
-    background: var(--bg-sunken);
-    color: var(--text);
-    border: 1px solid var(--border);
+
+  .fallback {
+    margin: 0;
+    max-width: var(--read-measure);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
 </style>

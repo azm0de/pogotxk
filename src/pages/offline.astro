@@ -4,44 +4,162 @@ import Base from '~/layouts/Base.astro';
 // Prerendered on purpose: the service worker caches this at install time, and
 // it has to be servable when there is no network to render it.
 export const prerender = true;
+
+/*
+ * What the service worker actually keeps (public/sw.js): the offline page
+ * itself, the icons, the favicon and the manifest at install; then `/media/`,
+ * `/_astro/` and map tiles as they are fetched. No page HTML is ever cached —
+ * navigations are network-first and fall back here — so the old copy, "anything
+ * you have already looked at may still open", was not true. These links are
+ * therefore signposts for the moment the signal returns, not cached routes,
+ * and the page says so.
+ */
+const PLACES = [
+  { href: '/map', label: 'The map' },
+  { href: '/go', label: 'Quick actions' },
+  { href: '/live', label: 'The live board' },
+  { href: '/events', label: 'Meetups and events' },
+];
 ---
 
 <Base title="Offline">
-  <section class="offline">
-    <h1>No connection</h1>
-    <p>
-      You are offline, so this page could not load. The park has patchy signal in places — try
-      moving a few metres and reloading.
+  <section class="offline container">
+    <header class="offline-head">
+      <h1>No connection</h1>
+    </header>
+
+    <p class="lede">
+      You are offline, so the page could not load. The park has patchy signal in places, so
+      walking a few metres and trying again usually fixes it.
     </p>
-    <p>
-      Anything you have already looked at may still open. Raid flares will not: showing you a
-      cached one would be worse than showing you nothing, since it may have ended.
+
+    <div class="offline-actions cluster">
+      <button class="btn btn--primary" type="button" data-retry>Try again</button>
+    </div>
+
+    <p class="offline-status" data-online role="status" hidden></p>
+
+    <div class="panel offline-places">
+      <div class="panel-head">
+        <h2>Where to go when the signal is back</h2>
+      </div>
+      <ul class="offline-links">
+        {
+          PLACES.map((place) => (
+            <li>
+              <a class="btn btn--outline btn--arrow btn--block" href={place.href}>
+                {place.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+
+    <p class="offline-note">
+      Pages are not stored on your phone, so nothing else opens until you are back on. The map
+      tiles you have already loaded are kept, so the map redraws quickly when it is. Raid flares
+      are never cached: showing you one that has already ended would be worse than showing you
+      nothing.
     </p>
-    <button type="button" onclick="location.reload()">Try again</button>
   </section>
 </Base>
 
+<script is:inline>
+  (() => {
+    const retry = document.querySelector('[data-retry]');
+    const status = document.querySelector('[data-online]');
+    if (!retry || !status) return;
+
+    retry.addEventListener('click', () => location.reload());
+
+    const offline = () => {
+      // Only when the browser is certain: `navigator.onLine === false` means
+      // there is no network interface at all. `true` is not proof of a working
+      // connection — park wifi with no route out reports true — so the button
+      // stays live in that case and reloading is still the right answer.
+      retry.disabled = true;
+      retry.textContent = 'Waiting for a signal';
+      status.hidden = true;
+    };
+
+    const online = () => {
+      retry.disabled = false;
+      retry.textContent = 'Try again';
+      status.textContent = "You're back online.";
+      status.hidden = false;
+    };
+
+    const sync = () => (navigator.onLine ? online() : offline());
+
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    // Some browsers never fire `online` after a sleeping radio wakes up.
+    setInterval(sync, 2000);
+
+    if (!navigator.onLine) offline();
+  })();
+</script>
+
 <style>
   .offline {
-    max-width: 40ch;
-    margin: 0 auto;
-    padding: clamp(40px, 12vw, 100px) 24px;
-    text-align: center;
+    /* `--measure` (68ch) reads ~96 characters a line in Atkinson; capped at the
+       58-60ch the token is being retuned to, and still follows it downward. */
+    --read-measure: min(var(--measure), 60ch);
+    max-width: var(--container-narrow);
+    padding-block: var(--space-section) var(--space-16);
+    font-family: var(--font-read);
   }
-  h1 {
-    font-size: clamp(1.5rem, 6vw, 2rem);
+  .offline > * + * {
+    margin-block-start: var(--space-5);
   }
-  p {
-    color: var(--text-muted);
+
+  .offline-head {
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--text);
   }
-  button {
-    margin-top: 18px;
-    padding: 12px 26px;
-    border: 0;
-    border-radius: 999px;
-    background: var(--accent);
-    color: var(--accent-contrast);
+  .offline h2 {
+    font-family: var(--font-sign);
+  }
+  .offline h1 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--display-lg);
+    font-weight: 800;
+    line-height: var(--lh-display);
+    letter-spacing: var(--tracking-display);
+  }
+  .lede {
+    margin: 0;
+    max-width: var(--read-measure);
+    font-size: var(--text-lg);
+    line-height: var(--lh-body);
+  }
+
+  .offline-status {
+    margin: 0;
     font-weight: 700;
-    cursor: pointer;
+  }
+
+  .offline-places {
+    max-width: var(--read-measure);
+  }
+  .offline-links {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .offline-links a {
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .offline-note {
+    margin: 0;
+    max-width: var(--read-measure);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
 </style>

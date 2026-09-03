@@ -17,127 +17,149 @@ const counts = await env.DB.prepare(
   .first<{ pokestops: number; gyms: number; powerspots: number; campsite: number }>()
   .catch(() => null);
 
+// width/height come along so the photograph reserves its own space instead of
+// shoving the page down when it decodes.
 const hero = await env.DB.prepare(
-  `SELECT r2_key, alt, credit FROM media
+  `SELECT r2_key, alt, credit, width, height FROM media
     WHERE kind = 'community_photo' ORDER BY COALESCE(source_date, created_at) DESC LIMIT 1`,
 )
-  .first<{ r2_key: string; alt: string | null; credit: string | null }>()
+  .first<{
+    r2_key: string;
+    alt: string | null;
+    credit: string | null;
+    width: number | null;
+    height: number | null;
+  }>()
   .catch(() => null);
+
+const tally = counts && (counts.pokestops ?? 0) > 0
+  ? [
+      { n: counts.pokestops, label: 'PokéStops' },
+      { n: counts.gyms, label: 'Gyms' },
+      { n: counts.powerspots, label: 'Power Spots' },
+      { n: counts.campsite, label: 'Campsite spots' },
+    ]
+  : null;
 ---
 
 <Base
   title="About"
   description="PoGo TXK is the Pokémon GO community for Texarkana, Texas and Arkansas, with a Community Campsite at Spring Lake Park."
 >
-  <article class="legal">
-    <p class="legal-eyebrow">PoGo TXK</p>
-    <h1>About the community</h1>
+  <article class="legal container">
+    <header class="legal-head">
+      <h1>About the community</h1>
+    </header>
 
     {
       hero && (
-        <figure class="about-hero">
+        <figure class="figure about-hero">
           <img
             src={`/media/${hero.r2_key}`}
             alt={hero.alt ?? 'PoGo TXK community members at Spring Lake Park'}
+            width={hero.width ?? undefined}
+            height={hero.height ?? undefined}
             loading="eager"
           />
-          {hero.credit && <figcaption>{hero.credit}</figcaption>}
+          {/* A press credit is a licensing obligation: it rides on the image so
+              a crop or a screenshot cannot separate the two. */}
+          {hero.credit && <figcaption class="credit">{hero.credit}</figcaption>}
         </figure>
       )
     }
 
-    <p class="lede">
-      PoGo Texarkana — PoGo TXK — is a local Pokémon GO community serving Texarkana, Texas and
-      Arkansas, and the surrounding area. Members of Team Valor, Team Mystic and Team Instinct
-      work together to take over opposing Gyms, defend their team's Gyms, trade, battle, and
-      turn up to community meetups.
-    </p>
-
-    <h2>The Community Campsite</h2>
-    <p>
-      Community Campsites are dedicated, localised in-game areas for Pokémon GO. They are
-      established by official Community Ambassadors and serve as local hubs for in-person player
-      meetups. They come with perks: exclusive event Check-Ins, special Timed Research tasks, and
-      enhanced PokéStops and Gyms.
-    </p>
-    <p>
-      Ours covers <strong>Spring Lake Park</strong> in Texarkana. On{' '}
-      <a href="/map">the map</a>, Campsite locations carry a ★.
-    </p>
-
     {
-      counts && (counts.pokestops ?? 0) > 0 && (
-        <dl class="about-stats">
-          <div>
-            <dt>PokéStops</dt>
-            <dd>{counts.pokestops}</dd>
+      tally && (
+        <section class="panel about-survey" aria-labelledby="about-survey-h">
+          <div class="panel-head">
+            <h2 id="about-survey-h">The survey</h2>
           </div>
-          <div>
-            <dt>Gyms</dt>
-            <dd>{counts.gyms}</dd>
-          </div>
-          <div>
-            <dt>Power Spots</dt>
-            <dd>{counts.powerspots}</dd>
-          </div>
-          <div>
-            <dt>★ Campsite</dt>
-            <dd>{counts.campsite}</dd>
-          </div>
-        </dl>
+          <ul class="about-tally">
+            {tally.map((row) => (
+              <li class="post">
+                <span class="disc">{row.n}</span>
+                <span class="post-label">{row.label}</span>
+              </li>
+            ))}
+          </ul>
+          <p class="about-survey-note">
+            Every one of them walked, photographed and written up by hand, in Spring Lake Park.
+            Campsite spots carry a ★.
+          </p>
+          <a class="btn btn--primary btn--arrow" href="/map">Open the map</a>
+        </section>
       )
     }
 
-    <h2>Getting involved</h2>
-    <p>
-      Everyone is welcome — any team, any level, and you do not need to be good at the game.
-      Check the <strong>#announcements</strong> channel in either Niantic Campfire or Discord to
-      stay up to date on meetups and Pokémon GO news.
-    </p>
-    <ul>
-      <li>
-        <a href={DISCORD} rel="noopener noreferrer" target="_blank">Discord</a> — raid
-        coordination, chat, and where meetups get announced first
-      </li>
-      <li>
-        <a href={CAMPFIRE} rel="noopener noreferrer" target="_blank">Niantic Campfire</a> — check
-        in at meetups for in-game rewards
-      </li>
-      <li><a href="/events">Events</a> — community meetups and the global Pokémon GO calendar</li>
-      <li><a href="/go">Quick actions</a> — fire a raid flare from your phone while you play</li>
-    </ul>
+    <div class="legal-body prose">
+      <p class="lede">
+        PoGo Texarkana — PoGo TXK — is a local Pokémon GO community serving Texarkana, Texas and
+        Arkansas, and the surrounding area. Members of Team Valor, Team Mystic and Team Instinct
+        work together to take over opposing Gyms, defend their team's Gyms, trade, battle, and
+        turn up to community meetups.
+      </p>
 
-    <h2>This website</h2>
-    <p>
-      Built and run by volunteers. The map, the news, and the event calendar are all maintained by
-      Community Ambassadors — nobody is paid, and there is no advertising. Raid boss, egg and
-      research data updates itself from{' '}
-      <a href="https://leekduck.com" rel="noopener noreferrer" target="_blank">Leek Duck</a> via{' '}
-      <a href="https://github.com/bigfoott/ScrapedDuck" rel="noopener noreferrer" target="_blank">
-        ScrapedDuck</a
-      >.
-    </p>
-    <p>
-      Read our <a href="/conduct">Code of Conduct</a>, <a href="/terms">Terms of Service</a> and{' '}
-      <a href="/privacy">Privacy Policy</a>.
-    </p>
+      <h2>The Community Campsite</h2>
+      <p>
+        Community Campsites are dedicated, localised in-game areas for Pokémon GO. They are
+        established by official Community Ambassadors and serve as local hubs for in-person player
+        meetups. They come with perks: exclusive event Check-Ins, special Timed Research tasks, and
+        enhanced PokéStops and Gyms.
+      </p>
+      <p>
+        Ours covers <strong>Spring Lake Park</strong> in Texarkana. On{' '}
+        <a href="/map">the map</a>, Campsite locations carry a ★.
+      </p>
 
-    <p class="legal-note">
-      PoGo TXK is a fan community and is not affiliated with, endorsed by, or sponsored by
-      Niantic, Nintendo, Creatures Inc., GAME FREAK, or The Pokémon Company. Pokémon and its
-      trademarks are ©1995–2026 Nintendo, Creatures, and GAMEFREAK. All images and names owned and
-      trademarked by Nintendo, Niantic, The Pokémon Company, and GAMEFREAK are property of their
-      respective owners.
-    </p>
+      <h2>Getting involved</h2>
+      <p>
+        Everyone is welcome — any team, any level, and you do not need to be good at the game.
+        Check the <strong>#announcements</strong> channel in either Niantic Campfire or Discord to
+        stay up to date on meetups and Pokémon GO news.
+      </p>
+      <ul>
+        <li>
+          <a href={DISCORD} rel="noopener noreferrer" target="_blank">Discord</a> — raid
+          coordination, chat, and where meetups get announced first
+        </li>
+        <li>
+          <a href={CAMPFIRE} rel="noopener noreferrer" target="_blank">Niantic Campfire</a> — check
+          in at meetups for in-game rewards
+        </li>
+        <li><a href="/events">Events</a> — community meetups and the global Pokémon GO calendar</li>
+        <li><a href="/go">Quick actions</a> — fire a raid flare from your phone while you play</li>
+      </ul>
+
+      <h2>This website</h2>
+      <p>
+        Built and run by volunteers. The map, the news, and the event calendar are all maintained by
+        Community Ambassadors — nobody is paid, and there is no advertising. Raid boss, egg and
+        research data updates itself from{' '}
+        <a href="https://leekduck.com" rel="noopener noreferrer" target="_blank">Leek Duck</a> via{' '}
+        <a href="https://github.com/bigfoott/ScrapedDuck" rel="noopener noreferrer" target="_blank">
+          ScrapedDuck</a
+        >.
+      </p>
+      <p>
+        Read our <a href="/conduct">Code of Conduct</a>, <a href="/terms">Terms of Service</a> and{' '}
+        <a href="/privacy">Privacy Policy</a>.
+      </p>
+
+      <p class="legal-note">
+        PoGo TXK is a fan community and is not affiliated with, endorsed by, or sponsored by
+        Niantic, Nintendo, Creatures Inc., GAME FREAK, or The Pokémon Company. Pokémon and its
+        trademarks are ©1995–2026 Nintendo, Creatures, and GAMEFREAK. All images and names owned and
+        trademarked by Nintendo, Niantic, The Pokémon Company, and GAMEFREAK are property of their
+        respective owners.
+      </p>
+    </div>
   </article>
 </Base>
 
 <style>
   .about-hero {
-    margin: 0 0 24px;
-    position: relative;
+    margin: 0;
     border-radius: var(--radius);
-    overflow: hidden;
   }
   .about-hero img {
     display: block;
@@ -145,43 +167,46 @@ const hero = await env.DB.prepare(
     max-height: 320px;
     object-fit: cover;
   }
-  .about-hero figcaption {
-    position: absolute;
-    inset: auto 0 0 0;
-    padding: 22px 12px 7px;
-    font-size: 0.68rem;
-    color: #fff;
-    background: linear-gradient(transparent, rgb(0 0 0 / 0.78));
+
+  /*
+   * The survey is the positioning claim — 104 hand-walked places nobody else
+   * has — so it is evidence on the page rather than a footnote mid-paragraph.
+   * Each count is a waypoint post: the number is the datum, so the disc earns
+   * its place.
+   */
+  .about-survey {
+    display: grid;
+    gap: var(--space-4);
+    justify-items: start;
+  }
+  .about-tally {
+    display: grid;
+    /* Two columns at every width. Four across wrapped 3+1 on a phone, which
+       read as one count having been left behind. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    width: 100%;
+  }
+  .about-tally .post {
+    align-items: center;
+  }
+  .post-label {
+    font-family: var(--font-sign);
+    font-weight: 700;
+    font-size: var(--text-md);
+    line-height: var(--lh-ui);
+    min-width: 0;
+  }
+  .about-survey-note {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
 
   .lede {
-    font-size: 1.05rem;
-  }
-
-  .about-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 26px;
-    margin: 20px 0 8px;
-    padding: 16px 18px;
-    background: var(--bg-sunken);
-    border-radius: var(--radius);
-  }
-  .about-stats div {
-    display: flex;
-    flex-direction: column-reverse;
-  }
-  .about-stats dt {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .about-stats dd {
-    margin: 0;
-    font-size: 1.6rem;
-    font-weight: 800;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
+    font-size: var(--text-lg);
   }
 </style>

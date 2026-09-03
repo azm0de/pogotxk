@@ -23,51 +23,94 @@ const next = '/account/delete';
   title="Delete your account"
   description="Permanently delete your PoGo TXK account and personal data."
 >
-  <article class="legal">
-    <p class="legal-eyebrow">PoGo TXK</p>
-    <h1>Delete your account</h1>
+  <article class="legal container">
+    <header class="legal-head">
+      <h1>Delete your account</h1>
+    </header>
 
-    <div class="legal-summary">
+    {/*
+      The warning and the closure are the same slot: on success the first is
+      replaced by the second, so the page never describes a deletion that has
+      already happened as something about to happen.
+    */}
+    <div class="panel acct-warning" data-warning>
+      <p class="acct-warning-head">
+        <span class="badge badge--live">Permanent</span>
+      </p>
       <p>
-        <strong>This permanently removes your Discord identity, avatar, trainer profile and
-        active sessions from PoGo TXK.</strong> It does not require the app to be installed —
-        this page works in any browser, signed in or not.
+        <strong>
+          This removes your Discord identity, avatar, trainer profile and active sessions from
+          PoGo TXK.
+        </strong>{' '}
+        It does not require the app to be installed — this page works in any browser, signed in
+        or not.
       </p>
     </div>
 
-    <p>
-      Flares, RSVPs and change-log entries you are part of stay as community history — see{' '}
-      <a href="/privacy#retention">how long we keep it</a> — but stop being linked to your
-      Discord identity. Your account cannot be recovered afterwards: signing back in with the
-      same Discord account creates a brand new one, starting from guest.
-    </p>
+    <div class="panel acct-done" data-done hidden>
+      <p class="acct-done-head">Your account is deleted.</p>
+      <p>
+        Your Discord identity, avatar, trainer profile and sessions are gone from PoGo TXK, and
+        you are signed out. Flares, RSVPs and change-log entries you were part of stay as
+        community history, no longer linked to you. Signing in with the same Discord account
+        creates a brand new one, starting from guest.
+      </p>
+      <a class="btn btn--primary btn--arrow" href="/map">Open the map</a>
+    </div>
 
+    <div class="legal-body prose">
+      <p>
+        Flares, RSVPs and change-log entries you are part of stay as community history — see{' '}
+        <a href="/privacy#retention">how long we keep it</a> — but stop being linked to your
+        Discord identity. Your account cannot be recovered afterwards: signing back in with the
+        same Discord account creates a brand new one, starting from guest.
+      </p>
+    </div>
+
+    {/*
+      The controls sit outside `.prose` on purpose. `.prose a` (0,2,0) sets the
+      link colour and out-ranks `.btn--primary` (0,1,0), which painted the
+      sign-in button's label in the accent red on its own accent-red fill —
+      measured 1.00:1, an invisible label.
+    */}
     {
-      user ? (
-        <section class="acct-delete" data-account-delete>
-          <p class="acct-delete-who">
-            {user.avatarUrl && <img src={user.avatarUrl} alt="" width="32" height="32" />}
-            Signed in as <strong>{user.displayName}</strong>.{' '}
-            <a href={`/auth/logout?switch=1&next=${encodeURIComponent(next)}`}>Not you?</a>
-          </p>
+        user ? (
+          <section class="acct-delete" data-account-delete>
+            <p class="acct-delete-who">
+              {user.avatarUrl && (
+                <img src={user.avatarUrl} alt="" width="32" height="32" loading="lazy" />
+              )}
+              <span>
+                Signed in as <strong>{user.displayName}</strong>.{' '}
+                <a class="target" href={`/auth/logout?switch=1&next=${encodeURIComponent(next)}`}>
+                  Not you?
+                </a>
+              </span>
+            </p>
 
-          <label class="acct-delete-confirm">
-            <input type="checkbox" data-confirm-check />
-            I understand this is permanent and cannot be undone.
-          </label>
+            <label class="acct-delete-confirm">
+              <input type="checkbox" data-confirm-check />
+              I understand this is permanent and cannot be undone.
+            </label>
 
-          <button type="button" class="acct-delete-btn" data-confirm-btn disabled>
-            Delete my account
-          </button>
+            <button type="button" class="btn btn--primary" data-confirm-btn disabled>
+              Delete my account
+            </button>
 
-          <p class="acct-delete-status" data-status role="status" hidden />
-        </section>
-      ) : (
-        <p class="acct-delete-signin">
-          <a href={`/auth/login?next=${encodeURIComponent(next)}`}>Sign in with Discord</a> to
-          delete your account. Signing in only proves who you are — it does not undo anything by
-          itself.
-        </p>
+            <p class="acct-delete-status" data-status role="status" hidden />
+          </section>
+        ) : (
+          <section class="acct-delete">
+            <a
+              class="btn btn--primary btn--arrow"
+              href={`/auth/login?next=${encodeURIComponent(next)}`}
+            >
+              Sign in with Discord
+            </a>
+            <p class="acct-delete-note">
+              Signing in only proves who you are. It does not delete anything by itself.
+            </p>
+          </section>
       )
     }
 
@@ -86,6 +129,8 @@ const next = '/account/delete';
       const check = root.querySelector('[data-confirm-check]');
       const btn = root.querySelector('[data-confirm-btn]');
       const status = root.querySelector('[data-status]');
+      const warning = document.querySelector('[data-warning]');
+      const done = document.querySelector('[data-done]');
 
       check.addEventListener('change', () => {
         btn.disabled = !check.checked;
@@ -109,8 +154,11 @@ const next = '/account/delete';
 
           check.closest('label').remove();
           btn.remove();
-          say('Your account has been deleted. You can close this page, or ');
-          status.append(Object.assign(document.createElement('a'), { href: '/', textContent: 'go home' }), '.');
+          // The warning describes something about to happen; once it has, the
+          // closure panel takes its place rather than sitting under it.
+          if (warning) warning.hidden = true;
+          if (done) done.hidden = false;
+          say('Your account is deleted.');
         } catch {
           say('Something went wrong — your account was not deleted. Try again, or ask an ambassador on Discord.');
           btn.disabled = false;
@@ -121,51 +169,59 @@ const next = '/account/delete';
   </script>
 
   <style>
+    .acct-warning,
+    .acct-done {
+      display: grid;
+      gap: var(--space-3);
+      justify-items: start;
+    }
+    .acct-warning p,
+    .acct-done p {
+      margin: 0;
+    }
+    .acct-warning-head {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .acct-done-head {
+      font-family: var(--font-sign);
+      font-weight: 800;
+      font-size: var(--text-xl);
+      line-height: var(--lh-heading);
+    }
+
     .acct-delete {
-      margin: 24px 0;
-      padding: 18px 20px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--bg-sunken);
+      display: grid;
+      gap: var(--space-4);
+      justify-items: start;
     }
     .acct-delete-who {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin: 0 0 16px;
+      gap: var(--space-3);
+      margin: 0;
+      min-width: 0;
     }
     .acct-delete-who img {
+      flex: none;
       border-radius: 50%;
     }
     .acct-delete-confirm {
       display: flex;
       align-items: flex-start;
-      gap: 8px;
-      margin: 0 0 16px;
+      gap: var(--space-2);
+      margin: 0;
       cursor: pointer;
-    }
-    .acct-delete-btn {
-      display: inline-flex;
-      align-items: center;
-      min-height: 44px;
-      padding: 0 20px;
-      border: none;
-      border-radius: var(--radius);
-      background: var(--accent-solid);
-      color: #fff;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .acct-delete-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
     }
     .acct-delete-status {
-      margin: 14px 0 0;
-      font-weight: 600;
+      margin: 0;
+      font-weight: 700;
     }
-    .acct-delete-signin {
-      margin: 24px 0;
+    .acct-delete-note {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: var(--text-sm);
     }
   </style>
 </Base>
