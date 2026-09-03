@@ -958,6 +958,14 @@ function homeWhen(event: CalendarEvent): string {
 
   .board-map {
     position: relative;
+    /*
+     * A stacking context of its own. Leaflet's panes carry z-index 200–700 and
+     * `.leaflet-container` is not itself a stacking context, so without this
+     * the tiles paint over the panel's `z-index: 1` and the board's own heading
+     * disappears behind the map — which is exactly what shipped at every width
+     * until the finish captures caught it.
+     */
+    isolation: isolate;
     height: 70dvh;
     min-height: 320px;
     max-height: 560px;
@@ -1025,6 +1033,40 @@ function homeWhen(event: CalendarEvent): string {
       width: min(440px, 100%);
       margin-inline-start: auto;
       margin-inline-end: var(--space-6);
+    }
+  }
+  /*
+   * Wide screens: the panel is a sign bolted across the whole bottom of the
+   * board, three posts in a row, rather than a narrow column hanging off one
+   * side of it. At 1440 the column version left ~600px of empty page beside
+   * 480px of panel; a full-width panel is ~220px tall and the map stays whole.
+   */
+  @media (min-width: 1000px) {
+    .board-panel {
+      width: auto;
+      margin-inline: var(--space-6);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: var(--space-8);
+      align-items: start;
+    }
+    .board-panel .panel-head {
+      grid-column: 1 / -1;
+    }
+    .board-panel .board-lede {
+      grid-column: 1 / -1;
+    }
+    .board-panel .posts {
+      grid-column: 1;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-6);
+    }
+    .board-panel .actions {
+      grid-column: 2;
+      align-self: end;
+      flex-direction: column;
+      align-items: stretch;
     }
   }
   /* The board is the page's title plate, so its heading is the display size the

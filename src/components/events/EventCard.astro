@@ -127,18 +127,18 @@ const source = sourceLabel();
   aria-labelledby={`${anchor}-title`}
 >
   {
-    /* The box renders whenever the caller asked for artwork, with or without an
-       image in it: it is the fallback surface while the picture loads, it is
-       what a 404 leaves behind, and it keeps every row in a column aligned on
-       one left rail. */
-    showImage && (
+    /* The box renders only when there is a picture to put in it. It is still
+       the fallback surface while that picture loads or if it 404s, but an event
+       with no artwork of its own (upstream's generic placeholder is the Pokémon
+       GO logo, which never ships here) gets no empty box: four blank squares in
+       a row read as four broken images, and the card's grid collapses to one
+       column instead. */
+    showImage && image && (
       <div class="event-image">
         {/* Decorative: the title right beside it says the same thing, and
             upstream gives us no alt text — inventing one would be worse than
             none. */}
-        {image && (
-          <img src={image} alt="" loading="lazy" decoding="async" width="64" height="64" />
-        )}
+        <img src={image} alt="" loading="lazy" decoding="async" width="64" height="64" />
       </div>
     )
   }

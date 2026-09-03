@@ -15,6 +15,11 @@
   gap: var(--space-3);
   align-items: start;
 }
+/* No artwork, no empty column. Browsers without :has() keep the auto column,
+   which collapses to zero anyway and costs only the 12px gap. */
+.event-card:not(:has(.event-image)) {
+  grid-template-columns: minmax(0, 1fr);
+}
 
 /* The body column holds long text and a scrollable blurb, so it must be allowed
    to shrink below its content — a grid child will not, and that is exactly how
