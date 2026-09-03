@@ -2,7 +2,9 @@
 /**
  * Egg pools by walking distance.
  *
- * Same server-rendered, KV-cached shape as /raids. Hatch CP matters more here
+ * Same server-rendered, KV-cached shape as /raids, and now the same
+ * architecture: a running head, the freshness line, then one panel per pool
+ * with the walking distance as its numbered post. Hatch CP matters more here
  * than anywhere else in the game — eggs hatch at a fixed level 20, so the CP
  * printed on each card *is* the full range you can roll.
  */
@@ -12,7 +14,7 @@ import GameNav from '~/components/game/GameNav.astro';
 import EggCard from '~/components/game/EggCard.astro';
 import FeedStatus from '~/components/game/FeedStatus.astro';
 import '~/components/game/game.css';
-import { eggDistanceRank, getFeed, groupSorted, slugifyLabel } from '~/lib/scrapedduck';
+import { eggDistanceRank, getFeed, groupSorted, slugifyLabel, type EggEntry } from '~/lib/scrapedduck';
 
 export const prerender = false;
 
@@ -23,6 +25,19 @@ const feed = await getFeed('eggs', {
 
 const pools = groupSorted(feed.data, (egg) => egg.eggType, eggDistanceRank);
 const total = feed.data.length;
+
+const RARITY_MAX = 5;
+
+/**
+ * The same normalisation `EggCard` applies to a published tier — kept in step
+ * with it deliberately, because the page has to know whether a pool's tiers are
+ * all one value before the cards decide whether to draw the dots at all.
+ */
+function rarityOf(egg: EggEntry): number {
+  return Number.isFinite(egg.rarity)
+    ? Math.min(Math.max(Math.round(egg.rarity), 0), RARITY_MAX)
+    : 0;
+}
 
 /**
  * Where a pool comes from. Only the two the source makes unambiguous are
@@ -48,8 +63,11 @@ function poolNote(eggType: string, adventureSync: number, gift: number): string 
 >
   <div class="g-page">
     <header class="g-head">
-      <h1>What is hatching</h1>
-      <p>
+      <div class="panel-head">
+        <h1>What is hatching</h1>
+        {total > 0 && <span class="g-count">{total} species</span>}
+      </div>
+      <p class="g-lede">
         The current egg pools by walking distance. Eggs always hatch at level 20, so the CP shown
         on each card is the entire range you can get — handy for spotting a perfect before you
         spend dust on it.
@@ -66,7 +84,7 @@ function poolNote(eggType: string, adventureSync: number, gift: number): string 
 
     {
       total === 0 ? (
-        <div class="g-empty">
+        <div class="empty-state g-empty">
           <h2>No egg pools right now</h2>
           <p>
             We could not reach the live egg data and have nothing saved to fall back on. Try again
@@ -75,24 +93,56 @@ function poolNote(eggType: string, adventureSync: number, gift: number): string 
         </div>
       ) : (
         pools.map((group) => {
+          const count = group.items.length;
           const adventureSync = group.items.filter((egg) => egg.isAdventureSync).length;
           const gift = group.items.filter((egg) => egg.isGiftExchange).length;
           const shiny = group.items.filter((egg) => egg.canBeShiny).length;
           const note = poolNote(group.key, adventureSync, gift);
+
+          // A mark that says the same thing on every card in a pool is not a
+          // mark, it is wallpaper. Where a pool agrees with itself, the head
+          // says it once and the cards drop the dots and the shiny badge.
+          const tiers = new Set(group.items.map(rarityOf));
+          const uniformRarity = tiers.size === 1;
+          const tier = [...tiers][0];
+          const uniformShiny = shiny === count || shiny === 0;
+
+          const shinyLine =
+            shiny === count
+              ? `All ${count} can be shiny.`
+              : shiny === 0
+                ? 'None of these can be shiny yet.'
+                : `${shiny} of these can be shiny, marked on the card.`;
+          const rarityLine = !uniformRarity
+            ? 'The dots are Leek Duck’s own rarity tier within this pool, shown as published.'
+            : tier > 0
+              ? `Every species here is Leek Duck’s rarity tier ${tier} of ${RARITY_MAX}.`
+              : 'Leek Duck publishes no rarity tier for this pool.';
+
           const id = `pool-${slugifyLabel(group.key)}`;
+          const headingId = `${id}-name`;
+          const km = /(\d+)/.exec(group.key)?.[1] ?? '?';
 
           return (
-            <section class="g-section" aria-labelledby={id}>
-              <div class="g-section-head">
-                <h2 id={id}>{group.key} eggs</h2>
-                <span class="g-count">
-                  {group.items.length} species · {shiny} can be shiny
-                </span>
-                {note && <p class="g-section-note">{note}</p>}
+            <section class="panel g-section" id={id} aria-labelledby={headingId}>
+              <div class="panel-head g-section-head">
+                <div class="post g-pool">
+                  <span class="disc" aria-hidden="true">
+                    {km}
+                  </span>
+                  <div class="g-post-body">
+                    <h2 id={headingId}>{group.key} eggs</h2>
+                    {note && <p class="g-note">{note}</p>}
+                    <p class="g-note">
+                      {shinyLine} {rarityLine}
+                    </p>
+                  </div>
+                </div>
+                <span class="g-count">{count} species</span>
               </div>
               <ul class="g-grid">
                 {group.items.map((egg) => (
-                  <EggCard egg={egg} />
+                  <EggCard egg={egg} showRarity={!uniformRarity} showShiny={!uniformShiny} />
                 ))}
               </ul>
             </section>
@@ -101,27 +151,10 @@ function poolNote(eggType: string, adventureSync: number, gift: number): string 
       )
     }
 
-    <p class="g-legend">
-      The dots on each card are Leek Duck's own rarity tier for that species within its pool, shown
-      as published rather than relabelled.
-    </p>
-
-    <p class="g-related">
-      Also live: <a href="/raids">raid bosses</a> and <a href="/research">field research</a>.
+    <p class="g-map-link">
+      <a class="btn btn--ghost btn--arrow" href="/map">Find a walking loop on the park map</a>
     </p>
 
     <Attribution />
   </div>
 </Base>
-
-<style>
-  .g-legend,
-  .g-related {
-    margin-top: 24px;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-  }
-  .g-related {
-    margin-top: 8px;
-  }
-</style>

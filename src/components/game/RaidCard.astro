@@ -4,10 +4,15 @@
  *
  * Renders as an <li> because the grids on /raids are real lists — a screen
  * reader should hear "list, 6 items" before wading through the bosses.
+ *
+ * Every image here goes through our own proxy. The boss art and the weather
+ * icons were hotlinked straight from Leek Duck's CDN, which is their bandwidth
+ * on our page and a broken image the day they add hotlink protection.
  */
 import './game.css';
 import ShinyMark from './ShinyMark.astro';
 import TypeChips from './TypeChips.astro';
+import { proxiedImageUrl } from '~/lib/game-image';
 import { formatCp, type RaidBoss } from '~/lib/scrapedduck';
 
 interface Props {
@@ -16,45 +21,47 @@ interface Props {
 
 const { boss } = Astro.props;
 
-const weather = boss.boostedWeather ?? [];
+const art = proxiedImageUrl(boss.image);
+const weather = (boss.boostedWeather ?? []).map((w) => ({
+  name: w.name,
+  image: proxiedImageUrl(w.image),
+}));
 const weatherNames = weather.map((w) => w.name).join(', ');
 ---
 
-<li class="g-card" data-shiny={boss.canBeShiny ? 'true' : 'false'}>
+<li class="card g-card" data-shiny={boss.canBeShiny ? 'true' : 'false'}>
   <div class="g-card-top">
     <h3 class="g-card-name">{boss.name}</h3>
     {boss.canBeShiny && <ShinyMark />}
   </div>
 
-  <img
-    class="g-art"
-    src={boss.image}
-    alt={boss.name}
-    width="96"
-    height="96"
-    loading="lazy"
-    decoding="async"
-  />
+  {/* alt="" — the boss's name is the heading directly above it. Art the proxy
+      cannot resolve leaves the empty 96px tile, so the card never reflows. */}
+  {
+    art ? (
+      <img class="g-art" src={art} alt="" width="96" height="96" loading="lazy" decoding="async" />
+    ) : (
+      <span class="g-art" aria-hidden="true" />
+    )
+  }
 
   <TypeChips types={boss.types ?? []} label={`${boss.name} types`} />
 
-  <dl class="g-card-facts">
-    <div class="g-fact">
-      <dt>Catch CP</dt>
-      <dd>{formatCp(boss.combatPower?.normal)}</dd>
-    </div>
-    <div class="g-fact g-fact--boosted">
-      <dt>Weather boosted</dt>
-      <dd>{formatCp(boss.combatPower?.boosted)}</dd>
-    </div>
+  <dl class="g-facts">
+    <dt>Catch CP</dt>
+    <dd>{formatCp(boss.combatPower?.normal)}</dd>
+    <dt>Weather boosted</dt>
+    <dd>{formatCp(boss.combatPower?.boosted)}</dd>
   </dl>
 
   {
     weather.length > 0 && (
-      <ul class="g-chips" aria-label={`Boosted in ${weatherNames}`}>
+      <ul class="g-badges" aria-label={`Boosted in ${weatherNames}`}>
         {weather.map((w) => (
-          <li class="g-chip">
-            <img src={w.image} alt="" width="16" height="16" loading="lazy" decoding="async" />
+          <li class="badge">
+            {w.image && (
+              <img src={w.image} alt="" width="16" height="16" loading="lazy" decoding="async" />
+            )}
             {w.name}
           </li>
         ))}

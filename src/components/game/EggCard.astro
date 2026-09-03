@@ -5,16 +5,28 @@
  * Hatch CP is fixed at level 20, so the min/max here is the entire spread you
  * can get — worth showing, because it is how you spot a hundo before you power
  * anything up.
+ *
+ * A pool where every species shares the same rarity tier, or where every one of
+ * them can be shiny, says so once in its panel head instead of printing the
+ * same mark on twenty-seven cards: `showRarity` and `showShiny` are how the
+ * page turns those off.
  */
 import './game.css';
 import ShinyMark from './ShinyMark.astro';
+import { proxiedImageUrl } from '~/lib/game-image';
 import { formatCp, type EggEntry } from '~/lib/scrapedduck';
 
 interface Props {
   egg: EggEntry;
+  /** False when the whole pool shares one rarity tier and the head says so. */
+  showRarity?: boolean;
+  /** False when every species in the pool has the same shiny answer. */
+  showShiny?: boolean;
 }
 
-const { egg } = Astro.props;
+const { egg, showRarity = true, showShiny = true } = Astro.props;
+
+const art = proxiedImageUrl(egg.image);
 
 const flags = [
   egg.isAdventureSync && 'Adventure Sync',
@@ -34,42 +46,47 @@ const rarity = Number.isFinite(egg.rarity)
 const dots = Array.from({ length: RARITY_MAX }, (_, i) => i < rarity);
 ---
 
-<li class="g-card" data-shiny={egg.canBeShiny ? 'true' : 'false'}>
+<li class="card g-card" data-shiny={egg.canBeShiny ? 'true' : 'false'}>
   <div class="g-card-top">
     <h3 class="g-card-name">{egg.name}</h3>
-    {egg.canBeShiny && <ShinyMark />}
+    {showShiny && egg.canBeShiny && <ShinyMark />}
   </div>
 
-  <img
-    class="g-art"
-    src={egg.image}
-    alt={egg.name}
-    width="96"
-    height="96"
-    loading="lazy"
-    decoding="async"
-  />
+  {/* alt="" — the species name is the heading directly above it. */}
+  {
+    art ? (
+      <img class="g-art" src={art} alt="" width="96" height="96" loading="lazy" decoding="async" />
+    ) : (
+      <span class="g-art" aria-hidden="true" />
+    )
+  }
 
-  <dl class="g-card-facts">
-    <div class="g-fact">
-      <dt>Hatch CP</dt>
-      <dd>{formatCp(egg.combatPower)}</dd>
-    </div>
-    <div class="g-fact">
-      <dt>Rarity tier</dt>
-      <dd>
-        <span class="g-rarity" role="img" aria-label={`Leek Duck rarity tier ${rarity} of ${RARITY_MAX}`}>
-          {dots.map((on) => <span class:list={[on && 'is-on']}></span>)}
-        </span>
-      </dd>
-    </div>
+  <dl class="g-facts">
+    <dt>Hatch CP</dt>
+    <dd>{formatCp(egg.combatPower)}</dd>
+    {showRarity && <dt>Rarity tier</dt>}
+    {
+      showRarity && (
+        <dd>
+          <span
+            class="g-rarity"
+            role="img"
+            aria-label={`Leek Duck rarity tier ${rarity} of ${RARITY_MAX}`}
+          >
+            {dots.map((on) => (
+              <span class:list={[on && 'is-on']} />
+            ))}
+          </span>
+        </dd>
+      )
+    }
   </dl>
 
   {
     flags.length > 0 && (
-      <ul class="g-chips" aria-label={`${egg.name} notes`}>
+      <ul class="g-badges" aria-label={`${egg.name} notes`}>
         {flags.map((flag) => (
-          <li class="g-chip g-chip--flag">{flag}</li>
+          <li class="badge">{flag}</li>
         ))}
       </ul>
     )

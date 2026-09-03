@@ -1,26 +1,49 @@
 ---
 /**
- * Raid tier badge.
+ * A tier's head on the raid ladder: the numbered post that opens its panel.
  *
- * `data-tier` carries the slugified upstream string so the stylesheet can key
- * colour off it with prefix selectors — a tier we have never seen still renders
- * correctly, just in the default accent.
+ * The disc carries the tier's own key — the star count — and the word sits
+ * beside it, with the tier's local note as the lede underneath. The weight of a
+ * tier is drawn in ink rather than in colour: 1★ and 3★ are outlined discs,
+ * 5★ / Mega / Shadow are filled. The old version mapped tiers onto four map
+ * tokens (`--poi-*`, `--team-valor`), which gave the ladder no direction and
+ * borrowed meanings from a legend on another page.
+ *
+ * `data-tier` carries the slugified upstream string, so a tier nobody has seen
+ * before still renders — with its first letter in the disc when it has no star
+ * count of its own.
  */
 import './game.css';
 import { slugifyLabel } from '~/lib/scrapedduck';
 
 interface Props {
   tier: string;
-  /** Drop the trailing "Raids" — right inside a card, wrong as a page heading. */
-  short?: boolean;
+  /** The id the panel's `aria-labelledby` points at. */
+  headingId: string;
+  /** Local, practical context for this tier. */
+  note?: string | null;
 }
 
-const { tier, short = true } = Astro.props;
+const { tier, headingId, note = null } = Astro.props;
 
-const label = short ? tier.replace(/\s*raids?\s*$/i, '').trim() || tier : tier;
+const lower = tier.toLowerCase();
+const stars = /(\d+)[\s-]*star/.exec(lower);
+
+// The number when the tier has one, otherwise its initial — "M" for Mega. Both
+// are keys to the word beside them, never decoration.
+const key = stars ? stars[1] : tier.trim().charAt(0).toUpperCase();
+
+// Filled means "bring people": four stars and up, every named legendary tier,
+// and anything Shadow.
+const heavy =
+  (stars ? Number(stars[1]) >= 4 : false) ||
+  /mega|primal|elite|ultra|legendary|shadow/.test(lower);
 ---
 
-<span class="g-tier" data-tier={slugifyLabel(tier)}>
-  <span class="g-tier-dot" aria-hidden="true"></span>
-  {label}
-</span>
+<div class="post g-tier" data-tier={slugifyLabel(tier)}>
+  <span class:list={['disc', heavy && 'is-heavy']} aria-hidden="true">{key}</span>
+  <div class="g-post-body">
+    <h2 id={headingId}>{tier}</h2>
+    {note && <p class="g-note">{note}</p>}
+  </div>
+</div>

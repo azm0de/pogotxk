@@ -1,11 +1,16 @@
 ---
 /**
- * Current raid bosses, grouped by tier.
+ * Current raid bosses, as a ladder: hardest tier first.
  *
  * Server-rendered from the KV-cached ScrapedDuck feed so the page is useful on
  * a phone with one bar of signal at Spring Lake Park — no client fetch, no
  * spinner. The only script is the shiny filter, and the page is complete
  * without it.
+ *
+ * The page used to open on a 375px-tall slab of Niantic key art that put the
+ * 5-star tier at y=2169 — past two screenfuls of scrolling to reach the one
+ * tier anybody plans an evening around. It now opens on its own heading, and
+ * the jump row puts every tier one tap from the top.
  */
 import Base from '~/layouts/Base.astro';
 import Attribution from '~/components/game/Attribution.astro';
@@ -25,9 +30,42 @@ const feed = await getFeed('raids', {
   waitUntil: cfContext ? (promise) => cfContext.waitUntil(promise) : undefined,
 });
 
-const tiers = groupSorted(feed.data, (boss) => boss.tier, raidTierRank);
+/**
+ * Ladder order: hardest first.
+ *
+ * `raidTierRank` ranks tiers the way a list of them is written down — 1-star up
+ * to Elite, Shadow after everything — and that is the order nobody reads them
+ * in. A raid hour is planned from the legendary tier down, so the ladder leads
+ * with 5-star, then Mega and its named relatives, then anything unrecognised
+ * (Niantic names a new tier most seasons), then the soloable tiers counting
+ * down. A Shadow variant sorts immediately above its plain sibling.
+ */
+function ladderRank(tier: string): number {
+  const rank = raidTierRank(tier);
+  const shadow = rank >= 1000;
+  const base = shadow ? rank - 1000 : rank;
+  const lead = shadow ? -0.5 : 0;
+
+  if (base >= 4 && base < 100) return -base + lead; // 6-star, 5-star, 4-star
+  if (base >= 100 && base < 900) return 100 + base + lead; // Mega, Primal, Elite
+  if (base >= 900) return 500 + lead; // a tier we have never seen
+  return 1000 - base + lead; // 3-star, 2-star, 1-star
+}
+
+const ladder = groupSorted(feed.data, (boss) => boss.tier, ladderRank);
 const total = feed.data.length;
 const shinyCount = feed.data.filter((boss) => boss.canBeShiny).length;
+
+/**
+ * The filter only earns its place when it would actually remove something.
+ * Right now every boss in rotation can be shiny, so a "shiny-eligible only"
+ * button would be a control that does nothing — the count says it instead.
+ */
+const filterChangesSomething = shinyCount > 0 && shinyCount < total;
+const shinyLine =
+  shinyCount === total
+    ? `All ${total} bosses in rotation can be shiny.`
+    : `None of the ${total} bosses in rotation can be shiny right now.`;
 
 /** Local, practical context per tier — the part a boss list alone does not tell you. */
 function tierNote(tier: string): string | null {
@@ -41,6 +79,11 @@ function tierNote(tier: string): string | null {
     return 'Legendary tier. Raid trains and remote invites get organised in the Discord.';
   return null;
 }
+
+/** "5-Star Raids" -> "5-Star", for the jump chips. */
+function shortTier(tier: string): string {
+  return tier.replace(/\s*raids?\s*$/i, '').trim() || tier;
+}
 ---
 
 <Base
@@ -48,39 +91,17 @@ function tierNote(tier: string): string | null {
   description="Every current Pokémon GO raid boss by tier, with catch CP, weather-boosted CP, type matchups, and shiny availability — for the PoGo TXK community in Texarkana."
 >
   <div class="g-page">
-    <header class="raids-hero">
-      {/*
-        Decorative: the `h1` beside it already says what this is, and describing
-        a crowd of trainers fighting a Gigantamax Pokémon tells a screen-reader
-        user nothing about the boss list below.
-
-        1600x900 is the whole source and the card caps at 1116px, so the widest
-        variant is the most any layout can ask for. 217KB of JPEG became 190KB
-        of WebP at full width, and 61KB at 640 — which is the one phones get.
-      */}
-      <picture class="raids-hero-art">
-        <img
-          src="/hero/raid-battle-1600.webp"
-          srcset="/hero/raid-battle-640.webp 640w, /hero/raid-battle-960.webp 960w, /hero/raid-battle-1280.webp 1280w, /hero/raid-battle-1600.webp 1600w"
-          sizes="(min-width: 1244px) 1116px, calc(100vw - 28px)"
-          width="1600"
-          height="900"
-          alt=""
-          decoding="async"
-        />
-      </picture>
-
-      <h1>Current raid bosses</h1>
-      <p class="raids-lede">
-        Every boss in rotation right now, grouped by tier, with the CP you will see on the catch
+    <header class="g-head">
+      <div class="panel-head">
+        <h1>Current raid bosses</h1>
+        {total > 0 && <span class="g-count">{total} in rotation</span>}
+      </div>
+      <p class="g-lede">
+        Every boss in rotation right now, hardest tier first, with the CP you will see on the catch
         screen and the weather that boosts it.
       </p>
-
+      <GameNav />
     </header>
-
-    {/* Below the card rather than inside it: these are opaque panel chips, and
-        floating them over artwork this busy reads as clutter. */}
-    <div class="raids-nav"><GameNav /></div>
 
     <FeedStatus
       fetchedAt={feed.fetchedAt}
@@ -90,21 +111,50 @@ function tierNote(tier: string): string | null {
     />
 
     {
-      total > 0 && (
-        <div class="g-toolbar" id="raid-toolbar" hidden>
-          <button type="button" class="g-toggle" id="shiny-toggle" aria-pressed="false">
-            Shiny-eligible only
-          </button>
-          <p class="g-count" id="raid-filter-status" role="status">
-            Showing all {total} bosses · {shinyCount} can be shiny
-          </p>
-        </div>
+      ladder.length > 1 && (
+        <nav class="g-jump" aria-label="Jump to a tier">
+          <ul>
+            {ladder.map((group) => {
+              const id = `tier-${slugifyLabel(group.key)}`;
+              const short = shortTier(group.key);
+              const count = group.items.length;
+              return (
+                <li data-jump-for={id}>
+                  <a
+                    class="chip"
+                    href={`#${id}`}
+                    aria-label={`${short}, ${count} ${count === 1 ? 'boss' : 'bosses'}`}
+                  >
+                    {short}
+                    <span class="g-jump-n">{count}</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
       )
     }
 
     {
+      total > 0 &&
+        (filterChangesSomething ? (
+          <div class="g-toolbar" id="raid-toolbar" hidden>
+            <button type="button" class="chip" id="shiny-toggle" aria-pressed="false">
+              Shiny-eligible only
+            </button>
+            <p class="g-count" id="raid-filter-status" role="status">
+              Showing all {total} bosses · {shinyCount} can be shiny
+            </p>
+          </div>
+        ) : (
+          <p class="g-count g-summary">{shinyLine}</p>
+        ))
+    }
+
+    {
       total === 0 ? (
-        <div class="g-empty">
+        <div class="empty-state g-empty">
           <h2>No raid list right now</h2>
           <p>
             We could not reach the live boss list and have nothing saved to fall back on. Try again
@@ -113,18 +163,16 @@ function tierNote(tier: string): string | null {
           </p>
         </div>
       ) : (
-        tiers.map((group) => {
-          const note = tierNote(group.key);
+        ladder.map((group) => {
+          const id = `tier-${slugifyLabel(group.key)}`;
+          const headingId = `${id}-name`;
           return (
-            <section class="g-section" data-tier-section aria-labelledby={`tier-${slugifyLabel(group.key)}`}>
-              <div class="g-section-head">
-                <h2 id={`tier-${slugifyLabel(group.key)}`}>
-                  <TierBadge tier={group.key} short={false} />
-                </h2>
-                <span class="g-count">
+            <section class="panel g-section" id={id} data-tier-section aria-labelledby={headingId}>
+              <div class="panel-head g-section-head">
+                <TierBadge tier={group.key} headingId={headingId} note={tierNote(group.key)} />
+                <span class="g-count" data-tier-count>
                   {group.items.length} {group.items.length === 1 ? 'boss' : 'bosses'}
                 </span>
-                {note && <p class="g-section-note">{note}</p>}
               </div>
               <ul class="g-grid">
                 {group.items.map((boss) => (
@@ -137,181 +185,20 @@ function tierNote(tier: string): string | null {
       )
     }
 
-    <p class="g-related">
-      Also live: <a href="/eggs">egg pools</a> and <a href="/research">field research</a>.
+    <p class="g-map-link">
+      <a class="btn btn--ghost btn--arrow" href="/map">Find these gyms on the park map</a>
     </p>
 
     <Attribution />
   </div>
 </Base>
 
-<style>
-  /* --- the hero card -------------------------------------------------------
-   *
-   * Built the same way as the events hero, deliberately: art at z-index −2,
-   * scrim at −1, and `isolation: isolate` so neither escapes to the root
-   * stacking context and paints behind the page itself.
-   *
-   * This replaces `.g-head`, which is still what /eggs and /research use — so
-   * the type styling `.g-head h1` was providing is restated below rather than
-   * inherited.
-   */
-  .raids-hero {
-    position: relative;
-    isolation: isolate;
-    overflow: hidden;
-    border-radius: var(--radius-lg);
-    /* Symmetric now. The bottom was the short side because the credit line sat
-       in it; with that gone an uneven pad just reads as the text having slipped
-       upward. */
-    padding: clamp(22px, 5vw, 42px) clamp(16px, 4vw, 30px);
-    color: #fff;
-    /* Bottom, not centred. Centred text sits in the middle of the picture and
-       competes with it; along the bottom edge it reads as a caption and lets
-       the artwork be the artwork. Justin's call, and it also puts the copy
-       where the scrim below is anchored, so the two agree. */
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-  }
-
-  /* Taller from 760px up, so more of the artwork survives the crop.
-     At 380px the card showed 60% of the image; 520px got that to 80-83%.
-     Raised again on request to show more of the scene: the source is 16:9 and
-     the card caps at 1116px wide, so at full width the image is 628px tall and
-     600px shows ~96% of it — near the ceiling, since past 628px the crop turns
-     horizontal instead and starts cutting the trainers off the sides.
-     Measured on the rendered page, not derived — 600px is the cap because the
-     nav/toolbar under the card has to stay in view, and it does at every size
-     tested: 1920x1080 shows 366px of it, 1440x900 186px, 1280x800 123px,
-     1024x768 203px, 390x844 581px. 1280x800 is the tightest and is what stops
-     this going further. */
-  @media (min-width: 760px) {
-    .raids-hero {
-      min-height: clamp(360px, 44vw, 600px);
-    }
-  }
-
-  .raids-hero-art {
-    display: block;
-    position: absolute;
-    inset: 0;
-    z-index: -2;
-  }
-  .raids-hero-art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    /* 38% keeps the Gigantamax Pokémon's head and the trainers below it inside
-       the band; centre would cut the head off at the top. */
-    object-position: center 38%;
-  }
-
-  /*
-   * Dark only along the bottom, where the words now are.
-   *
-   * The text used to be vertically centred with a left-heavy horizontal scrim,
-   * because the copy occupied the leftmost ~546px whatever the card's width.
-   * Justin asked for the text moved to the foot of the image and the tint
-   * reduced: floating in the middle competes with the artwork it is sitting on,
-   * where along the bottom edge it reads as a caption and leaves the picture
-   * to be a picture.
-   *
-   * With the copy at the bottom, an x-axis gradient is darkening the wrong
-   * axis, so this is a plain vertical one anchored to the bottom edge.
-   *
-   * Stops in PIXELS FROM THE BOTTOM rather than percentages, which is the same
-   * trick the old horizontal version used and it earns its keep twice:
-   *
-   *   - On a tall desktop card (up to 600px) only the lowest ~300px is
-   *     meaningfully tinted, so the top half of the artwork comes out from
-   *     under the black entirely. That is the "shrink the overlay" half.
-   *   - On a phone the card has no min-height and collapses to roughly 200px of
-   *     content, which sits inside the plateau, so it stays as dark as it
-   *     always was. A percentage gradient would have gone light exactly where
-   *     the card is shortest and the text covers all of it.
-   *
-   * The plateau runs to 160px because that is what the heading plus a two-line
-   * lede occupies above the bottom padding; the falloff to 300px is the
-   * dissolve, and above that the image is essentially clear.
-   *
-   * Measured, not chosen — see hero-contrast, which samples the real composited
-   * screenshot under the text's own line boxes (not the h1's full-width block,
-   * which spans bright image where no glyph ever lands). Worst case over
-   * 1920/1440/1280/1024/760/390 is recorded in the commit; the previous design
-   * floored at 6.52 and this must not go under 4.5.
-   */
-  .raids-hero::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: linear-gradient(
-      to top,
-      rgb(6 8 12 / 0.66) 0px,
-      rgb(6 8 12 / 0.62) 160px,
-      rgb(6 8 12 / 0.20) 300px,
-      rgb(6 8 12 / 0.04) 100%
-    );
-  }
-
-  /*
-   * Phones keep the heavier tint, and that is not an oversight.
-   *
-   * Below 760px the card has no min-height, so it collapses to its content and
-   * the copy covers essentially all of it — there is no top half of a
-   * photograph to uncover, which is the entire thing the lighter ramp buys.
-   * What the lighter ramp does cost there is real: measured against the actual
-   * artwork the lede fell from 7.15:1 to 5.49:1 on /raids. Both clear AA, but
-   * spending legibility on a phone to reveal an image the text is already
-   * sitting on top of is a bad trade, and phones are most of this audience.
-   *
-   * So the reduction lands where the complaint actually was — the large desktop
-   * cards, where more than half the picture was under black for no reason.
-   */
-  @media (max-width: 759px) {
-    .raids-hero::before {
-      background: linear-gradient(
-        to top,
-        rgb(6 8 12 / 0.74) 0px,
-        rgb(6 8 12 / 0.70) 100%
-      );
-    }
-  }
-
-  .raids-hero h1 {
-    margin: 0 0 6px;
-    font-size: clamp(1.7rem, 4vw, 2.3rem);
-    color: #fff;
-  }
-  .raids-lede {
-    margin: 0;
-    max-width: 62ch;
-    color: rgb(255 255 255 / 0.92);
-  }
-  /* Carries the gap `.g-head`'s own margin-bottom used to provide. */
-  .raids-nav {
-    margin-bottom: 22px;
-  }
-
-  /* The tier name is the heading; the badge inside it carries the colour, so
-     the heading itself needs no extra type styling. */
-  .g-page :global(.g-section-head h2) {
-    font-size: 1rem;
-  }
-
-  .g-related {
-    margin-top: 28px;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-  }
-</style>
-
 <script>
   /*
    * Shiny filter. Rendered `hidden` and revealed here so the control never
    * appears for a reader who has no JavaScript to run it — without this script
-   * the page is simply the full, unfiltered list.
+   * the page is simply the full, unfiltered list. The page only renders the
+   * toolbar at all when filtering would change what is on screen.
    */
   const toolbar = document.getElementById('raid-toolbar');
   const toggle = document.getElementById('shiny-toggle');
@@ -333,9 +220,17 @@ function tierNote(tier: string): string | null {
         if (visible) shown += 1;
       }
 
-      // A tier whose whole grid just emptied should take its heading with it.
+      // A tier whose whole grid just emptied should take its heading with it —
+      // and its jump chip, which would otherwise point at nothing. A tier that
+      // kept some of its bosses recounts, so its head never claims six above
+      // two cards.
       for (const section of sections) {
-        section.hidden = section.querySelector('.g-card:not([hidden])') === null;
+        const left = section.querySelectorAll('.g-card:not([hidden])').length;
+        section.hidden = left === 0;
+        const jump = document.querySelector<HTMLElement>(`[data-jump-for="${section.id}"]`);
+        if (jump) jump.hidden = left === 0;
+        const count = section.querySelector<HTMLElement>('[data-tier-count]');
+        if (count) count.textContent = `${left} ${left === 1 ? 'boss' : 'bosses'}`;
       }
 
       status.textContent = shinyOnly

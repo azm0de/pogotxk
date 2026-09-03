@@ -2,23 +2,25 @@
 /**
  * Shiny-eligible indicator.
  *
- * The sparkle is decorative; the meaning lives in the visually-hidden text so a
- * screen reader announces "Shiny available" rather than a bare image.
+ * It used to be a sparkle in `--poi-campsite` at 2.08:1 with the meaning hidden
+ * in `sr-only` text — the only carrier of "shiny" on the card, in a colour
+ * nobody could see. It is now a printed badge: the word, the sparkle beside it,
+ * and ink contrast in both themes.
  */
 import './game.css';
 
 interface Props {
+  /** The visible word. "Shiny" everywhere unless a card needs to say more. */
   label?: string;
-  size?: number;
 }
 
-const { label = 'Shiny available', size = 15 } = Astro.props;
+const { label = 'Shiny' } = Astro.props;
 ---
 
-<span class="g-shiny">
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+<span class="badge badge--outline g-shiny">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M11 1.6l1.7 5 5 1.7-5 1.7-1.7 5-1.7-5-5-1.7 5-1.7z"></path>
     <path d="M18.4 13.2l.9 2.5 2.5.9-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9z" opacity="0.85"></path>
   </svg>
-  <span class="sr-only">{label}</span>
+  {label}
 </span>

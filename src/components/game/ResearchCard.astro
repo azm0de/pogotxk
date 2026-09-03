@@ -4,10 +4,11 @@
  *
  * Upstream ships the task text as a fragment of Leek Duck's markup, so it goes
  * through `stripTags` before Astro escapes it — we render their words, never
- * their HTML.
+ * their HTML. The reward art goes through our proxy rather than their CDN.
  */
 import './game.css';
 import ShinyMark from './ShinyMark.astro';
+import { proxiedImageUrl } from '~/lib/game-image';
 import { formatCp, stripTags, type ResearchTask } from '~/lib/scrapedduck';
 
 interface Props {
@@ -17,34 +18,40 @@ interface Props {
 const { task } = Astro.props;
 
 const text = stripTags(task.text);
-const rewards = task.rewards ?? [];
+const rewards = (task.rewards ?? []).map((reward) => ({
+  ...reward,
+  image: proxiedImageUrl(reward.image),
+}));
 const anyShiny = rewards.some((reward) => reward.canBeShiny);
 ---
 
-<li class="g-card" data-shiny={anyShiny ? 'true' : 'false'}>
+<li class="card g-card" data-shiny={anyShiny ? 'true' : 'false'}>
   <div class="g-card-top">
     <h3 class="g-card-name">{text}</h3>
-    {anyShiny && <ShinyMark label="Shiny possible from this task" />}
+    {anyShiny && <ShinyMark label="Shiny reward" />}
   </div>
 
-  <ul class="g-chips" aria-label={`Rewards for ${text}`}>
+  <ul class="g-rewards" aria-label={`Rewards for ${text}`}>
     {
       rewards.map((reward) => (
         <li class="g-reward">
-          <img
-            class="g-art g-art--sm"
-            src={reward.image}
-            alt={reward.name}
-            width="56"
-            height="56"
-            loading="lazy"
-            decoding="async"
-          />
-          <span class="g-reward-name">
-            {reward.name}
-            {reward.canBeShiny && <ShinyMark size={12} />}
-          </span>
+          {/* alt="" — the reward's name is printed directly under it. */}
+          {reward.image ? (
+            <img
+              class="g-art g-art--sm"
+              src={reward.image}
+              alt=""
+              width="56"
+              height="56"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <span class="g-art g-art--sm" aria-hidden="true" />
+          )}
+          <span class="g-reward-name">{reward.name}</span>
           <span class="g-reward-cp">CP {formatCp(reward.combatPower)}</span>
+          {reward.canBeShiny && <ShinyMark />}
         </li>
       ))
     }
@@ -55,35 +62,45 @@ const anyShiny = rewards.some((reward) => reward.canBeShiny);
 
 <style>
   /* Reward tiles are specific to this card, so they stay scoped here rather
-     than growing the shared sheet. */
+     than growing the shared sheet. Nothing in this block is a primitive name. */
+  .g-rewards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
   .g-reward {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    width: 84px;
-    padding: 6px 4px;
+    gap: var(--space-1);
+    width: 108px;
+    min-width: 0;
+    padding: var(--space-2) var(--space-1);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--bg-sunken);
     text-align: center;
   }
+  /* Was 11.5px, under the readable floor for a name somebody is matching
+     against a game screen in sunlight. */
   .g-reward-name {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    line-height: 1.2;
+    min-width: 0;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    line-height: var(--lh-ui);
   }
   .g-reward-cp {
     color: var(--text-muted);
-    font-size: 0.68rem;
+    font-family: var(--font-sign);
+    font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
   }
   .g-reward-none {
     margin: 0;
     color: var(--text-muted);
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
   }
 </style>

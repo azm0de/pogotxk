@@ -6,6 +6,9 @@
  * know "which task should I keep" and the answer depends on what they can
  * actually do while walking a loop — throwing tasks are trivial, Rocket tasks
  * are not.
+ *
+ * Same architecture as /raids and /eggs: a running head, the freshness line,
+ * then one panel per category.
  */
 import Base from '~/layouts/Base.astro';
 import Attribution from '~/components/game/Attribution.astro';
@@ -44,8 +47,11 @@ const shinyTasks = feed.data.filter((task) =>
 >
   <div class="g-page">
     <header class="g-head">
-      <h1>Field research</h1>
-      <p>
+      <div class="panel-head">
+        <h1>Field research</h1>
+        {total > 0 && <span class="g-count">{total} tasks</span>}
+      </div>
+      <p class="g-lede">
         Tasks currently dropping from PokéStops, grouped by what they ask you to do. Each card
         lists every possible encounter, its CP range at the fixed research level, and whether the
         shiny is available.
@@ -70,7 +76,7 @@ const shinyTasks = feed.data.filter((task) =>
 
     {
       total === 0 ? (
-        <div class="g-empty">
+        <div class="empty-state g-empty">
           <h2>No research list right now</h2>
           <p>
             We could not reach the live research data and have nothing saved to fall back on. Try
@@ -81,12 +87,14 @@ const shinyTasks = feed.data.filter((task) =>
       ) : (
         categories.map((group) => {
           const id = `task-${slugifyLabel(group.key)}`;
+          const headingId = `${id}-name`;
+          const count = group.items.length;
           return (
-            <section class="g-section" aria-labelledby={id}>
-              <div class="g-section-head">
-                <h2 id={id}>{researchCategoryLabel(group.key)}</h2>
+            <section class="panel g-section" id={id} aria-labelledby={headingId}>
+              <div class="panel-head g-section-head">
+                <h2 id={headingId}>{researchCategoryLabel(group.key)}</h2>
                 <span class="g-count">
-                  {group.items.length} {group.items.length === 1 ? 'task' : 'tasks'}
+                  {count} {count === 1 ? 'task' : 'tasks'}
                 </span>
               </div>
               <ul class="g-grid g-grid--wide">
@@ -100,21 +108,10 @@ const shinyTasks = feed.data.filter((task) =>
       )
     }
 
-    <p class="g-related">
-      Also live: <a href="/raids">raid bosses</a> and <a href="/eggs">egg pools</a>.
+    <p class="g-map-link">
+      <a class="btn btn--ghost btn--arrow" href="/map">Find these PokéStops on the park map</a>
     </p>
 
     <Attribution />
   </div>
 </Base>
-
-<style>
-  .g-summary {
-    margin: 12px 0 0;
-  }
-  .g-related {
-    margin-top: 28px;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-  }
-</style>

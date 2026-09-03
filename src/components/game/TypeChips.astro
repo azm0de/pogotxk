@@ -1,10 +1,16 @@
 ---
 /**
- * Pokémon type chips.
+ * Pokémon type badges.
  *
- * The icons are hotlinked from leekduck.com — they are the licensed source and
- * the attribution block credits them — with explicit dimensions so a slow icon
- * never reflows the card underneath it.
+ * Each type used to be a chip tinted 15% with its own hue, which made all
+ * eighteen the same pale wash and put the type name on a background that
+ * shifted under it. A type now reads as its word at full ink contrast with the
+ * hue as a 10px dot beside it — the arrangement that survives greyscale, colour
+ * blindness and sunlight.
+ *
+ * That also retires the last hotlink here: the type icons came straight from
+ * leekduck.com on every card. The dot replaces them, so the page asks their CDN
+ * for nothing at all.
  */
 import './game.css';
 import type { NamedImage } from '~/lib/scrapedduck';
@@ -19,11 +25,10 @@ const { types, label = 'Types' } = Astro.props;
 
 {
   types.length > 0 && (
-    <ul class="g-chips" aria-label={label}>
+    <ul class="g-badges" aria-label={label}>
       {types.map((type) => (
-        <li class="g-chip g-chip--type" data-type={type.name.toLowerCase()}>
-          {/* alt="" — the type name is right there as text. */}
-          <img src={type.image} alt="" width="16" height="16" loading="lazy" decoding="async" />
+        <li class="badge badge--outline g-type" data-type={type.name.toLowerCase()}>
+          <span class="g-type-dot" aria-hidden="true" />
           {type.name}
         </li>
       ))}
