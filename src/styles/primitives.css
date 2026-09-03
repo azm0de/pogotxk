@@ -41,7 +41,7 @@
     padding: var(--btn-pad-block, var(--space-3)) var(--btn-pad-inline, var(--space-5));
     border: 2px solid transparent;
     border-radius: var(--btn-radius, var(--radius-sm));
-    font-family: var(--font);
+    font-family: var(--font-read);
     font-size: var(--text-base);
     font-weight: 700;
     line-height: var(--lh-ui);
@@ -113,7 +113,20 @@
     transition: transform var(--dur-1) var(--ease-out);
   }
   .btn--arrow:hover::after {
-    transform: translateX(2px);
+    transform: var(--nudge);
+  }
+  /* The same arrow pointing back, for "Newer" / "All news" style returns. */
+  .btn--arrow-back::before {
+    content: '';
+    flex: none;
+    width: 1em;
+    height: 1em;
+    background: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12H5'/%3E%3Cpath d='M11 6l-6 6 6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform var(--dur-1) var(--ease-out);
+  }
+  .btn--arrow-back:hover::before {
+    transform: var(--nudge-back);
   }
 
   /* ------------------------------------------------------- 24px targets -- */
@@ -123,6 +136,12 @@
   .target {
     display: inline-block;
     padding-block: 5px;
+    margin-block: -5px;
+  }
+  /* A badge that is also a link: keep the badge's own padding and grow the hit
+     area with margin-compensated padding on top of it. */
+  .badge.target {
+    padding-block: calc(2px + 5px);
     margin-block: -5px;
   }
 
@@ -183,8 +202,8 @@
   .disc {
     display: inline-grid;
     place-items: center;
-    width: 32px;
-    height: 32px;
+    width: var(--disc-size, 32px);
+    height: var(--disc-size, 32px);
     border-radius: 50%;
     border: 2px solid var(--text);
     background: var(--bg-panel);
@@ -283,7 +302,8 @@
     border-radius: var(--radius-pill);
     background: var(--bg-panel);
     color: var(--text);
-    font-family: var(--font);
+    text-decoration: none;
+    font-family: var(--font-read);
     font-size: var(--text-sm);
     font-weight: 600;
     line-height: 1;
@@ -296,7 +316,10 @@
   .chip:hover {
     border-color: var(--text);
   }
-  .chip[aria-pressed='true'] {
+  /* A chip that is a link marks the current place with aria-current instead of
+     aria-pressed; both read as the same inverted state. */
+  .chip[aria-pressed='true'],
+  .chip[aria-current] {
     background: var(--text);
     border-color: var(--text);
     color: var(--bg);
@@ -315,7 +338,8 @@
     padding-bottom: var(--space-2);
     border-bottom: 2px solid var(--text);
   }
-  .section-head h2 {
+  .section-head h2,
+  .section-head h3 {
     margin: 0;
     font-family: var(--font-sign);
     font-weight: 800;
@@ -323,10 +347,15 @@
     line-height: var(--lh-heading);
     letter-spacing: var(--tracking-tight);
   }
-  .section-head .count {
+  .section-head h3 {
+    font-size: var(--text-xl);
+  }
+  /* A count beside a heading, in a panel head, a section head or a summary. */
+  .count {
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
     font-size: var(--text-sm);
+    font-weight: 600;
   }
 
   /* ------------------------------------------------------------ empty state -- */
@@ -402,7 +431,10 @@
   .prose h4 {
     font-size: var(--text-lg);
   }
-  .prose p {
+  /* :where() keeps these at zero specificity so the `> * + *` rhythm above
+     still wins (a plain `.prose p` out-ranked it and ran paragraphs together)
+     and so a `.btn` inside prose keeps its own colour. */
+  .prose :where(p) {
     margin-block: 0;
   }
   .prose ul,
@@ -412,7 +444,7 @@
   .prose li + li {
     margin-block-start: var(--space-2);
   }
-  .prose a {
+  .prose :where(a:not([class])) {
     color: var(--accent);
     text-underline-offset: 0.15em;
     text-decoration-thickness: from-font;

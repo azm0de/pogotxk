@@ -1,6 +1,6 @@
 # W3.5 promotions and cross-file requests (batched from wave reports)
 
-Owner: main thread, applied serially after W2, before W3.
+Owner: main thread. **Applied 2026-09-02 (during W2, files disjoint from W2 ownership):** `.prose :where(p)` / `:where(a:not([class]))`; `.btn`/`.chip` on `--font-read`; `--nudge`/`--nudge-back` with reduced-motion escape; `.btn--arrow-back`; `.chip[aria-current]`; standalone `.count`; `.section-head h3`; `--disc-size`; `.badge.target`; `--measure: 60ch`; `--poi-campsite-text` (light/dark); `markdown.ts` table-scroll region; `MapPreview` placeholder ink. Still open below: items marked [ ].
 
 ## primitives.css
 - [ ] `.btn` and `.chip` pin `font-family: var(--font)` → `var(--font-read)` (W1-D, W1-B worked around locally; remove their overrides after).
@@ -32,6 +32,12 @@ Owner: main thread, applied serially after W2, before W3.
 - [ ] W1-C's current nav chip on the game sub-nav is filled ink, not red (two You-Are-Here reds on one screen would compete); flip if the owner disagrees.
 
 - [ ] **Owner sign-off:** W1-E corrected `/privacy`'s third-parties table (CARTO no longer sees your IP for tiles; tiles are Protomaps + OpenStreetMap served from our own hosting) and `/terms`'s map-data credit to match `basemap.ts`. Legal text — confirm with Justin. Also `/offline` copy was rewritten because the old promise ("anything you have already looked at may still open") was false: `sw.js` caches no page HTML.
+
+- [ ] `src/components/map/MapPreview.tsx:57` placeholder inline `color: var(--text-muted)` measures 2.03:1 on `--map-canvas` in dark; W1-A forced `--ink-700 !important` from the page. Fix in the component (a fixed ink, as `.map-loading` uses) and drop the page override (W1-A).
+- [ ] `EventCard.astro` `.event-title-link` is 23px tall, 1px under the floor (W1-A measured) — `min-height: 24px` or `.target` (main thread, W3.5).
+- [ ] `MapView.css` `.cluster`/`.cluster-wrap` collide with the `.cluster` primitive — sent to W2-A to rename `.map-cluster`; after that, W1-A's local `.actions` workaround in `index.astro` can go back to `.cluster`.
+- [ ] **Owner question:** the GO Fest banner carries no photographer byline in code (the vault says the photo has a named photographer); W1-A kept the caption text as-is rather than invent a credit. Ask Justin for the byline and add it to the `.credit`.
+- [ ] Vault/plan drift: the landmark rail and the "Right now" card were dropped in `e814e0d`; `vault/Design System.md` and `Backlog.md` still describe them. Fix in the documenter pass.
 
 ## Fonts
 - [x] Atkinson regular/italic files were swapped at download; swapped back on disk 2026-09-02 (regular = 33,996 B, italic = 37,644 B). Any wave that screenshotted "oblique body text" before the swap should be re-checked.

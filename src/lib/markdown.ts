@@ -398,8 +398,14 @@ function renderTable(lines: string[], start: number, opts: MarkdownOptions): [st
     : '';
 
   // Wrapped so a wide table scrolls inside the article instead of widening the
-  // page — the same rule the rest of the site follows for overflow.
-  return [`<div class="table-scroll"><table>${head}${body}</table></div>`, i];
+  // page — the same rule the rest of the site follows for overflow. The wrapper
+  // is a focusable region: a scroll container a keyboard cannot reach fails
+  // WCAG 2.1.1, and the table inside stays a real table (display: block on a
+  // <table> strips its semantics).
+  return [
+    `<div class="table-scroll" tabindex="0" role="region" aria-label="Table, scrolls sideways"><table>${head}${body}</table></div>`,
+    i,
+  ];
 }
 
 function renderBlocks(lines: string[], opts: MarkdownOptions): string {

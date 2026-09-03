@@ -174,7 +174,8 @@ check('no headings at all does not throw', levels('just a paragraph'), '');
 console.log('\n== tables ==');
 const T = '| Lap | Stops |\n| --- | --- |\n| One | 11 |\n| Two | 16 |';
 const tableHtml = renderMarkdown(T);
-check('wrapped so a wide table scrolls, not the page', tableHtml.startsWith('<div class="table-scroll"><table>'), true);
+check('wrapped so a wide table scrolls, not the page', tableHtml.startsWith('<div class="table-scroll" tabindex="0" role="region"'), true);
+check('the scroll wrapper is a labelled, focusable region', /aria-label="[^"]+"><table>/.test(tableHtml), true);
 // `[ >]` matters: a bare /<th/ also matches the <thead> wrapper.
 check('header cells are th', (tableHtml.match(/<th[ >]/g) ?? []).length, 2);
 check('body rows', (tableHtml.match(/<tr>/g) ?? []).length, 3);

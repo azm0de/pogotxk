@@ -152,6 +152,9 @@
      clears 4.5, hue held at ~34°. Calculated 4.58; re-measure in the browser
      the first time it ships as text or an icon. */
   --poi-campsite-badge: #9e6a27;
+  /* The same idea as *text or an icon on the page*, which needs the opposite
+     move in dark mode (the badge value is 3.60:1 on the dark panel). */
+  --poi-campsite-text: #9e6a27; /* on white: 4.62 */
 
   /* Teams */
   --team-valor: #e8453c;
@@ -301,7 +304,9 @@
   --container: 1100px;
   --container-wide: 1180px;
   --container-narrow: 900px;
-  --measure: 68ch;
+  /* 60ch, not the textbook 68: Atkinson's wide letterforms fit ~1.25 characters
+     per ch, so 68ch measured 85–96 characters a line on /privacy and /blog. */
+  --measure: 60ch;
 
   /* --------------------------------------------------------------- motion --
    * Durations and one exponential ease-out. The transforms are *values*, not
@@ -319,6 +324,8 @@
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --lift: translateY(-2px);
   --press: scale(0.97);
+  --nudge: translateX(2px); /* the signage arrow on hover */
+  --nudge-back: translateX(-2px);
 
   /* -------------------------------------------------------------- z-index --
    * MapView.css is exempt from this scale: its 400–1000 values interleave with
@@ -382,6 +389,8 @@
        lighter instead, because here it sits on a dark panel. */
     --live: var(--red-700); /* white on this: 5.99:1 */
     --live-text: #ff7a86; /* on #1e1e22:    6.63:1, hue 354.6 */
+
+    --poi-campsite-text: var(--poi-campsite); /* on #1e1e22: 7.97:1 */
   }
 }
 
@@ -507,6 +516,8 @@
   :root {
     --lift: none;
     --press: none;
+    --nudge: none;
+    --nudge-back: none;
   }
   *,
   *::before,

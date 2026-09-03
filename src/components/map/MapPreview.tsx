@@ -58,5 +58,7 @@ const PLACEHOLDER: React.CSSProperties = {
   display: 'grid',
   placeContent: 'center',
   font: '600 0.86rem/1.4 inherit',
-  color: 'var(--text-muted)',
+  // A fixed ink, not `--text-muted`: this sits on `--map-canvas`, which stays
+  // light in both themes, and the dark-theme muted grey measured 2.03:1 on it.
+  color: 'var(--ink-700)',
 };
