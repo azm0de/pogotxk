@@ -101,6 +101,8 @@ const PANEL_W = 340;
  * rectangle that never resolves is the failure this page must not hide.
  */
 const TILE_GRACE_MS = 4000;
+/** Between the watchdog's three asks; see the probe in the map effect. */
+const TILE_RETRY_MS = 2000;
 
 /** How long the visible status row holds a message before it clears itself. */
 const FLASH_MS = 9000;
@@ -744,13 +746,35 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
      * Attached here rather than in `basemap.ts`: the layer is shared with the
      * admin editor, and this notice is the public map's own chrome.
      */
-    const probe = () =>
+    /*
+     * Three asks, not one. The probe fires while the first thirty tile range
+     * requests are still in flight, and one refused connection under that load
+     * (the dev server does it; a phone on park wifi will too) was enough to
+     * print "the map is not loading" over a map that was loading. A store that
+     * refuses three times, two seconds apart, is genuinely unreachable; a store
+     * that answers any one of them clears the notice.
+     */
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    const ask = () =>
       fetch(BASEMAP_URL, {
         headers: { range: 'bytes=0-15' },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      })
-        .then((r) => setTilesDown(!r.ok))
-        .catch(() => setTilesDown(true));
+      }).then((r) => r.ok);
+    const probe = async (attemptsLeft = 3): Promise<void> => {
+      if (cancelled) return;
+      const ok = await ask().catch(() => false);
+      if (cancelled) return;
+      if (ok) {
+        setTilesDown(false);
+        return;
+      }
+      if (attemptsLeft > 1) {
+        retryTimer = window.setTimeout(() => void probe(attemptsLeft - 1), TILE_RETRY_MS);
+        return;
+      }
+      setTilesDown(true);
+    };
 
     const graceTimer = window.setTimeout(() => void probe(), TILE_GRACE_MS);
     // Wired anyway: it costs nothing, and it is the right answer the day the
@@ -879,7 +903,9 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
     }
 
     return () => {
+      cancelled = true;
       window.clearTimeout(graceTimer);
+      window.clearTimeout(retryTimer);
       tiles.off('tileerror', onTileError);
       map.remove();
       mapRef.current = null;

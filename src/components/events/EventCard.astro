@@ -35,9 +35,22 @@ interface Props {
    * out eight more times.
    */
   stateNamedByGroup?: boolean;
+  /**
+   * How much of the row the artwork takes. `thumb` is the 64px square the
+   * calendar scans past sixty times; `plate` runs the art down the whole left
+   * side of the card, for a short list where the picture is the point.
+   */
+  art?: 'thumb' | 'plate';
 }
 
-const { event, when, state, showImage = false, stateNamedByGroup = false } = Astro.props;
+const {
+  event,
+  when,
+  state,
+  showImage = false,
+  stateNamedByGroup = false,
+  art = 'thumb',
+} = Astro.props;
 
 /*
  * Leek Duck artwork, served through our own origin — see lib/game-image.ts.
@@ -137,7 +150,7 @@ const source = sourceLabel();
   an invisible affordance is not an affordance.
 */}
 <article
-  class={`event-card card${externalUrl ? ' event-card--linked' : ''}`}
+  class={`event-card card${externalUrl ? ' event-card--linked' : ''}${art === 'plate' ? ' event-card--plate' : ''}`}
   id={anchor}
   data-state={state}
   data-source={event.source}

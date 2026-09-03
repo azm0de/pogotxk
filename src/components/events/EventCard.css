@@ -67,6 +67,38 @@
   opacity: 0.55;
 }
 
+/* --- the plate variant ------------------------------------------------------
+   The art runs down the whole left side of the card, about a third of its
+   width, and the card's own padding is cancelled on that side so the picture
+   bleeds to the edge like a plate on a board. For the home page's short
+   calendar, where the picture is the point; the sixty-row calendar keeps the
+   thumbnail. */
+.event-card--plate {
+  --card-pad: var(--space-4);
+  grid-template-columns: clamp(140px, 40%, 260px) minmax(0, 1fr);
+  gap: 0 var(--space-4);
+  /* Tall enough that the plate is a picture, not a thumbnail wearing a bigger
+     box: 113px rows made the art a small square beside two lines of text. */
+  min-height: 160px;
+  align-items: center;
+}
+.event-card--plate .event-image {
+  width: auto;
+  height: auto;
+  min-height: 100%;
+  align-self: stretch;
+  /* Bleed to the card's top, left and bottom edges. */
+  margin: calc(var(--card-pad) * -1) 0 calc(var(--card-pad) * -1) calc(var(--card-pad) * -1);
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+.event-card--plate .event-image img {
+  position: absolute;
+  inset: 0;
+}
+.event-card--plate .event-image {
+  position: relative;
+}
+
 /* --- the row's own hierarchy ---------------------------------------------
    When first in the DOM, because "when" is the question and it should be the
    first thing read out. Not the loudest, though: at 21/700 over an 18/700 title
