@@ -59,11 +59,123 @@ const {
  *
  * Their placeholder for an event with no artwork is the Pokémon GO logo itself,
  * which this site does not use anywhere, and which says nothing about the event
- * either. Those rows keep the flat thumbnail panel instead.
+ * either. Those rows fall back to `fallbackArt` below instead of Leek Duck's
+ * picture.
  */
 const GENERIC_ART = /events-default-img/;
 const raw = showImage ? proxiedImageUrl(event.imageUrl) : null;
 const image = raw && !GENERIC_ART.test(raw) ? raw : null;
+
+/*
+ * Fallback art, by event type, for a card with no real picture.
+ *
+ * Refusing Leek Duck's placeholder used to leave nothing to show at all: a
+ * poster with no image falls back further still, to the bare `--ink-800`
+ * rectangle in EventCard.css — legal, logo-free, and the least appealing
+ * outcome available. These three images are the site's own instead: Niantic
+ * key art already sitting in `public/hero/` under the fan-use position this
+ * redesign already uses it under (the home hero, the campsite band), chosen
+ * by event type rather than left blank. Being the site's own asset, no Leek
+ * Duck credit or provenance plate attaches to them.
+ *
+ * Two of the three collages are themselves a problem, though: each is a
+ * Niantic-drawn poster carrying the official "Pokémon GO" wordmark in one
+ * corner and a copyright line along an edge, and a 16:9 poster card shows a
+ * 16:9 picture whole — `object-fit: cover` has no excess to crop when the box
+ * and the picture already share an aspect ratio. `anchor` and `zoom` below
+ * are enlargement, not positioning: EventCard.css scales the picture up
+ * about the fixed corner named by `anchor`, which pushes the wordmark and
+ * the copyright line off the edge they sit against and out of the frame.
+ * That is what keeps the site's no-logo rule true on these cards too.
+ * `raid-battle` carries neither and stays at zoom 1.
+ */
+interface FallbackArt {
+  src: string;
+  srcset: string;
+  /**
+   * `transform-origin` for `zoom` below — the corner of the picture held
+   * fixed while the rest enlarges around it, so the wordmark and the
+   * copyright line (both near an edge) are what moves out of frame.
+   */
+  anchor: string;
+  /**
+   * `transform: scale()` applied to the picture inside its clipped 16:9 box.
+   * `1` leaves it exactly as delivered; each per-bucket comment below works
+   * out how much of which edge a higher value cuts.
+   */
+  zoom: number;
+}
+
+// Explicit rather than left to the substring test alone: `max-mondays` is a
+// real ScrapedDuck slug that names a raid promotion but contains neither
+// "raid" nor "battle".
+const RAID_EVENT_TYPES = new Set([
+  'raid-battles',
+  'raid-day',
+  'raid-hour',
+  'raid-weekend',
+  'elite-raids',
+  'shadow-raids',
+  'max-battles',
+  'max-mondays',
+]);
+
+function fallbackArt(eventType: string | null | undefined): FallbackArt {
+  const type = eventType?.trim().toLowerCase() ?? '';
+
+  if (type === 'community-day') {
+    return {
+      src: '/hero/outing-960.webp',
+      srcset: '/hero/outing-640.webp 640w, /hero/outing-960.webp 960w, /hero/outing-1280.webp 1280w',
+      // The wordmark sits top-right (x ≈ 80–98%, y ≈ 3–20%) and the
+      // copyright line runs the bottom edge. Anchored at the left edge, a
+      // third of the way down, and enlarged 1.35x, the window that shows
+      // through drops the right 26%, the top 9% and the bottom 17% — taking
+      // the wordmark and the copyright line with them.
+      anchor: '0% 35%',
+      zoom: 1.35,
+    };
+  }
+
+  if (RAID_EVENT_TYPES.has(type) || /raid|battle/.test(type)) {
+    return {
+      src: '/hero/raid-battle-960.webp',
+      srcset:
+        '/hero/raid-battle-640.webp 640w, /hero/raid-battle-960.webp 960w, /hero/raid-battle-1280.webp 1280w, /hero/raid-battle-1600.webp 1600w',
+      // Carries neither the wordmark nor a copyright line — the one of the
+      // three that doesn't — so there is nothing to crop out: zoom stays at
+      // 1 and the anchor is inert.
+      anchor: '50% 50%',
+      zoom: 1,
+    };
+  }
+
+  // Event, research, timed research, season, GO Pass, Hatch Day, PokéStop
+  // Showcase, GO Fest, and anything this feed has not shipped yet.
+  return {
+    src: '/hero/pokestop-960.webp',
+    srcset: '/hero/pokestop-640.webp 640w, /hero/pokestop-960.webp 960w, /hero/pokestop-1280.webp 1280w',
+    // The wordmark sits bottom-left (x ≈ 2–15%, y ≈ 85–98%) and the
+    // copyright line runs the bottom edge. Anchored at the top-right corner
+    // and enlarged 1.3x, the window that shows through drops the left 23%
+    // and the bottom 23% — taking the wordmark and the copyright line with
+    // them.
+    anchor: '100% 0%',
+    zoom: 1.3,
+  };
+}
+
+const fallback = showImage && !image ? fallbackArt(event.eventType) : null;
+
+/*
+ * The poster's own two widths: ~520px per card, two abreast inside the
+ * 1100px `--container` once its gutters and the row's gap come out, and full
+ * width less a phone's gutters in one column — the same rough approximation
+ * the community photo's `sizes` already uses for that (src/pages/index.astro).
+ * Raw px, not the tokens themselves: `sizes` is read by the HTML parser
+ * before any stylesheet runs, so it cannot resolve a custom property.
+ */
+const FALLBACK_SIZES = '(min-width: 768px) 520px, calc(100vw - 40px)';
 
 const recurrence = describeRecurrence(event.rrule ?? null);
 const cancelled = event.status === 'CANCELLED';
@@ -160,18 +272,37 @@ const source = sourceLabel();
   aria-labelledby={`${anchor}-title`}
 >
   {
-    /* The box renders only when there is a picture to put in it. It is still
-       the fallback surface while that picture loads or if it 404s, but an event
-       with no artwork of its own (upstream's generic placeholder is the Pokémon
-       GO logo, which never ships here) gets no empty box: four blank squares in
-       a row read as four broken images, and the card's grid collapses to one
-       column instead. */
-    showImage && image && (
-      <div class="event-image">
-        {/* Decorative: the title right beside it says the same thing, and
-            upstream gives us no alt text — inventing one would be worse than
-            none. */}
-        <img src={image} alt="" loading="lazy" decoding="async" width="64" height="64" />
+    /* The box renders whenever there is a picture to put in it: real Leek Duck
+       art, or — since an event with none of its own is served the Pokémon GO
+       logo as upstream's "placeholder", and this site never shows that logo —
+       this card's fallback art by event type instead. Only `showImage` being
+       off leaves no box at all: four blank squares in a row read as four
+       broken images, and the card's grid collapses to one column instead. */
+    showImage && (image || fallback) && (
+      <div class={`event-image${fallback ? ' event-image--fallback' : ''}`}>
+        {/* Decorative either way: the title beside it says the same thing a
+            real image's alt text would, and a fallback picture was never of
+            the event to begin with — inventing alt text for either would be
+            worse than none. */}
+        {
+          image ? (
+            <img src={image} alt="" loading="lazy" decoding="async" width="64" height="64" />
+          ) : (
+            fallback && (
+              <img
+                src={fallback.src}
+                srcset={fallback.srcset}
+                sizes={FALLBACK_SIZES}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                width="960"
+                height="540"
+                style={`--fallback-anchor: ${fallback.anchor}; --fallback-zoom: ${fallback.zoom}`}
+              />
+            )
+          )
+        }
       </div>
     )
   }

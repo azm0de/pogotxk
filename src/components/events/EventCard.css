@@ -146,6 +146,17 @@
   object-fit: cover;
   transition: transform var(--dur-3) var(--ease-out);
 }
+
+/* Niantic's collage key-art carries the Pokémon GO logo in one corner and a
+   copyright line along the foot, and a 16:9 poster shows a 16:9 picture
+   whole. The fallback is enlarged about an anchor corner, set per picture
+   by the component, until both leave the frame: the rule that the official
+   logo appears nowhere on the site holds on these cards too. */
+.event-image--fallback img {
+  transform: scale(var(--fallback-zoom, 1));
+  transform-origin: var(--fallback-anchor, 50% 50%);
+}
+
 .event-card--poster .event-body {
   padding: var(--space-4);
   /*
@@ -210,6 +221,14 @@
 }
 .event-card--poster.event-card--linked:hover .event-image img {
   transform: var(--poster-hover, scale(1.03));
+}
+/* The rule above would replace a fallback's crop with the hover lift and pull
+   the logo straight back into frame. Equal specificity, later in the file, so
+   this one wins instead and holds the crop through hover — including under
+   reduced motion just below, which zeroes `--poster-hover` but never touches
+   `--fallback-zoom`: that crop is not the hover motion this site opts out of. */
+.event-card--poster.event-card--linked:hover .event-image--fallback img {
+  transform: scale(var(--fallback-zoom, 1));
 }
 @media (prefers-reduced-motion: reduce) {
   .event-card--poster {

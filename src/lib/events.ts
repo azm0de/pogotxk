@@ -40,6 +40,13 @@ export interface CalendarEvent {
   source: CalendarSource;
   heading?: string | null;
   imageUrl?: string | null;
+  /**
+   * ScrapedDuck's own event-type slug (`raid-battles`, `community-day`, …) —
+   * distinct from `heading`, which is the human-readable title upstream shows
+   * ("Raid Battles"). EventCard keys its fallback art off this because the
+   * slug is the stable, enumerable value; a meetup never sets it.
+   */
+  eventType?: string | null;
   /** Where `location` points — the map deep link for a POI-backed meetup. */
   locationUrl?: string | null;
 }
@@ -311,6 +318,7 @@ export function normalizeGameEvents(payload: unknown): CalendarEvent[] {
       source: 'global',
       heading,
       imageUrl: pickString(row, ['image', 'imageUrl', 'image_url']),
+      eventType: pickString(row, ['eventType', 'type']),
     });
   }
 
