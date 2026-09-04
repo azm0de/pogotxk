@@ -207,6 +207,15 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
             ))
           }
         </ul>
+
+        {/*
+          The account control's home below 820px, empty in the markup. The
+          script that builds the control moves it in here whenever the nav is a
+          panel, and back beside the socials when the nav is a row, so on a
+          phone "Sign in" (or the member's own name) is the last row of the menu
+          rather than a second button in the bar beside the one that opens it.
+        */}
+        <div class="nav-account"></div>
       </nav>
 
       {/*
@@ -236,6 +245,11 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         itself. That matters: the nav is centred by the two side zones being
         equal, so hanging the account control off the end as a third sibling
         would have shifted the nav left by exactly its width.
+
+        Below 820px the whole zone leaves the bar. The socials are gone by then
+        and the account control has moved into the menu panel (see
+        `.nav-account` above and the script below), so the bar is the brand and
+        the menu button, and the button takes the right edge.
       */}
       <div class="header-right">
         <ul class="header-socials">
@@ -299,15 +313,23 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           // what the next press does, not what the icon is.
           btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
           nav.toggleAttribute('data-open', open);
+          // The account rows fold with the panel. Otherwise the panel reopens
+          // mid-accordion, and on a resize the control crosses back to the bar
+          // with its dropdown already hanging open.
+          if (!open) for (const d of nav.querySelectorAll('details[open]')) d.open = false;
         };
 
         btn.addEventListener('click', () => setOpen(!isOpen()));
 
         document.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape' && isOpen()) {
-            setOpen(false);
-            btn.focus();
-          }
+          if (e.key !== 'Escape' || !isOpen()) return;
+          // The account menu inside the panel has an Escape of its own, and it
+          // runs after this one. Closing both on one press would drop a keyboard
+          // user back on the bar when they only meant to fold the account rows,
+          // so while something in here is open the panel stays.
+          if (nav.querySelector('details[open]')) return;
+          setOpen(false);
+          btn.focus();
         });
 
         // Tapping the page behind it should close it. The button's own click is
@@ -344,6 +366,27 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       (() => {
         const root = document.querySelector('[data-account]');
         if (!root) return;
+
+        /*
+         * Where the control lives depends on what the nav is. Above 820px the
+         * nav is a row and this is a pill beside the socials; below it the nav
+         * is a panel behind the menu button and this is the panel's last row,
+         * so the bar holds the brand and the button and nothing else. The same
+         * breakpoint the menu script watches, and one `append` moves the
+         * finished control either way: the listeners below are on the
+         * document, so nothing is lost in the move. The styling follows the
+         * node — the `.nav-account` rules in the global block key off the slot,
+         * not the viewport — so this is the only place that has to know.
+         */
+        const bar = document.querySelector('.header-right');
+        const menu = document.querySelector('.nav-account');
+        const wide = window.matchMedia('(min-width: 821px)');
+        const place = () => {
+          const home = wide.matches ? bar : menu;
+          if (home && root.parentNode !== home) home.append(root);
+        };
+        place();
+        wide.addEventListener('change', place);
 
         const el = (tag, props) => Object.assign(document.createElement(tag), props);
         // Where to come back to. Deliberately not the hash — it never reaches
@@ -1042,6 +1085,14 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           margin-left: auto;
         }
 
+        /* The right-hand zone leaves the bar. The socials are already gone at
+           this width and the account control has moved into the panel, and an
+           empty zone here would still be `flex: 1 1 0`: it was taking half the
+           leftover width and holding the menu button in the middle of the bar. */
+        .header-right {
+          display: none;
+        }
+
         .site-header nav {
           position: absolute;
           top: 100%;
@@ -1050,6 +1101,12 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           /* It is out of flow now, so the auto margin that kept the row right
              would do nothing but confuse the next reader. */
           margin-left: 0;
+          /* Seven rows and the account below them clear a phone screen with the
+             accordion closed; opened on a short phone they may not, so the
+             panel scrolls rather than running off the bottom. */
+          max-height: calc(100vh - var(--header-public-h));
+          max-height: calc(100dvh - var(--header-public-h));
+          overflow-y: auto;
           background: var(--accent-solid);
           border-bottom: 4px solid var(--ink-900);
           box-shadow: var(--shadow-lg);
@@ -1241,15 +1298,102 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         outline-offset: -2px;
       }
 
-      /* On a phone the header is already tight and the nav has collapsed into a
-         panel, so the name goes and the avatar carries the control alone. */
-      @media (max-width: 560px) {
-        .account-name {
-          display: none;
-        }
-        .account-summary {
-          padding-inline: var(--space-2);
-        }
+      /* ------------------------------------------------ account, in the menu --
+       * Below 820px the script moves the control into `.nav-account`, the last
+       * row of the menu panel, and these rules restyle the same nodes for the
+       * red sheet: a hairline above, the pill at the panel's 44px row height,
+       * and the account `<details>` as an accordion whose rows open in place
+       * instead of as a floating panel. Keyed to the slot rather than to a
+       * media query, so the styling follows the node wherever the script puts
+       * it and nothing here has to agree with the breakpoint a second time.
+       * The header's pinned foreground properties inherit down into the panel,
+       * which is why `--header-fg` and friends resolve here.
+       */
+      .nav-account .header-account {
+        margin-top: var(--space-2);
+        padding: var(--space-3) var(--gutter) var(--space-4);
+        border-top: 1px solid var(--header-line);
+      }
+      .nav-account .account-signin,
+      .nav-account .account-summary {
+        display: flex;
+        width: 100%;
+        min-height: 44px;
+        padding: var(--space-2) var(--space-4);
+        font-family: var(--font-sign);
+        font-size: var(--text-base);
+        border-color: var(--header-fg);
+      }
+      .nav-account .account-signin {
+        justify-content: center;
+      }
+      /* The 6px hit-area extension is the bar's: the row is 44px on its own
+         here, and the invisible box would reach up into the rule above. */
+      .nav-account .account-signin::before,
+      .nav-account .account-summary::before {
+        content: none;
+      }
+      .nav-account .account-menu {
+        position: static;
+      }
+      .nav-account .account-summary {
+        max-width: none;
+        justify-content: flex-start;
+        gap: var(--space-3);
+      }
+      .nav-account .account-name {
+        display: block;
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: var(--text-base);
+      }
+      /* A chevron at the row's end, two borders in the text's own white so it
+         costs no glyph. Down when the rows are folded, up when they are open. */
+      .nav-account .account-summary::after {
+        content: '';
+        flex: none;
+        width: 8px;
+        height: 8px;
+        margin-inline-start: auto;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: translateY(-2px) rotate(45deg);
+        transition: transform var(--dur-2) var(--ease-out);
+      }
+      .nav-account .account-menu[open] .account-summary::after {
+        transform: translateY(2px) rotate(-135deg);
+      }
+      /* The rows open in place on the sheet, drawn as the nav rows above them
+         are: white, 44px, pill, a wash on hover. `.panel`'s white ground,
+         radius and shadow are all undone; there is no floating surface here. */
+      .nav-account .account-panel {
+        position: static;
+        display: grid;
+        gap: var(--space-1);
+        min-width: 0;
+        margin-top: var(--space-2);
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        color: var(--header-fg);
+      }
+      .nav-account .account-panel a {
+        padding: var(--space-3) var(--space-4);
+        border-radius: var(--radius-pill);
+        color: var(--header-fg-2);
+        font-family: var(--font-sign);
+        font-size: var(--text-base);
+        font-weight: 700;
+      }
+      .nav-account .account-panel a:hover {
+        background: var(--header-wash);
+        color: var(--header-fg);
+      }
+      .nav-account .account-panel a:focus-visible {
+        outline: 3px solid var(--header-fg);
+        outline-offset: 2px;
       }
     </style>
   </body>
