@@ -190,11 +190,13 @@ const nextUp: {
 })();
 
 /*
- * The meetup's cover art does not come to the board.
+ * The meetup's cover art comes to the board now, in post 1 below.
  *
- * The post is a time, a place and one button; a 16:9 cover above it put the
- * artwork back on top of the thing the post exists to say. `/events` still
- * renders it, which is where someone has gone to browse rather than to glance.
+ * It used to stop at `/events`, on the theory that the board post is a time,
+ * a place and one button, and a 16:9 cover on top of that would outrank the
+ * thing the post exists to say. The owner's call (2026-09-04) folds the
+ * closing panel's own card — art, name, time, place, RSVP — up into post 1
+ * instead of repeating it at the foot of the page, so the art comes with it.
  */
 const nextUpWhen = nextUp ? formatInZone(nextUp.startsAt, nextUp.tz) : null;
 const nextUpWhere = placeLabel(nextUp?.where ?? null);
@@ -579,10 +581,10 @@ function homeWhen(event: CalendarEvent): string {
     </script>
 
     {/*
-      THE BOARD: three posts on a panel bolted over the hero's foot. The numbers
-      are a legend, so the board can be read in any order — what is on, who is
-      out there, and how much of the park has been surveyed. The map it used to
-      sit over is in the hero now, and the arrows that used to ride on its title
+      THE BOARD: two posts on a panel bolted over the hero's foot. The numbers
+      are a legend, so the board can be read in any order — the next meetup,
+      cover art included, and what is on right now. The map it used to sit
+      over is in the hero now, and the arrows that used to ride on its title
       plate are the hero's own two buttons.
     */}
     <section class="board container" aria-labelledby="board-title">
@@ -593,35 +595,66 @@ function homeWhen(event: CalendarEvent): string {
         </div>
 
         <ol class="posts" role="list">
-          <li class="post">
+          <li class:list={['post', nextUp?.imageUrl && 'post--event']}>
             <span class="disc" aria-hidden="true">1</span>
             <div class="post-body">
               {
                 nextUp ? (
                   <>
-                    {/* The name leads. The date used to be the loudest line on
-                        the board, which made the display face a function of
-                        position rather than of meaning — a reader glancing at
-                        the post learned "Wed, Sep 10" before they learned what
-                        was happening. */}
-                    <p class="post-lead">{nextUp.title}</p>
-                    <p class="post-line post-when tnum">
-                      <time datetime={nextUp.startsAt}>{nextUpWhen}</time>
-                    </p>
-                    <p class="post-line post-muted">{nextUpWhere ?? 'Place to be confirmed'}</p>
-                    {nextUp.rsvpUrl && (
-                      <p class="post-action">
+                    {/*
+                      The closing panel's own card, folded up here on the
+                      owner's call: cover art as a plate, the name, the time
+                      and place, and the RSVP — not a sentence about the
+                      meetup, the meetup itself. The art is its own (the
+                      hand-entered hero, or the cover the organiser attached
+                      to the Discord event), so it carries no credit
+                      obligation. Its "Open the map" button did not come with
+                      it; the hero's own map button is a scroll above this.
+                    */}
+                    {nextUp.imageUrl && (
+                      <div class="post-art">
+                        <img
+                          src={nextUp.imageUrl}
+                          alt=""
+                          width="480"
+                          height="270"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </div>
+                    )}
+                    <div class="post-text">
+                      <p class="post-kind">Next meetup</p>
+                      {/* The name leads. The date used to be the loudest line on
+                          the board, which made the display face a function of
+                          position rather than of meaning — a reader glancing at
+                          the post learned "Wed, Sep 10" before they learned what
+                          was happening. */}
+                      <p class="post-lead">{nextUp.title}</p>
+                      <p class="post-line post-when tnum">
+                        <time datetime={nextUp.startsAt}>{nextUpWhen}</time>
+                        <span class="post-where"> · {nextUpWhere ?? 'Place to be confirmed'}</span>
+                      </p>
+                      <p class="actions post-action">
+                        {nextUp.rsvpUrl && (
+                          <a
+                            class="btn btn--primary btn--arrow"
+                            href={nextUp.rsvpUrl}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                          >
+                            {nextUp.rsvpLabel}
+                            <span class="sr-only"> (opens in a new tab)</span>
+                          </a>
+                        )}
                         <a
-                          class="btn btn--sm btn--primary btn--arrow"
-                          href={nextUp.rsvpUrl}
-                          rel="noopener noreferrer"
-                          target="_blank"
+                          class={`btn ${nextUp.rsvpUrl ? 'btn--outline' : 'btn--primary'} btn--arrow`}
+                          href="/events"
                         >
-                          {nextUp.rsvpLabel}
-                          <span class="sr-only"> (opens in a new tab)</span>
+                          See the event calendar
                         </a>
                       </p>
-                    )}
+                    </div>
                   </>
                 ) : (
                   <>
@@ -675,38 +708,6 @@ function homeWhen(event: CalendarEvent): string {
                   </>
                 )
               }
-            </div>
-          </li>
-
-          <li class="post">
-            <span class="disc" aria-hidden="true">3</span>
-            <div class="post-body">
-              {
-                totalPois > 0 ? (
-                  <>
-                    {/* The tally IS the action: every one of these places is on
-                        the map, so the number is the way in rather than a fact
-                        with a button bolted under it. */}
-                    <p class="post-lead tnum">
-                      <a href="/map">{totalPois} places surveyed</a>
-                    </p>
-                    <p class="post-line post-muted tnum">
-                      {counts?.pokestops ?? 0} PokéStops, {counts?.gyms ?? 0} Gyms,{' '}
-                      {counts?.powerspots ?? 0} Power Spots, {counts?.campsite ?? 0} starred for the
-                      Campsite.
-                    </p>
-                  </>
-                ) : (
-                  <p class="post-lead post-lead--quiet">The survey is not published yet</p>
-                )
-              }
-              {/* The board's own identity line, folded down here off the panel
-                  head: at the top it spent two lines above the fold restating
-                  what the map underneath already shows. */}
-              <p class="post-line post-muted">
-                Spring Lake Park is the Pokémon GO Community Campsite in Texarkana, run by the
-                official Ambassadors.
-              </p>
             </div>
           </li>
         </ol>
@@ -1067,81 +1068,6 @@ function homeWhen(event: CalendarEvent): string {
     </section>
     </div>
 
-    {/*
-      The page ends on the ask rather than on a glossary entry: where to be, and
-      the one arrow to follow.
-    */}
-    <section class="band container" aria-labelledby="closing-heading">
-      <div class:list={['panel', 'closing', nextUp?.imageUrl && 'closing--art']}>
-        <div class="panel-head">
-          <h2 id="closing-heading">See you at the park</h2>
-        </div>
-        {/*
-          The next meetup, as the thing itself: its cover art as a plate down
-          the side, its name, its time and place, and its RSVP. The owner asked
-          for the event and its art here, not a sentence about it; the art is
-          the meetup's own (the hand-entered hero, or the cover the organiser
-          attached to the Discord event), so it carries no credit obligation.
-        */}
-        {
-          nextUp ? (
-            <div class="closing-event">
-              {nextUp.imageUrl && (
-                <div class="closing-art">
-                  <img
-                    src={nextUp.imageUrl}
-                    alt=""
-                    width="480"
-                    height="270"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </div>
-              )}
-              <div class="closing-body">
-                <p class="closing-kind">Next meetup</p>
-                <p class="closing-title">{nextUp.title}</p>
-                <p class="closing-when tnum">
-                  <time datetime={nextUp.startsAt}>{nextUpWhen}</time>
-                  {nextUpWhere && <span class="closing-where"> · {nextUpWhere}</span>}
-                </p>
-                <p class="actions">
-                  {nextUp.rsvpUrl && (
-                    <a
-                      class="btn btn--primary btn--arrow"
-                      href={nextUp.rsvpUrl}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      {nextUp.rsvpLabel}
-                      <span class="sr-only"> (opens in a new tab)</span>
-                    </a>
-                  )}
-                  <a
-                    class={`btn ${nextUp.rsvpUrl ? 'btn--outline' : 'btn--primary'} btn--arrow`}
-                    href="/map"
-                  >
-                    Open the map
-                  </a>
-                  <a class="btn btn--outline btn--arrow" href="/events">See the event calendar</a>
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <p class="closing-line">
-                Meetups run on Wednesday evenings at the Campsite, and get announced in Discord
-                first.
-              </p>
-              <p class="actions">
-                <a class="btn btn--primary btn--arrow" href="/map">Open the map</a>
-                <a class="btn btn--outline btn--arrow" href="/events">See the event calendar</a>
-              </p>
-            </>
-          )
-        }
-      </div>
-    </section>
   </div>
 </Base>
 
@@ -1557,7 +1483,8 @@ function homeWhen(event: CalendarEvent): string {
   .board-panel .panel-head {
     margin-bottom: var(--space-3);
   }
-  /* Wide screens: three posts in a row on a sign across the foot of the hero,
+  /* Wide screens: the board's two posts on a sign across the foot of the
+     hero — the next meetup wide with its art, flares narrow beside it —
      inset a step from the container's edges so it reads as bolted over the
      band rather than as the next section starting. */
   @media (min-width: 1000px) {
@@ -1565,12 +1492,14 @@ function homeWhen(event: CalendarEvent): string {
       margin-inline: var(--space-6);
     }
     .board-panel .posts {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--space-6);
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+      /* Row gap unchanged; the column gets a wider one now that its two
+         tracks carry unequal weight. */
+      gap: var(--space-6) var(--space-8);
     }
   }
   /* The board's title plate, one step down from `--display-lg`: a name over
-     three posts, not the page's heading, which is the wordmark above it. */
+     two posts, not the page's heading, which is the wordmark above it. */
   .board-panel .panel-head h2 {
     font-size: var(--display-md);
     line-height: var(--lh-heading);
@@ -1617,7 +1546,7 @@ function homeWhen(event: CalendarEvent): string {
   }
 
   /* ---------------------------------------------------------------- posts --
-   * A legend: three numbered posts, readable in any order. The numbers are keys
+   * A legend: two numbered posts, readable in any order. The numbers are keys
    * rather than decoration, which is the only thing that earns them here.
    */
   .posts {
@@ -1670,6 +1599,50 @@ function homeWhen(event: CalendarEvent): string {
   .post-link--now {
     color: var(--live-text);
     text-decoration-color: currentColor;
+  }
+
+  /* The meetup's cover art, folded up into post 1 from the old closing panel:
+     a plate beside the words on a wide screen, above them on a phone — same
+     picture, same treatment, new address. */
+  .post-art {
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    aspect-ratio: 16 / 9;
+    background: var(--bg-sunken);
+  }
+  .post-art img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .post-text {
+    /* Same trap `.post-body` guards against above, one level deeper now that
+       post 1 has two children instead of one. */
+    min-width: 0;
+  }
+  /* The place, quieter than the time it sits beside: `.post-when` bolds the
+     whole line in signage type, and the place is not the time. */
+  .post-where {
+    color: var(--text-muted);
+    font-family: var(--font-read);
+    font-weight: 400;
+  }
+  /* Post 1 only, and only once it actually has art — see the `nextUp.imageUrl`
+     check at the call site. Below 640px the art sits above the text; from
+     640px it is a plate beside it. With no art (or no meetup at all) this
+     class never lands and the post falls back to plain block flow, same as
+     every other post on the board. */
+  .post--event .post-body {
+    display: grid;
+    gap: var(--space-3);
+  }
+  @media (min-width: 640px) {
+    .post--event .post-body {
+      grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+      gap: var(--space-4);
+      align-items: start;
+    }
   }
 
   /*
@@ -1990,68 +1963,6 @@ function homeWhen(event: CalendarEvent): string {
   .inline-star {
     vertical-align: -2px;
     color: var(--poi-campsite-text);
-  }
-
-  /* -------------------------------------------------------------- closing -- */
-  .closing-line {
-    margin: 0 0 var(--space-5);
-    font-size: var(--text-lg);
-    line-height: var(--lh-body);
-  }
-
-  /* The closing panel's event: art as a plate beside the words on a wide
-     screen, above them on a phone. */
-  .closing-event {
-    display: grid;
-    gap: var(--space-4);
-  }
-  .closing-art {
-    position: relative;
-    overflow: hidden;
-    border-radius: var(--radius-sm);
-    aspect-ratio: 16 / 9;
-    background: var(--bg-sunken);
-  }
-  .closing-art img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .closing-body {
-    min-width: 0;
-  }
-  .closing-kind {
-    margin: 0 0 var(--space-1);
-    color: var(--text-muted);
-    font-size: var(--text-sm);
-  }
-  .closing-title {
-    margin: 0 0 var(--space-1);
-    font-family: var(--font-sign);
-    font-size: var(--display-sm);
-    font-weight: 800;
-    line-height: var(--lh-heading);
-    letter-spacing: var(--tracking-tight);
-  }
-  .closing-when {
-    margin: 0 0 var(--space-4);
-    font-size: var(--text-lg);
-    line-height: var(--lh-body);
-  }
-  .closing-when time {
-    font-weight: 700;
-  }
-  .closing-where {
-    color: var(--text-muted);
-  }
-  @media (min-width: 768px) {
-    .closing--art .closing-event {
-      grid-template-columns: minmax(220px, 38%) minmax(0, 1fr);
-      align-items: start;
-      gap: var(--space-6);
-    }
   }
 
   /* --------------------------------------------------------- calendar art --
