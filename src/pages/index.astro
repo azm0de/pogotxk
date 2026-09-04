@@ -366,83 +366,114 @@ function homeWhen(event: CalendarEvent): string {
 <Base title="PoGo TXK">
   <div class="home">
     {/*
-      THE MASTHEAD: the wordmark, back at the top of the page on the owner's
-      call, and the page's h1 — the heading element holds the image and its
-      `alt` reads exactly what the words would. Below 640px the stacked cut;
-      from 640px the wide one, a third of the height at the same width. Shiny
-      Lucario stands at the band's right edge at every width: the band is
-      full-bleed so he has an edge to stand against, and the wordmark keeps to
-      the container so the two never meet.
+      THE HERO, as production had it, on the owner's call (2026-09-04): the
+      wordmark and the live map side by side over the forest on a wide screen,
+      stacked on a phone. The lede, the two buttons and the survey counts sit
+      under the mark, and the board panel below is bolted over the band's foot.
+
+      A full-width band so the forest and the artwork have an edge to run off;
+      the content keeps to the container.
     */}
-    <div class="masthead-band art-band">
-      <header class="masthead container">
-        <h1 class="masthead-title">
-          <picture>
-            <source
-              media="(min-width: 640px)"
-              srcset="/art/logo-txk-wide.webp"
-              width="1574"
-              height="575"
-            />
-            {/* No `fetchpriority="high"`: the old hero measured worse LCP with
-                it than without, over three runs, and Chrome already ranks a
-                large first-viewport image High on its own. */}
+    <div class="hero-band art-band">
+      {/*
+        Leafeon and Espeon, behind the logo and the map. The source was
+        3440x1440 at 60fps and 25Mbps with an audio track on a background that
+        is muted by definition; re-encoded to 1600 wide, 30fps and no audio it
+        is 656KB.
+
+        `data-src`, not `src`, and `preload="none"`: the script below promotes
+        it only when motion is allowed and the browser is not in data-saver
+        mode. Served from R2 via /media, NOT from /hero in the static assets:
+        Cloudflare's asset layer does not do byte ranges, and iOS Safari probes
+        with a range request before it will play any `<video>`. R2 serves
+        ranges natively, /media passes them through, and the service worker
+        steps aside for any ranged request (public/sw.js).
+
+        The poster is the whole fallback strategy. The band comes up when the
+        still loads and the clip fades in over it for whoever can have it; Low
+        Power Mode, Data Saver and Reduce Motion all refuse playback and all
+        still get the forest, because the still is a frame of this clip.
+      */}
+      <video
+        class="hero-video"
+        poster="/hero/eevee-forest-still.webp"
+        data-src="/media/hero/eevee-forest.mp4"
+        muted
+        loop
+        playsinline
+        preload="none"
+        aria-hidden="true"
+        tabindex="-1"></video>
+      <div class="hero-scrim" aria-hidden="true"></div>
+
+      <section class="hero container" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          {/*
+            The wordmark is the page's h1: the heading element holds the image
+            and its `alt` reads exactly what the words would. Deliberately NO
+            `fetchpriority="high"`, despite Lighthouse asking for it: Chrome
+            already ranks a large first-viewport image High on its own, and
+            measured production LCP was worse with the hint than without over
+            three runs. Check the priority in a network trace before re-adding.
+          */}
+          <h1 id="hero-title" class="hero-title">
             <img
-              class="wordmark"
+              class="hero-logo"
               src="/art/logo-txk-classic.webp"
               width="850"
               height="793"
               alt="Pokémon GO Texarkana"
-              decoding="async"
             />
-          </picture>
-        </h1>
-      </header>
-    </div>
+          </h1>
+          <p class="lede">
+            A community Campsite at Spring Lake Park, run by the official Texarkana Pokémon GO
+            Ambassadors. Find every PokéStop and Gym, catch the next meetup, and raid with new and
+            experienced players.
+          </p>
 
-    {/*
-      THE BANNER, and the board it sits on.
+          <div class="hero-actions">
+            <a class="btn btn--primary btn--arrow" href="/map">Open the map</a>
+            <a
+              class="btn btn--discord"
+              href={DISCORD_INVITE}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Join the Discord
+              <span class="sr-only"> (opens in a new tab)</span>
+            </a>
+          </div>
+        </div>
 
-      The photograph is the first thing on the page because a stranger's first
-      impression of a community site should be the community. It is the top
-      plate of one object: the group shot, then the park itself, then a panel of
-      posts bolted over the map's lower edge.
-
-      The credit rides ON the image (`.figure` + `.credit`), which is why the
-      map does not overlap the photograph's bottom edge — that strip is a
-      licence obligation, not a margin. The two share one radius and one shadow
-      instead, which is what makes them read as a single board.
-    */}
-    <section class="board container" aria-labelledby="board-title">
-      <div class="board-plate">
-        <figure class="figure banner">
-          {/*
-            Art-directed, not scaled: a sixty-person group shot 3.4 times wider
-            than it is tall renders every face about three pixels across on a
-            phone, so narrow screens get the tighter crop centred on the two
-            Ambassador banners.
-          */}
-          <picture>
-            <source
-              media="(min-width: 900px)"
-              srcset="/hero/community-wide-1200.webp 1200w, /hero/community-wide-1600.webp 1600w, /hero/community-wide-2400.webp 2400w"
-              sizes="(min-width: 1140px) 1060px, calc(100vw - 40px)"
-            />
-            <img
-              src="/hero/community-tight-900.webp"
-              srcset="/hero/community-tight-600.webp 600w, /hero/community-tight-900.webp 900w, /hero/community-tight-1200.webp 1200w"
-              sizes="calc(100vw - 40px)"
-              width="1200"
-              height="560"
-              alt="PoGo TXK members gathered at Spring Lake Park for GO Fest 2026, holding two Pokémon GO Community Ambassador banners under a black and a purple canopy."
-              decoding="async"
-            />
-          </picture>
-          <figcaption class="credit">
-            GO Fest 2026 at Spring Lake Park.{' '}
-            <a class="target" href="/blog#photos">All photos</a>
-          </figcaption>
-        </figure>
+        {/*
+          A sibling of `.hero-copy`, not a child of it, and that is load-bearing
+          on a wide screen: it gives the counts their own grid row, which lets
+          the map end on the same line as the buttons without anyone having to
+          know how tall this block is. Stacked below 820px it simply follows the
+          copy.
+        */}
+        {
+          totalPois > 0 && (
+            <dl class="stats tnum">
+              <div>
+                <dt>PokéStops</dt>
+                <dd>{counts?.pokestops ?? 0}</dd>
+              </div>
+              <div>
+                <dt>Gyms</dt>
+                <dd>{counts?.gyms ?? 0}</dd>
+              </div>
+              <div>
+                <dt>Power Spots</dt>
+                <dd>{counts?.powerspots ?? 0}</dd>
+              </div>
+              <div>
+                <dt>★ Campsite</dt>
+                <dd>{counts?.campsite ?? 0}</dd>
+              </div>
+            </dl>
+          )
+        }
 
         {/*
           The real map, not a picture of one. It is the thing people came for,
@@ -453,11 +484,11 @@ function homeWhen(event: CalendarEvent): string {
           path. MapPreview exists to make that possible: MapView itself cannot
           be server-rendered, because Leaflet reads `window` on import.
         */}
-        <div class="board-map">
+        <div class="hero-map">
           <MapPreview client:visible compact />
 
           <noscript>
-            <div class="board-fallback">
+            <div class="hero-map-fallback">
               <strong>Spring Lake Park</strong>
               <span>
                 {
@@ -470,39 +501,96 @@ function homeWhen(event: CalendarEvent): string {
             </div>
           </noscript>
         </div>
-      </div>
+      </section>
+    </div>
 
-      {/*
-        The panel: three posts and one arrow. The numbers are a legend, so the
-        board can be read in any order — what is on, who is out there, and how
-        much of the park has been surveyed.
-      */}
+    <script is:inline>
+      // The hero video, on every screen, phones included. `saveData` is the one
+      // opt-out: 656KB of decoration is not something to push at someone who
+      // has explicitly asked their browser to spend less.
+      (() => {
+        const band = document.querySelector('.hero-band');
+        const video = band && band.querySelector('.hero-video');
+        if (!video) return;
+
+        const still = matchMedia('(prefers-reduced-motion: reduce)');
+        const thrifty = navigator.connection && navigator.connection.saveData;
+
+        /*
+         * Raised when the POSTER has loaded, not only when the clip plays. A
+         * phone can refuse playback in at least three ways it never reports
+         * (iOS Low Power Mode, Data Saver, and Reduce Motion, which is declined
+         * on purpose), and keying the band to the still gives every one of
+         * them the forest while keeping the original guarantee: the scrim only
+         * ever goes over a picture that actually loaded. A 404 on the still
+         * leaves the attribute unset and the hero exactly as it is without any
+         * of this.
+         */
+        const reveal = () => band.setAttribute('data-hero-video', '');
+        const art = new Image();
+        art.addEventListener('load', reveal);
+        art.src = video.getAttribute('poster');
+        // Either signal is enough, and the second is not redundant: a still
+        // that 404s while the clip plays would otherwise leave the clip playing
+        // perfectly and invisibly behind Lucario. Not hypothetical — the poster
+        // answered 404 for about a minute after a deploy once.
+        video.addEventListener('playing', reveal);
+
+        const sync = () => {
+          if (!still.matches && !thrifty) {
+            if (!video.src) video.src = video.dataset.src;
+            // The attribute alone is not always enough for autoplay policy; the
+            // property is what browsers actually check.
+            video.muted = true;
+            // A refused autoplay is a normal outcome, not an error: the poster
+            // is already up, so there is nothing to handle here.
+            video.play().catch(() => {});
+          } else {
+            // Reduced motion asks for a still image, not for no image. The
+            // poster stays up and the attribute belongs to it.
+            video.pause();
+          }
+        };
+        sync();
+        still.addEventListener('change', sync);
+
+        /*
+         * Ask again, because asking once is why the hero was once a still.
+         * `play()` at script time is a request, a refusal is silent, and on
+         * production the clip sat fully loaded, `readyState` 4, and paused.
+         * `canplay` covers the ordinary race with `preload="none"`, where
+         * assigning `src` and playing happen in the same tick. The first real
+         * interaction covers the policies no retry gets past on its own: a
+         * user gesture satisfies Chrome's autoplay rules, and on iOS it is what
+         * permits playback in Low Power Mode. `scroll` counts, and is what
+         * someone does first on a page like this. `once` on each, and both are
+         * no-ops when the clip is already running or the reader has opted out.
+         */
+        const retry = () => {
+          if (still.matches || thrifty) return;
+          if (!video.paused) return;
+          video.play().catch(() => {});
+        };
+        video.addEventListener('canplay', retry, { once: true });
+        for (const evt of ['pointerdown', 'touchstart', 'keydown', 'scroll']) {
+          addEventListener(evt, retry, { once: true, passive: true });
+        }
+      })();
+    </script>
+
+    {/*
+      THE BOARD: three posts on a panel bolted over the hero's foot. The numbers
+      are a legend, so the board can be read in any order — what is on, who is
+      out there, and how much of the park has been surveyed. The map it used to
+      sit over is in the hero now, and the arrows that used to ride on its title
+      plate are the hero's own two buttons.
+    */}
+    <section class="board container" aria-labelledby="board-title">
       <div class="panel board-panel">
         <div class="panel-head">
-          {/* An h2 now: the masthead's wordmark is the page's h1. */}
+          {/* An h2: the hero's wordmark is the page's h1. */}
           <h2 id="board-title">Spring Lake Park</h2>
         </div>
-        {/*
-          The arrow rides with the title plate, above the three posts.
-
-          It used to close the panel, and at the bottom of three posts it landed
-          at y=1,012 on a 812px phone — the board's one primary action, below the
-          fold, on the page's first screen. A signpost carries its arrow at the
-          top; the posts under it are the notices pinned to the same board, and
-          they are read after you know where the arrow goes.
-        */}
-        <p class="board-actions actions">
-          <a class="btn btn--primary btn--arrow" href="/map">Open the map</a>
-          <a
-            class="btn btn--outline"
-            href={DISCORD_INVITE}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Join the Discord
-            <span class="sr-only"> (opens in a new tab)</span>
-          </a>
-        </p>
 
         <ol class="posts" role="list">
           <li class="post">
@@ -826,6 +914,33 @@ function homeWhen(event: CalendarEvent): string {
           <p class="band-lede">
             PoGo TXK meets year-round at Spring Lake Park. New players and veterans, any team.
           </p>
+          {/*
+            The GO Fest group shot leads the section, where production had it.
+            Art-directed, not scaled: a sixty-person group shot 3.4 times wider
+            than it is tall renders every face about three pixels across on a
+            phone, so narrow screens get the tighter crop centred on the two
+            Ambassador banners.
+          */}
+          <figure class="figure banner">
+            <picture>
+              <source
+                media="(min-width: 900px)"
+                srcset="/hero/community-wide-1200.webp 1200w, /hero/community-wide-1600.webp 1600w, /hero/community-wide-2400.webp 2400w"
+                sizes="(min-width: 1140px) 1060px, calc(100vw - 40px)"
+              />
+              <img
+                src="/hero/community-tight-900.webp"
+                srcset="/hero/community-tight-600.webp 600w, /hero/community-tight-900.webp 900w, /hero/community-tight-1200.webp 1200w"
+                sizes="calc(100vw - 40px)"
+                width="1200"
+                height="560"
+                alt="PoGo TXK members gathered at Spring Lake Park for GO Fest 2026, holding two Pokémon GO Community Ambassador banners under a black and a purple canopy."
+                loading="lazy"
+                decoding="async"
+              />
+            </picture>
+            <figcaption class="credit">GO Fest 2026 at Spring Lake Park</figcaption>
+          </figure>
           {/* Several of these are Texarkana Gazette press photos, so the credit
               rides on the image rather than sitting in a caption a crop could
               separate from it. */}
@@ -1043,6 +1158,9 @@ function homeWhen(event: CalendarEvent): string {
     font-family: var(--font-read);
     line-height: var(--lh-body);
     padding-bottom: var(--space-section);
+    /* How far the board panel rises into the hero's foot. The band pads its
+       bottom by the same amount, so the two agree by construction. */
+    --board-overlap: var(--space-12);
   }
   .home h1,
   .home h2,
@@ -1069,138 +1187,316 @@ function homeWhen(event: CalendarEvent): string {
     color: var(--text-muted);
   }
 
-  /* --------------------------------------------------------------- board --
-   * The banner, the map and the panel are one object: one radius, one shadow,
-   * and no gap between the photograph and the park it was taken in.
-   *
-   * The panel overlaps the map rather than the photograph, and that is a
-   * licence decision rather than a compositional one — the press credit lives
-   * on the bottom strip of the image (`.credit`), and nothing sits on top of it.
+  /* ---------------------------------------------------------------- hero --
+   * The production hero, back on the owner's call (2026-09-04). The forest
+   * clip and its scrim sit behind the band at negative z; the wordmark, lede,
+   * buttons and counts take the left column and the live map the right, and
+   * the board panel below rises over the band's dissolving foot by
+   * `--board-overlap` (declared on `.home`, read here and by `.board`).
    */
-  /*
-   * The board is one object that has to fit one screen.
-   *
-   * Round 1 shipped it 1,088–1,330px tall on a 760–900px viewport: the banner
-   * and the map together spent the whole first screen, and the panel — the only
-   * part of the board carrying a date, a place and a button — began below the
-   * fold at every width measured. The three sizes below are the budget, and
-   * they are load-bearing rather than taste:
-   *
-   *   banner  180px (220 from 900px up)
-   *   map     clamp(240px, 42dvh, 380px)
-   *   overlap 80px
-   *
-   * which leaves the panel's first post — its name, its time, its place and its
-   * RSVP button — and the board's one arrow inside 812px on the phone this site
-   * is designed for, and the whole board inside 900px on a laptop.
-   */
-  .board {
-    --board-overlap: var(--space-20);
-    margin-block-start: var(--space-4);
-  }
-  .board-plate {
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    box-shadow: var(--shadow-md);
-    /* Map paper, so a tile that has not painted yet reads as loading rather
-       than as a hole punched in the board. */
-    background: var(--map-canvas);
+  .hero-band {
+    /*
+     * Shiny Lucario is the hero's artwork only while the forest is not up: the
+     * moment the still loads he stands down (below), so this is the picture a
+     * broken still leaves behind. 280x431 trimmed, pushed past the edge so the
+     * leading half shows and the screen crops the rest — anything wider would
+     * only hide behind the map card, whose corner carries the tile credit.
+     */
+    --art-src: url('/art/lucario-shiny.webp');
+    --art-ratio: 0.65;
+    --art-right: calc(-1 * clamp(30px, 6vw, 110px));
+    --art-bottom: -14px;
+    --art-w: clamp(150px, 17vw, 280px);
+    /*
+     * The distance the forest and its scrim dissolve over at the foot of the
+     * band, and the room made for them to do it in. The padding is
+     * unconditional rather than under `[data-hero-video]`: tied to the clip it
+     * would move everything below the hero the moment the still landed. The
+     * panel's overlap is added on top, so the counts and the map keep their
+     * clearance from the fade and from the panel both. Production measured the
+     * 6.5vw/96px term at 21–26px of margin between the last content and the
+     * fade across 900–1920.
+     */
+    --hero-out: clamp(70px, 8vw, 110px);
+    padding-bottom: calc(clamp(52px, 6.5vw, 96px) + var(--board-overlap));
   }
 
-  .banner {
-    margin: 0;
-    display: block;
+  /* --- the forest behind the hero -------------------------------------------
+   * Both layers start invisible and are revealed together by
+   * `data-hero-video`, which the script sets when the still has loaded or the
+   * clip is playing, so every way this can fail leaves the hero exactly as it
+   * is without the forest instead of a scrim darkening an empty band.
+   *
+   * `--z-art` and one step below it put them under the band's content while
+   * keeping the scrim over the clip. The same trick `.art-band::after` uses,
+   * and it works for the same reason: nothing between here and the root
+   * paints an opaque background.
+   */
+  .hero-video,
+  .hero-scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity calc(var(--dur-4) * 2) var(--ease-out);
   }
-  .banner picture {
-    display: block;
-  }
-  .banner img {
-    display: block;
+  .hero-video {
+    z-index: calc(var(--z-art) - 1);
     width: 100%;
-    height: auto;
-    /* Matches the tight crop the `<img>` fallback actually serves, so `cover`
-       is not cropping an already-cropped frame a second time. */
-    aspect-ratio: 1200 / 560;
-    max-height: 180px;
+    height: 100%;
+    /* Fills the band, which is what a phone wants: stacked, the band is taller
+       than it is wide, and a clip sized to its own 2.39:1 would be a thin strip
+       over a lot of empty. From 900px up this is overridden below. Centred
+       either way: the two subjects sit at 33% and 76% across, so any
+       `object-position` off centre drops one of them first. */
     object-fit: cover;
-    /* Low, because the people are in the lower two-thirds of the frame. */
-    object-position: center 58%;
+    object-position: center;
   }
-  /* The `<source>` swaps to the wide crop at exactly this width, so the ratio
-     has to swap with it or `cover` starts eating the group. */
-  @media (min-width: 900px) {
-    .banner img {
-      aspect-ratio: 2540 / 740;
-      max-height: 220px;
-      object-position: center 72%;
+  .hero-scrim {
+    z-index: var(--z-art);
+    /* Heaviest on the left, where the copy is, lifting toward the map card on
+       the right, which brings its own opaque ground. The stops are the ones
+       production shipped under this copy. */
+    background: linear-gradient(
+      to right,
+      rgb(6 8 12 / 0.84) 0%,
+      rgb(6 8 12 / 0.72) 46%,
+      rgb(6 8 12 / 0.52) 100%
+    );
+  }
+  .hero-band[data-hero-video] .hero-video,
+  .hero-band[data-hero-video] .hero-scrim {
+    opacity: 1;
+  }
+  /* Lucario stands down wherever the forest is up. */
+  .hero-band[data-hero-video]::after {
+    display: none;
+  }
+
+  /* --- the same forest, on a phone -----------------------------------------
+   * Not the desktop treatment scaled down. `cover` on a 2.39:1 clip over a tall
+   * phone column keeps roughly 18% of its width, and both Pokémon fall outside
+   * it. So the clip gets a strip at the top of the band instead, sized to end
+   * behind the mark, and below the strip the scrim goes fully opaque and
+   * becomes the hero's ground. In the scrim, already the layer above the clip,
+   * because a `background` on the band would paint over a clip that has
+   * escaped to the root stacking context; the 900px-and-up block takes the
+   * other route and sets `isolation: isolate` to make a band background legal.
+   * Neither approach works without its own half, so do not move one alone.
+   */
+  @media (max-width: 899px) {
+    .hero-band {
+      --hero-vid-h: clamp(210px, 62vw, 330px);
+    }
+    .hero-video {
+      height: var(--hero-vid-h);
+      bottom: auto;
+    }
+    .hero-scrim {
+      background: linear-gradient(
+        to bottom,
+        rgb(6 8 12 / 0.42) 0,
+        rgb(6 8 12 / 0.5) calc(var(--hero-vid-h) * 0.55),
+        rgb(11 14 19) var(--hero-vid-h),
+        rgb(11 14 19) 100%
+      );
     }
   }
-  /* The primitive's five-stop ramp does the contrast work; this only sets the
-     weight, because the caption names the photograph rather than whispering it.
-     The two-stop scrim it replaces measured 2.50:1 where the glyphs are. */
-  .banner .credit {
-    font-family: var(--font-sign);
-    font-weight: 700;
+
+  /* The copy inverts over the scrim. `--text-muted` is a grey tuned for a light
+     panel and reads at roughly 2:1 on this ground. */
+  .hero-band[data-hero-video] .lede {
+    color: rgb(255 255 255 / 0.92);
   }
-  /*
-   * The credit's link underlines itself in white.
-   *
-   * Links are ink with a `--border-strong` underline now, and the underline is
-   * the whole affordance. On the credit's black scrim that token is #c7c7ce in
-   * light mode and #4c4c56 in dark — the dark one is invisible against the
-   * scrim, which left "All photos" as white text with no sign it was a link at
-   * all. `currentColor` puts the rule in the same white as the words.
-   */
-  .banner .credit a {
-    text-decoration-color: currentColor;
+  .hero-band[data-hero-video] .stats dt {
+    color: rgb(255 255 255 / 0.78);
+  }
+  .hero-band[data-hero-video] .stats dd {
+    color: #fff;
   }
 
-  .board-map {
-    position: relative;
+  /*
+   * The foot of the band dissolves instead of stopping dead: masked to
+   * transparent rather than covered by a page-colour gradient, so whatever is
+   * below shows through on its own and it holds in both themes. The scrim is
+   * masked at every width; the clip only from 900px up, because below that it
+   * is a strip whose bottom edge the opaque scrim already hides.
+   */
+  .hero-band[data-hero-video] .hero-scrim {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 calc(100% - var(--hero-out)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--hero-out)), transparent 100%);
+  }
+  @media (min-width: 900px) {
+    .hero-band[data-hero-video] .hero-video {
+      -webkit-mask-image: linear-gradient(
+        to bottom,
+        #000 calc(100% - var(--hero-out)),
+        transparent 100%
+      );
+      mask-image: linear-gradient(to bottom, #000 calc(100% - var(--hero-out)), transparent 100%);
+      /*
+       * Stop stretching the clip to the band's height. The source is 2.39:1
+       * and the band is nowhere near it, so `cover` was binding on height and
+       * eating the sides: at 1000px a centred 50% window is 25%–75%, and the
+       * subject at 76% was cropped out of its own hero. The box takes the
+       * clip's own ratio instead, floored at 72% of the band — 72% at 1000,
+       * 78% at 1200, the whole frame from ~1585px up. `aspect-ratio` is
+       * declared because a device that declines playback never gets a `src`,
+       * and `height: auto` on a video with nothing but a poster is not
+       * reliably the poster's ratio. The number matches the file; recut the
+       * clip and it moves.
+       */
+      bottom: auto;
+      height: auto;
+      aspect-ratio: 1600 / 670;
+      min-height: 72%;
+      max-height: 100%;
+    }
     /*
-     * A stacking context of its own. Leaflet's panes carry z-index 200–700 and
-     * `.leaflet-container` is not itself a stacking context, so without this
-     * the tiles paint over the panel's `z-index: 1` and the board's own heading
-     * disappears behind the map — which is exactly what shipped at every width
-     * until the finish captures caught it.
+     * What fills the strip below the clip. `isolation` is the whole reason
+     * this works: the clip and scrim sit at negative z, and without a stacking
+     * context on the band its own background would paint straight over them.
+     * The colour is the clip's own bottom edge averaged over its last 2% of
+     * rows, which is what makes the masked bottom of the clip dissolve into
+     * the strip rather than step into it; it then fades out over `--hero-out`.
      */
+    .hero-band[data-hero-video] {
+      isolation: isolate;
+      background: linear-gradient(
+        to bottom,
+        rgb(46 49 46) 0%,
+        rgb(46 49 46) calc(100% - var(--hero-out)),
+        transparent 100%
+      );
+    }
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    /* Columns only: the rows are spaced by `.stats`' own top margin, so that
+       one number keeps setting the distance under the buttons. */
+    column-gap: clamp(var(--space-5), 4vw, var(--space-12));
+    row-gap: 0;
+    align-items: center;
+    /* The top value is the space above the mark, so it is what sets how high
+       the mark sits under the header: ~46px on a wide screen and 24px on a
+       phone, where the same number would crowd the bar. The band's own
+       padding closes the foot. */
+    padding-block: clamp(var(--space-6), 4.4vw, var(--space-12))
+      clamp(var(--space-5), 4vw, var(--space-10));
+  }
+  /*
+   * Two columns, two rows: copy and map share the first, the counts have the
+   * second to themselves. That is what lands the map's bottom edge on the same
+   * line as "Join the Discord": the first row is only as tall as the copy down
+   * to the end of the buttons, so `align-self: end` puts the map on that line
+   * with no measurement of the counts block and nothing to re-tune if its type
+   * ever changes.
+   */
+  @media (min-width: 821px) {
+    .hero-copy {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .hero > .stats {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .hero-map {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: end;
+    }
+  }
+  .hero-title {
+    margin: var(--space-2) 0 var(--space-4);
+    /* The h1's only child is an image; a line-height on the block would show
+       up as unexplained space under it. */
+    line-height: 0;
+  }
+  /* Capped in px rather than left at 100%: the copy column is ~560px at the
+     container's cap, and a mark that wide dwarfs the lede and pushes both
+     buttons below the fold. */
+  .hero-logo {
+    display: block;
+    width: 100%;
+    max-width: 380px;
+    height: auto;
+  }
+  .lede {
+    margin: 0 0 var(--space-6);
+    max-width: 46ch;
+    font-size: clamp(var(--text-base), 2.2vw, var(--text-lg));
+    line-height: var(--lh-body);
+    color: var(--text-muted);
+  }
+  /*
+   * One row, not two. At 375 the primitive's `--space-5` inline padding made
+   * the pair 322px wide in a 349px box once the arrow was counted, so they
+   * stacked and spent 57px of the first screen on the wrap. Tightened through
+   * the primitive's own custom property rather than by restyling `.btn`; the
+   * 44px target height is untouched, and they still wrap if a narrower phone
+   * or a larger root font needs them to.
+   */
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    --btn-pad-inline: var(--space-3);
+  }
+
+  /* Four counts on one line at 375: the label is the eyebrow size and the
+     columns sit `--space-6` apart, which is 322px against the 349px box. */
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-6);
+    margin: var(--space-8) 0 0;
+  }
+  .stats div {
+    display: flex;
+    flex-direction: column-reverse;
+  }
+  .stats dt {
+    font-family: var(--font-sign);
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .stats dd {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--display-sm);
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  /* Holds the live map island, which sizes to this box. Square: the card is
+     bottom-aligned to the buttons and shares its row with the copy, which runs
+     ~560px tall at 1280 against the card's 470, so it grows to the copy's
+     height before the hero gets any taller at all. */
+  .hero-map {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    /* Map paper, so a tile that has not painted yet reads as loading rather
+       than as a hole punched in the band. */
+    background: var(--map-canvas);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    /* Leaflet's panes carry z-index 200–700 and `.leaflet-container` is not a
+       stacking context of its own; this keeps them inside the card. */
     isolation: isolate;
-    /* A strip of the real park, not a screenful of it. 42dvh keeps the map the
-       largest single thing on the board while still leaving the panel's first
-       post above the fold on a 812px phone; the floor stops it collapsing to a
-       band on a short landscape window, and the ceiling stops it eating a tall
-       desktop. */
-    height: clamp(240px, 42dvh, 380px);
   }
-  /*
-   * The tile attribution is an obligation, so the panel is never allowed to
-   * cover it. Leaflet anchors its bottom controls to the map's own bottom edge
-   * and the panel rises over that edge, so the whole corner moves up by the
-   * overlap plus the credit's own measured height.
-   *
-   * `--map-attrib-h` is published by MapView's ResizeObserver and is the real
-   * height of the credit, which wraps to two lines on a narrow phone; the old
-   * fixed `--space-2` of air cleared it by exactly 8px at every width, which is
-   * a clearance that holds only while the string does. `:global` because the map
-   * is a React island with no scoping of its own, and scoped under `.board-map`
-   * so /map is untouched.
-   */
-  .board-map :global(.leaflet-bottom) {
-    bottom: calc(var(--board-overlap) + var(--map-attrib-h, var(--space-6)));
-  }
-
-  /*
-   * The `!important` override that used to sit here is gone.
-   *
-   * It pinned every `[role="status"]` inside the board to `--ink-700`, to beat
-   * an inline `--text-muted` in MapPreview's loading placeholder that measured
-   * 2.03:1 on the light map ground. MapPreview writes the fixed ink itself now,
-   * so the sledgehammer had nothing left to hit except the map's own status
-   * panels — which sit on `--bg-panel` and would have been dark ink on a dark
-   * card in dark mode.
-   */
-
-  .board-fallback {
+  .hero-map-fallback {
     position: absolute;
     inset: 0;
     z-index: var(--z-content);
@@ -1214,15 +1510,45 @@ function homeWhen(event: CalendarEvent): string {
        both themes, so `--text` would invert out from under it. */
     color: var(--ink-800);
   }
-  .board-fallback strong {
+  .hero-map-fallback strong {
     font-family: var(--font-sign);
     font-size: var(--display-sm);
   }
 
-  .board-panel {
+  @media (max-width: 820px) {
+    .hero {
+      grid-template-columns: 1fr;
+    }
+    .hero-map {
+      /* Full width on a phone, a square card would be 345px of map and push
+         everything under it off the screen. */
+      aspect-ratio: 4 / 3;
+      /* Stacked, this is the gap the grid's row gap used to provide. */
+      margin-top: clamp(var(--space-5), 4vw, var(--space-12));
+    }
+    /* Single column, so there is no margin for the art to live in: every
+       horizontal band of the hero has text or the map card in it. He moves up
+       behind the mark and drops to atmosphere, because full opacity behind
+       body copy cannot hold 4.5:1 at every scroll position. */
+    .hero-band {
+      --art-top: -14px;
+      --art-right: -54px;
+      --art-bottom: auto;
+      --art-w: 208px;
+      --art-opacity: 0.16;
+    }
+  }
+
+  /* --------------------------------------------------------------- board --
+   * The panel, bolted over the hero's foot: `--board-overlap` up into the
+   * dissolving forest, above the band's content at `--z-content`.
+   */
+  .board {
     position: relative;
     z-index: var(--z-content);
-    margin-top: calc(var(--board-overlap) * -1);
+    margin-block-start: calc(var(--board-overlap) * -1);
+  }
+  .board-panel {
     /* One step tighter than the default panel, and only here: this is the panel
        whose contents have to clear a phone's fold, and 4px on each of four edges
        is 8px of the budget for nothing the reader can name. */
@@ -1231,60 +1557,63 @@ function homeWhen(event: CalendarEvent): string {
   .board-panel .panel-head {
     margin-bottom: var(--space-3);
   }
-  @media (min-width: 768px) {
-    .board-panel {
-      width: min(440px, 100%);
-      margin-inline-start: auto;
-      margin-inline-end: var(--space-6);
-    }
-  }
-  /*
-   * Wide screens: the panel is a sign bolted across the whole bottom of the
-   * board, three posts in a row, rather than a narrow column hanging off one
-   * side of it. At 1440 the column version left ~600px of empty page beside
-   * 480px of panel; a full-width panel is ~220px tall and the map stays whole.
-   */
+  /* Wide screens: three posts in a row on a sign across the foot of the hero,
+     inset a step from the container's edges so it reads as bolted over the
+     band rather than as the next section starting. */
   @media (min-width: 1000px) {
     .board-panel {
-      width: auto;
       margin-inline: var(--space-6);
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      column-gap: var(--space-8);
-      align-items: start;
     }
-    .board-panel .panel-head {
-      grid-column: 1 / -1;
-    }
-    /* Explicit row placement, because the arrow now comes BEFORE the posts in
-       the markup: auto-placement would otherwise put them on two rows. */
     .board-panel .posts {
-      grid-column: 1;
-      grid-row: 2;
-      display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: var(--space-6);
     }
-    .board-panel .actions {
-      grid-column: 2;
-      grid-row: 2;
-      align-self: start;
-      flex-direction: column;
-      align-items: stretch;
-    }
   }
-  /*
-   * The board's title plate, one step down from the round-1 `--display-lg`.
-   *
-   * The largest typeset heading on the page (the h1 is the wordmark image in
-   * the masthead), but the plate is a name over a map that is already showing
-   * the park — spending 46px of a 812px screen saying "Spring Lake Park" above
-   * a picture of Spring Lake Park pushed the one post carrying a date and a
-   * button below the fold.
-   */
+  /* The board's title plate, one step down from `--display-lg`: a name over
+     three posts, not the page's heading, which is the wordmark above it. */
   .board-panel .panel-head h2 {
     font-size: var(--display-md);
     line-height: var(--lh-heading);
+  }
+
+  /* -------------------------------------------------------- community shot --
+   * The GO Fest group shot leads "The community", where production had it,
+   * rather than opening the page. The credit rides ON the image (`.figure` +
+   * `.credit`) because it is a licence line, not a caption.
+   */
+  .banner {
+    margin: 0 0 var(--space-4);
+    display: block;
+  }
+  .banner picture {
+    display: block;
+  }
+  .banner img {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* Matches the tight crop the `<img>` fallback actually serves, so `cover`
+       is not cropping an already-cropped frame a second time. */
+    aspect-ratio: 1200 / 560;
+    max-height: 240px;
+    object-fit: cover;
+    /* Low, because the people are in the lower two-thirds of the frame. */
+    object-position: center 58%;
+  }
+  /* The `<source>` swaps to the wide crop at exactly this width, so the ratio
+     has to swap with it or `cover` starts eating the group. */
+  @media (min-width: 900px) {
+    .banner img {
+      aspect-ratio: 2540 / 740;
+      max-height: 300px;
+      object-position: center 72%;
+    }
+  }
+  /* The primitive's five-stop ramp does the contrast work; this only sets the
+     weight, because the caption names the photograph rather than whispering it. */
+  .banner .credit {
+    font-family: var(--font-sign);
+    font-weight: 700;
   }
 
   /* ---------------------------------------------------------------- posts --
@@ -1356,22 +1685,6 @@ function homeWhen(event: CalendarEvent): string {
     align-items: center;
     gap: var(--space-2);
   }
-  /*
-   * One row, not two.
-   *
-   * At 375 the default `--space-5` inline padding made the pair 322px wide in a
-   * 309px box, so they stacked — 57px of the first screen spent on the wrap,
-   * which is the difference between post 1's RSVP button being above the fold
-   * and being 26px under it. Tightened through the primitive's own custom
-   * property rather than by restyling `.btn`; the 44px target height is
-   * untouched, and they still wrap if a narrower phone or a larger root font
-   * needs them to.
-   */
-  .board-actions {
-    --btn-pad-inline: var(--space-3);
-    margin: 0 0 var(--space-4);
-  }
-
   /* --------------------------------------------------------------- panels --
    * The trailing phrase in a panel head is `.caption` now, not `.count`: it is
    * prose beside a heading rather than a tally, and the primitive sizes it. */
@@ -1738,55 +2051,6 @@ function homeWhen(event: CalendarEvent): string {
       grid-template-columns: minmax(220px, 38%) minmax(0, 1fr);
       align-items: start;
       gap: var(--space-6);
-    }
-  }
-
-  /* ------------------------------------------------------------- masthead --
-   * The wordmark at the top, on the owner's call. It is the brand in the
-   * Pokémon logotype, and it keeps to the container's left edge, where a plate
-   * on a kiosk is bolted. Lucario stands at the band's right edge with his feet
-   * on the board's top edge; the band is full-bleed (`.art-band`) so the screen
-   * crops him, not the container. He looks to the viewer's left, which from the
-   * right edge is into the page, so he is not mirrored here.
-   */
-  .masthead-band {
-    --art-src: url('/art/lucario-shiny.webp');
-    --art-ratio: 0.65; /* 280x431, trimmed */
-    --art-bottom: 0;
-    --art-right: calc(-1 * clamp(24px, 6vw, 40px));
-    /* Shorter than the band at every width, so his ears never rise behind the
-       sticky header: 130px wide is 200px tall against a 207px band. */
-    --art-w: clamp(104px, 28vw, 130px);
-  }
-  .masthead {
-    padding-top: var(--space-5);
-  }
-  .masthead-title {
-    margin: 0;
-    line-height: 0;
-  }
-  .wordmark {
-    display: block;
-    width: 100%;
-    max-width: 200px;
-    height: auto;
-  }
-  @media (min-width: 640px) {
-    .masthead-band {
-      /* His right edge on the container's content edge — the gutter plus
-         whatever the viewport has beyond 1100px, halved — so he lines up with
-         the wordmark's left edge across the band. Sized against the band:
-         126px wide is 194px tall under a 199px band. */
-      --art-right: calc(max(0px, (100% - var(--container)) / 2) + var(--gutter));
-      --art-w: clamp(110px, 9vw, 126px);
-    }
-    .masthead {
-      padding-top: var(--space-6);
-    }
-    /* The wide cut, and never within 160px of the right gutter, which is the
-       room Lucario needs at the narrow end of this range. */
-    .wordmark {
-      max-width: min(480px, calc(100% - 160px));
     }
   }
 
