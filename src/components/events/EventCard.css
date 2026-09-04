@@ -217,6 +217,31 @@
   }
 }
 
+/* --- poster + past -----------------------------------------------------
+   Past dims the *text* everywhere else on the site (`.event-card[data-state=
+   'past'] .event-title` -> `--text-muted`) and swaps the card to
+   `--bg-sunken`; both are specific enough to beat the poster's white text and
+   `--ink-800` fallback ground above, on a card that has no muted register —
+   the words are white by design. Equal specificity to what they override, so
+   source order alone makes this win; `state="upcoming"` has no rule anywhere
+   in this file and needs nothing. */
+.event-card--poster[data-state='past'] {
+  background: var(--ink-800);
+}
+.event-card--poster[data-state='past'] .event-when,
+.event-card--poster[data-state='past'] .event-title,
+.event-card--poster[data-state='past'] .event-where,
+.event-card--poster[data-state='past'] .event-blurb {
+  color: #fff;
+}
+/* The picture goes quiet and colourless; the words never do — they keep the
+   Halo Rule's full contrast no matter how flat the art has gone. Opacity is
+   already 0.55 from the generic past rule above; only the desaturation is
+   new, so the two don't compound into a darker dimming than either alone. */
+.event-card--poster[data-state='past'] .event-image img {
+  filter: grayscale(1);
+}
+
 /* --- the row's own hierarchy ---------------------------------------------
    When first in the DOM, because "when" is the question and it should be the
    first thing read out. Not the loudest, though: at 21/700 over an 18/700 title

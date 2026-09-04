@@ -326,6 +326,7 @@ const nowZone = zoneLabel(new Date());
                       when={formatWhen(event)}
                       state={calendar.live.includes(event) ? 'live' : 'ongoing'}
                       showImage
+                      art="poster"
                       stateNamedByGroup
                     />
                   ))}
@@ -343,7 +344,14 @@ const nowZone = zoneLabel(new Date());
               {calendar.upcoming.length > 0 ? (
                 <div class="event-grid">
                   {calendar.upcoming.map((event) => (
-                    <EventCard event={event} when={formatWhen(event)} state="upcoming" showImage />
+                    <EventCard
+                      event={event}
+                      when={formatWhen(event)}
+                      state="upcoming"
+                      showImage
+                      art="poster"
+                      stateNamedByGroup
+                    />
                   ))}
                 </div>
               ) : (
@@ -367,6 +375,7 @@ const nowZone = zoneLabel(new Date());
                       when={formatWhen(event)}
                       state="past"
                       showImage
+                      art="poster"
                       stateNamedByGroup
                     />
                   ))}
@@ -622,9 +631,20 @@ const nowZone = zoneLabel(new Date());
     display: grid;
     gap: var(--space-3);
   }
-  @media (min-width: 760px) {
+  /* Posters, two abreast on a wide screen: the same breakpoint and gap as the
+     home calendar's `.rows` (index.astro), so the two boards are one pattern
+     rather than two cards that happen to share a name. */
+  @media (min-width: 768px) {
     .event-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-4);
     }
+  }
+  /* The poster's foot is the time, title, where and its badges — the same
+     plate home prints. A description paragraph under the halo'd words would
+     make this calendar's cards taller and busier than home's for no reason
+     the reader asked for; home hides it on `.rows` for the same reason. */
+  .event-grid :global(.event-blurb) {
+    display: none;
   }
 </style>
