@@ -49,6 +49,14 @@ it from GitHub.
 | `Mew_800x.webp`, `mim.gif` | `public/art/mew-{anim,still}.webp` |
 | `mgkp.gif` | `public/art/magikarp-{anim,still}.webp` |
 
+Two derivatives are generated from a file in `public/`, not from anything here,
+because the source *is* shipped art rather than staging material:
+
+| Source | Derivatives |
+|---|---|
+| `public/art/logo-txk-classic.webp` | `public/art/logo-txk-classic-{400,680}.webp` — the hero srcset. The mark is never painted wider than 380 CSS px, and the 850px original was nearly twice the pixels a 1x screen needs |
+| `public/art/logo-txk-classic.webp` | `public/art/go-mark.webp` — the nav's Go chip. The two GO circles, cut out and masked to their own geometry so the Pokémon letterforms around them do not come with it |
+
 `go.webp`, `pogoeve.png` and `pogo10.jpg` have no derivative in the tree and no
 page uses them. They are Justin's staging material, kept as found.
 

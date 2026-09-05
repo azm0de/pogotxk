@@ -38,7 +38,18 @@ export { nextDiscordMeetup, type DiscordMeetup } from './discord-events-map';
 
 const API_BASE = 'https://discord.com/api/v10';
 
-const KV_KEY = 'discord-events:v1:scheduled';
+/*
+ * The version is part of the key because what is cached is the *mapped* events,
+ * not Discord's raw payload — so any change to the shape `mapEvents` produces
+ * has to invalidate the old copies, or a fresh deploy keeps serving whatever the
+ * previous code wrote until the TTL runs out.
+ *
+ * v1 -> v2 (2026-09-05): `imageUrl` changed from an absolute
+ * `cdn.discordapp.com` URL to a path on our own image proxy. A stale v1 entry
+ * would have gone on pointing browsers straight at Discord — cookie and all —
+ * for up to `HARD_TTL_S` after the deploy that was supposed to stop it.
+ */
+const KV_KEY = 'discord-events:v2:scheduled';
 
 /**
  * How long a cached copy counts as current.

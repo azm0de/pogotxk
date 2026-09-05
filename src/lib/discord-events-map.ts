@@ -10,6 +10,12 @@
  * somebody drives to the park.
  */
 
+// Relative, not `~/lib/...`, for the reason in the header: this module is
+// imported by `scripts/test-discord-events.ts` under tsx, which resolves the
+// path alias differently from Vite. `discord-image` is pure for the same
+// reason — no `cloudflare:workers` import — so it rides along safely.
+import { discordEventImagePath, DEFAULT_SIZE } from './discord-image';
+
 /** Discord's numeric event status. 1 SCHEDULED, 2 ACTIVE, 3 COMPLETED, 4 CANCELED. */
 export const STATUS_SCHEDULED = 1;
 export const STATUS_ACTIVE = 2;
@@ -43,17 +49,29 @@ export interface DiscordMeetup {
 }
 
 /**
- * Cover art URL.
+ * Cover art URL — ours, not Discord's.
  *
  * `.webp` rather than `.png`: Discord's CDN transcodes on request, and for the
  * one real event this was built against the same 512px image is 26 KB as WebP
  * against 260 KB as PNG. A tenfold saving on a card most visitors scroll past
  * is not a micro-optimisation, and the CDN does the work, not us.
+ *
+ * What comes back is a path on our own origin. This module is the one place
+ * that knows how to compose a Discord CDN URL out of an id and a hash, so it is
+ * also the right place to compose our proxy's instead — there is no "upstream
+ * URL" arriving in a field that a caller might want preserved, unlike the Leek
+ * Duck images, whose components proxy at render time. Every consumer therefore
+ * gets a local path for free, including `/events`, which used to drop these
+ * images entirely because `proxiedImageUrl` returns null for a non-Leek-Duck
+ * host. The reason it must be proxied at all — a `__cf_bm` third-party cookie
+ * set in the visitor's browser — is in `src/lib/discord-image.ts`.
  */
-export function cdnImage(eventId: string, hash: string | null, size = 1024): string | null {
-  return hash
-    ? `https://cdn.discordapp.com/guild-events/${eventId}/${hash}.webp?size=${size}`
-    : null;
+export function cdnImage(
+  eventId: string,
+  hash: string | null,
+  size = DEFAULT_SIZE,
+): string | null {
+  return hash ? discordEventImagePath(eventId, hash, size) : null;
 }
 
 /**
@@ -65,9 +83,16 @@ export function cdnImage(eventId: string, hash: string | null, size = 1024): str
  */
 export function cdnSrcset(url: string | null, sizes: number[] = [512, 1024]): string | null {
   if (!url) return null;
+  // Local paths only. `cdnImage` returns a path on our own origin now, and an
+  // absolute URL reaching here means a stale cache entry written by the previous
+  // version — emitting a srcset for it would either strip the host and 404, or
+  // put the Discord CDN back in the markup. Neither is better than no srcset.
+  if (!url.startsWith('/') || url.startsWith('//')) return null;
+
   let parsed: URL;
   try {
-    parsed = new URL(url);
+    // The base only supplies a host for the parser; it is discarded below.
+    parsed = new URL(url, 'https://pogotxk.invalid/');
   } catch {
     return null;
   }
@@ -75,7 +100,7 @@ export function cdnSrcset(url: string | null, sizes: number[] = [512, 1024]): st
   return sizes
     .map((n) => {
       parsed.searchParams.set('size', String(n));
-      return `${parsed.toString()} ${n}w`;
+      return `${parsed.pathname}${parsed.search} ${n}w`;
     })
     .join(', ');
 }

@@ -19,6 +19,7 @@ import {
   splitDescription,
   type RawScheduledEvent,
 } from '../src/lib/discord-events-map';
+import { discordEventImagePath, discordUpstream } from '../src/lib/discord-image';
 
 let failures = 0;
 
@@ -97,9 +98,9 @@ const mapped = mapEvents([raw({ image: 'abc123' })], GUILD)[0];
 check('start time is normalised to ISO UTC', mapped.startsAt, '2026-08-20T18:00:00.000Z');
 check('location comes through', mapped.locationText, 'Spring Lake Park');
 check(
-  'cover art becomes a CDN url',
+  'cover art becomes a path on our own origin, never the Discord CDN',
   mapped.imageUrl,
-  'https://cdn.discordapp.com/guild-events/100/abc123.webp?size=1024',
+  '/img/discord/guild-events/100/abc123.webp?size=1024',
 );
 check('no cover art yields null', mapEvents([raw()], GUILD)[0].imageUrl, null);
 check('jump link is built from the guild', mapped.url, `https://discord.com/events/${GUILD}/100`);
@@ -150,14 +151,19 @@ console.log('\n== cover art ==');
 check(
   'WebP, not PNG — same image, a tenth of the bytes',
   cdnImage('111', 'abc'),
-  'https://cdn.discordapp.com/guild-events/111/abc.webp?size=1024',
+  '/img/discord/guild-events/111/abc.webp?size=1024',
 );
 check('no hash means no image, not a broken URL', cdnImage('111', null), null);
+ok(
+  'the CDN host never reaches the markup',
+  !String(cdnImage('111', 'abc')).includes('discordapp.com'),
+  'an <img> pointed at cdn.discordapp.com sets a __cf_bm third-party cookie in the visitor’s browser',
+);
 check(
-  'srcset offers both renditions',
+  'srcset offers both renditions, both local',
   cdnSrcset(cdnImage('111', 'abc')),
-  'https://cdn.discordapp.com/guild-events/111/abc.webp?size=512 512w, ' +
-    'https://cdn.discordapp.com/guild-events/111/abc.webp?size=1024 1024w',
+  '/img/discord/guild-events/111/abc.webp?size=512 512w, ' +
+    '/img/discord/guild-events/111/abc.webp?size=1024 1024w',
 );
 ok(
   'a /media URL yields no srcset rather than a fabricated one',
@@ -165,6 +171,43 @@ ok(
   'hand-entered meetups store one fixed rendition in R2; inventing size params would 404',
 );
 check('no image, no srcset', cdnSrcset(null), null);
+
+console.log('\n== the image proxy will not fetch anything but event art ==');
+/*
+ * `cdn.discordapp.com/attachments/...` is user-uploaded content. A proxy willing
+ * to fetch it would re-serve arbitrary Discord uploads from our own domain, so
+ * the allowlist below is the load-bearing part of this route, not a formality.
+ */
+ok(
+  'a guild-events path resolves',
+  discordUpstream('guild-events/100/abc.webp', '512')?.toString() ===
+    'https://cdn.discordapp.com/guild-events/100/abc.webp?size=512',
+);
+ok(
+  'attachments are refused',
+  discordUpstream('attachments/1/2/anything.png', null) === null,
+  'user-uploaded content must never be re-served from our origin',
+);
+ok('traversal out of the tree is refused', discordUpstream('guild-events/../attachments/x.png', null) === null);
+ok('an absolute foreign URL is refused', discordUpstream('https://evil.example/x.png', null) === null);
+ok('a protocol-relative host is refused', discordUpstream('//evil.example/x.png', null) === null);
+ok('the backslash host form is refused', discordUpstream('/\\evil.example/x.png', null) === null);
+ok(
+  'a size Discord does not serve is dropped rather than forwarded',
+  discordUpstream('guild-events/100/abc.webp', '999')?.searchParams.has('size') === false,
+  'an unsupported size 400s upstream, which presents as a broken image',
+);
+ok(
+  'only size travels — no other query parameter is forwarded',
+  discordUpstream('guild-events/100/abc.webp?tracking=1', null)?.search === '',
+);
+ok(
+  'a hash that is not a hash yields no path at all',
+  discordEventImagePath('100', '../../etc/passwd') === null,
+  'components are validated, not escaped: anything unexpected is a bug or a payload',
+);
+ok('a non-numeric event id yields no path', discordEventImagePath('nope', 'abc') === null);
+ok('an animated (a_) hash is allowed', discordEventImagePath('100', 'a_abc') !== null);
 
 console.log('\n== lifting the RSVP link out of the description ==');
 // The real Nickit Community Day description, which is what prompted this.

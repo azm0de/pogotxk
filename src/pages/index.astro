@@ -23,7 +23,7 @@ import {
   type ResearchReward,
 } from '~/lib/scrapedduck';
 import { getDiscordEvents, nextDiscordMeetup } from '~/lib/discord-events';
-import { rsvpLabel, splitDescription } from '~/lib/discord-events-map';
+import { cdnSrcset, rsvpLabel, splitDescription } from '~/lib/discord-events-map';
 import Attribution from '~/components/game/Attribution.astro';
 import FeedStatus from '~/components/game/FeedStatus.astro';
 import ShinyMark from '~/components/game/ShinyMark.astro';
@@ -419,9 +419,22 @@ function homeWhen(event: CalendarEvent): string {
             three runs. Check the priority in a network trace before re-adding.
           */}
           <h1 id="hero-title" class="hero-title">
+            {/*
+              Three widths for a mark that is never painted wider than 380 CSS
+              px (`.hero-logo` is `width: 100%; max-width: 380px`). The single
+              850px file was 79KB to fill a 380px box: right for a 2x screen,
+              nearly twice the pixels needed on a 1x one, which is most desktops
+              and is where this is the LCP element. 400w is 41KB.
+
+              `width`/`height` stay at the original's intrinsic size — they are
+              what give the box its aspect ratio before any file lands, and
+              measured CLS is 0. Keep it that way.
+            */}
             <img
               class="hero-logo"
               src="/art/logo-txk-classic.webp"
+              srcset="/art/logo-txk-classic-400.webp 400w, /art/logo-txk-classic-680.webp 680w, /art/logo-txk-classic.webp 850w"
+              sizes="(min-width: 420px) 380px, 92vw"
               width="850"
               height="793"
               alt="Pokémon GO Texarkana"
@@ -613,8 +626,19 @@ function homeWhen(event: CalendarEvent): string {
                     */}
                     {nextUp.imageUrl && (
                       <div class="post-art">
+                        {/*
+                          The plate is ~310px wide on a phone and never wider
+                          than 480, so a bare `size=1024` was 85KB to paint a
+                          309px box — 51KB of it wasted, measured. The srcset
+                          only appears for a Discord cover, whose URL carries the
+                          `size` parameter `cdnSrcset` rewrites; a hand-entered
+                          meetup hero is an R2 key served from /media with no
+                          size to rewrite, and gets none.
+                        */}
                         <img
                           src={nextUp.imageUrl}
+                          srcset={cdnSrcset(nextUp.imageUrl) ?? undefined}
+                          sizes="(min-width: 1000px) 480px, (min-width: 640px) 45vw, 88vw"
                           alt=""
                           width="480"
                           height="270"
