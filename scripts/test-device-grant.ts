@@ -21,7 +21,7 @@ import {
   type DiscordConfig,
 } from '../src/lib/auth/discord';
 import { decodeDevicePayload, encodeDevicePayload } from '../src/lib/auth/device-payload';
-import { interactionTarget } from '../src/lib/auth/next';
+import { interactionTarget, phoneSignInTarget } from '../src/lib/auth/next';
 import { deviceLoginHref } from '../src/lib/auth/signin-surface';
 
 let failures = 0;
@@ -110,6 +110,67 @@ check(
   null,
 );
 check('undefined rejected', decodeDevicePayload(undefined), null);
+
+console.log('\n== phones start at the approval page ==');
+/*
+ * `interactionTarget` below can only fire if Discord reports `login_required`,
+ * and measurement against production on 2026-09-05 says it never does: with no
+ * Discord cookie it answers 200 and renders its own password form. So the phone
+ * decision is made up front instead, and these are the cases that decide it.
+ */
+const FIREFOX_ANDROID = 'Mozilla/5.0 (Android 14; Mobile; rv:130.0) Gecko/130.0 Firefox/130.0';
+const CHROME_ANDROID =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36';
+const IPHONE =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+const ANDROID_TABLET =
+  'Mozilla/5.0 (Linux; Android 14; SM-X700) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+const DESKTOP =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+
+check(
+  'Firefox on Android — the reported case — goes to the approval page',
+  phoneSignInTarget(FIREFOX_ANDROID, '/go', false),
+  '/auth/device?next=%2Fgo',
+);
+check('Chrome on Android too', phoneSignInTarget(CHROME_ANDROID, '/', false), '/auth/device');
+check('iPhone too', phoneSignInTarget(IPHONE, '/', false), '/auth/device');
+check('desktop keeps the redirect', phoneSignInTarget(DESKTOP, '/go', false), null);
+// An Android tablet sends `Android` without `Mobile`, and has room for the
+// ordinary flow. iPad says iPad, never iPhone.
+check('an Android tablet keeps the redirect', phoneSignInTarget(ANDROID_TABLET, '/', false), null);
+check(
+  'an iPad keeps the redirect',
+  phoneSignInTarget(IPHONE.replace('iPhone; CPU iPhone', 'iPad; CPU'), '/', false),
+  null,
+);
+// The shell intercepts /auth/login natively; its UA marker exists so the server
+// can tell it apart from a phone browser, and this must not rely on that luck.
+check(
+  'the Android shell keeps the plain href',
+  phoneSignInTarget(`${CHROME_ANDROID} PogoTxkApp/1`, '/', false),
+  null,
+);
+// THE LOOP GUARD. device.astro's escape link is /auth/login?retry=1, so without
+// this a phone bounces between the two pages forever.
+check('the device page’s own ?retry=1 escape is not sent back', phoneSignInTarget(FIREFOX_ANDROID, '/', true), null);
+check('a consent flow is not diverted either', phoneSignInTarget(IPHONE, '/', true), null);
+// The header's sign-in control builds its href from the page it sits on, so on
+// the device page it reads next=/auth/device. "Approve, then go to the approval
+// page" helps nobody; the bare page sends them home.
+check(
+  'a next pointing back into /auth/ is dropped',
+  phoneSignInTarget(FIREFOX_ANDROID, '/auth/device', false),
+  '/auth/device',
+);
+check('a real destination is still carried', phoneSignInTarget(FIREFOX_ANDROID, '/map?poi=x', false), '/auth/device?next=%2Fmap%3Fpoi%3Dx');
+check('no user-agent, no diversion', phoneSignInTarget(null, '/', false), null);
+// safeNext folds a foreign destination back to / before it reaches the URL.
+check(
+  'a tampered next cannot smuggle a destination through the hop',
+  phoneSignInTarget(IPHONE, 'https://evil.example/x', false),
+  '/auth/device',
+);
 
 console.log('\n== the routing split ==');
 check(

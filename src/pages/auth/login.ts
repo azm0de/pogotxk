@@ -9,7 +9,7 @@
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
 import { authorizeUrl, discordConfig, pkceChallenge } from '~/lib/auth/discord';
-import { safeNext } from '~/lib/auth/next';
+import { phoneSignInTarget, safeNext } from '~/lib/auth/next';
 import { randomToken, stateCookie } from '~/lib/auth/session';
 
 export const prerender = false;
@@ -72,9 +72,35 @@ function configHelp(url: URL): Response {
   });
 }
 
-export async function GET({ url }: APIContext): Promise<Response> {
+export async function GET({ url, request }: APIContext): Promise<Response> {
   const cfg = discordConfig(env);
   if (!cfg) return configHelp(url);
+
+  /*
+   * Phones start at the approval page, not at Discord.
+   *
+   * A phone browser that holds no Discord session gets Discord's password form
+   * from the redirect below, and there is no way back: Discord answers `200`
+   * and renders it, rather than returning `login_required` for the callback to
+   * catch. `/auth/device` reaches the same account through the Discord app the
+   * member is already signed into, and carries its own link back here for
+   * anyone who would rather use the browser.
+   *
+   * Read from the request rather than guessed at, and decided in
+   * `phoneSignInTarget`, where a plain test can reach it — including the guard
+   * that stops the device page's `?retry=1` escape from bouncing straight back.
+   */
+  const phone = phoneSignInTarget(
+    request.headers.get('user-agent'),
+    url.searchParams.get('next'),
+    url.searchParams.get('retry') === '1' || url.searchParams.get('consent') === '1',
+  );
+  if (phone) {
+    return new Response(null, {
+      status: 302,
+      headers: { location: phone, 'cache-control': 'no-store' },
+    });
+  }
 
   const state = randomToken(16);
   const verifier = randomToken(32);

@@ -71,6 +71,74 @@ export function signOutTarget(rawNext: string | null | undefined, wantsSwitch: b
 }
 
 /**
+ * Phone browsers, and only phone browsers.
+ *
+ * Android requires `Mobile` as well, because an Android tablet sends `Android`
+ * without it and a tablet is a big enough screen to want the ordinary redirect.
+ * iPad is excluded for the same reason and needs no extra clause — it says
+ * `iPad`, never `iPhone`.
+ */
+const PHONE_UA = /iPhone|iPod|Android.*Mobile/i;
+
+/** The Android shell's own marker, set in `MainActivity.kt`. */
+const APP_UA = /PogoTxkApp\//i;
+
+/**
+ * Whether a sign-in attempt should start at the device-approval page rather
+ * than the Discord redirect.
+ *
+ * The redirect cannot serve a phone browser that holds no Discord session.
+ * `prompt=none` was meant to detect exactly that and hand over to
+ * `/auth/device` through `interactionTarget` — but it never fires, because
+ * **Discord does not answer `login_required`**. It replies `200` and renders
+ * its own password form, so the browser never comes back to us and the
+ * hand-off below has nothing to trigger it. Measured against production,
+ * 2026-09-05, from a request with no Discord cookie.
+ *
+ * So the decision moves to the front, where it can be made without Discord's
+ * cooperation: a phone starts at `/auth/device`, taps through to
+ * `discord.com/activate` with the code already in the URL, and approves in the
+ * Discord app it is almost certainly already signed into. Desktop is untouched
+ * — a browser with a session sails through `prompt=none` with no screen at all,
+ * and that is still the best flow there is when it works.
+ *
+ * Two exclusions, both load-bearing:
+ *
+ * - **`alreadyInteractive`** is the loop guard, and it is not theoretical: the
+ *   device page's own escape link is `/auth/login?retry=1`, so without this a
+ *   phone would bounce between the two forever.
+ * - **The Android shell** keeps the plain href. It intercepts `/auth/login` in
+ *   `shouldOverrideUrlLoading` before the request is ever made, so this should
+ *   be unreachable from there — but the marker exists precisely so the server
+ *   can tell the shell from a phone browser, and relying on the interception
+ *   alone would make this correct only by luck.
+ */
+export function phoneSignInTarget(
+  userAgent: string | null | undefined,
+  rawNext: string | null | undefined,
+  alreadyInteractive: boolean,
+): string | null {
+  if (alreadyInteractive) return null;
+  if (!userAgent) return null;
+  if (APP_UA.test(userAgent)) return null;
+  if (!PHONE_UA.test(userAgent)) return null;
+
+  const dest = safeNext(rawNext);
+
+  /*
+   * A destination inside /auth/ is dropped rather than carried.
+   *
+   * The header's sign-in control builds its href from the page it is on, so on
+   * the device page itself it reads `/auth/login?next=%2Fauth%2Fdevice` — which
+   * would come back through here as "approve, then go to the approval page".
+   * Nobody wants to land on a sign-in screen after signing in, and the bare
+   * page sends them home instead.
+   */
+  if (dest === '/' || dest.startsWith('/auth/')) return '/auth/device';
+  return `/auth/device?next=${encodeURIComponent(dest)}`;
+}
+
+/**
  * Where the callback sends someone whose `prompt=none` attempt needed a human.
  *
  * The error code tells us which screen Discord would show next, so the split
