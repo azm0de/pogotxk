@@ -175,32 +175,55 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
             nav.map((item) => (
               <li>
                 {/*
-                  "Go" is a word now, in the black chip, rather than a third
-                  Poké Ball in a bar that already has two. A mark on its own told
-                  a sighted visitor nothing, and it was the same mark as the menu
-                  button a few pixels away.
+                  "Go" is the GO mark now (owner, 2026-09-05), where it used to
+                  be the word in a black chip. The old reasoning against a mark
+                  was that a bare Poké Ball told a sighted visitor nothing and
+                  repeated the menu button beside it — neither applies to this
+                  one, which has the word GO drawn into it and is a picture
+                  nobody confuses with anything else on the bar.
 
-                  The longer name rides in an `sr-only` span rather than an
-                  `aria-label`. "Go" alone reads as a verb with no object, and a
-                  screen-reader user pulling up a list of links sees it beside
-                  "Map" and "Events" with no way to tell what it does.
-                  `aria-label` fixes that for assistive tech but leaves
-                  `textContent` as "Go", which is what Lighthouse's link-text
-                  audit reads, so it kept failing while looking fixed. This way
-                  the name is descriptive for both, and it still *starts* with
-                  the visible word, so speech input users saying "click Go" match
-                  (WCAG 2.5.3).
+                  The art is cut from our own wordmark, `/art/logo-txk-classic
+                  .webp`, which already ships and already carries this mark on
+                  the home page — not from `art-src/Pokemon_Go.svg.webp`, which
+                  stays out of the build. See `vault/Attribution Obligations.md`
+                  §3.
 
-                  The disc before the current item is drawn in CSS, not here: it
-                  is decoration for a state the markup already carries in
-                  `aria-current`.
+                  `alt` carries the visible word, so the link is still named
+                  "Go" without the image; the longer name rides in an `sr-only`
+                  span rather than an `aria-label`, because "Go" alone reads as
+                  a verb with no object and a screen-reader user pulling up a
+                  list of links sees it beside "Map" and "Events" with no way to
+                  tell what it does. `aria-label` fixes that for assistive tech
+                  but leaves `textContent` as "Go", which is what Lighthouse's
+                  link-text audit reads, so it kept failing while looking fixed.
+                  This way the name is descriptive for both, and it still
+                  *starts* with the visible word, so speech-input users saying
+                  "click Go" match (WCAG 2.5.3).
+
+                  The You-Are-Here mark before the current item is in the markup
+                  rather than in CSS, because it is the Poké Ball we already own
+                  and a pseudo-element cannot hold it. `aria-current` still
+                  carries the state for anything that can read neither.
                 */}
                 <a
                   href={item.href}
                   class:list={[item.highlight && 'nav-highlight']}
                   aria-current={isCurrent(item.href) ? 'page' : undefined}
                 >
-                  {item.label}
+                  {isCurrent(item.href) && (
+                    <PokeBall size={18} variant="neutral" class="nav-here" />
+                  )}
+                  {item.highlight ? (
+                    <img
+                      class="nav-go-mark"
+                      src="/art/go-mark.webp"
+                      width="200"
+                      height="110"
+                      alt={item.label}
+                    />
+                  ) : (
+                    item.label
+                  )}
                   {item.describe && <span class="sr-only">, {item.describe}</span>}
                 </a>
               </li>
@@ -847,12 +870,15 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       }
 
       /*
-       * You Are Here, translated for a red field.
+       * You Are Here, as the ball itself.
        *
-       * On the map the marker is a red disc ringed in ink. The bar is already
-       * red, so the plate inverts: a white sign with the same disc printed on
-       * it. Shape and position as well as hue, and `aria-current` carries the
-       * state for anything that can read neither.
+       * This was a 10px red disc ringed in ink — the map's You-Are-Here marker,
+       * reprinted on the white chip. It read as a dot rather than as the brand
+       * (owner, 2026-09-05), so the mark stands in for it: the same
+       * `PokeBall.astro` the header plate and the footer already use, in its
+       * `neutral` variant. That variant is the one that works here — its ink
+       * ring is what keeps a white shell from erasing itself on a white chip,
+       * and the red centre button is the disc the old dot was.
        *
        * `--accent-solid`, not `--accent`: this is dark text on a white chip, and
        * in dark mode `--accent` is the *light* red meant for the opposite job.
@@ -866,16 +892,12 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
            is sitting on top of it rather than in it. */
         box-shadow: 0 2px 6px rgb(0 0 0 / 0.28);
       }
-      nav a[aria-current='page']::before {
-        content: '';
+      /* `:global`, and required rather than stylistic: the mark renders with
+         PokeBall.astro's own scope, so a scoped selector here compiles to an
+         attribute the SVG does not carry and silently matches nothing — the
+         same trap `.brand-ball` above documents. */
+      nav a :global(.nav-here) {
         flex: none;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: var(--accent-solid);
-        /* The band's ink, as a ring. Drawn with a shadow rather than a border so
-           the disc keeps its 10px and the ring costs no layout. */
-        box-shadow: 0 0 0 2px var(--ink-900);
       }
       nav a[aria-current='page']:hover {
         background: var(--header-fg);
@@ -886,28 +908,29 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
        * The quick-action screen is the point of the whole site on a phone, so it
        * earns a bit of weight in the nav.
        *
-       * Black, the Poké Ball's band, rather than a second colour. It also has to
-       * stay distinct from `[aria-current]`, which is a *white* chip: white here
-       * would look permanently selected.
-       *
-       * It is a word rather than a mark. As a bare Poké Ball it told a sighted
-       * visitor nothing, and it was the same mark as the menu button beside it.
+       * The GO mark is that weight now, where a black chip with the word in it
+       * used to be, and it carries no fill of its own. The mark is already a
+       * dark disc with a silver ring around a starfield: the old `--ink-900`
+       * chip put a dark shape behind a dark shape and cost the ring its edge,
+       * and on the red bar the ring is exactly what separates it. Hover and the
+       * focus outline come from `nav a` unchanged, and the current-page state
+       * stays the shared white chip rather than a private one, so `/go` reads as
+       * selected the same way every other page does.
        */
       nav a.nav-highlight {
-        background: var(--ink-900);
-        color: var(--header-fg); /* white on --ink-900: 18.4:1 */
-        border-color: var(--ink-900);
-        box-shadow: 0 2px 6px rgb(0 0 0 / 0.32);
+        padding-inline: var(--space-2);
       }
-      nav a.nav-highlight:hover {
-        background: var(--ink-900);
-        border-color: var(--header-line);
-        color: var(--header-fg);
-      }
-      nav a.nav-highlight[aria-current='page'] {
-        background: var(--header-fg);
-        color: var(--accent-solid);
-        border-color: var(--header-fg);
+      /* The export is 200x110. Height drives it and the intrinsic ratio does the
+         rest, so re-cutting the art at another size cannot stretch the mark. */
+      .nav-go-mark {
+        display: block;
+        flex: none;
+        /* 30px, not the 22px it was first cut at. The mark has to carry the
+           word GO, a silver ring and a starfield in whatever height it is given,
+           and at 22 all three collapsed into a dark blob on the red. This is the
+           smallest height at which the letterforms and the ring still read. */
+        height: 30px;
+        width: auto;
       }
 
       /* ------------------------------------------------------------ the menu --
