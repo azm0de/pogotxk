@@ -187,11 +187,51 @@ different permissions.
       silent updates — accepted, since nobody was ever told the URLs existed to subscribe
       in the first place
 
-## The one real Lighthouse finding left
+## Lighthouse
 
-Audited 2026-08-10, mobile and desktop, against production. Accessibility 93 → **97** and
-SEO 92 → **100** are done and live. Best Practices is 100. What remains is payload, and it
-is transport-independent — it does not go away at the edge:
+**Re-audited 2026-09-05** on the redesign branch, mobile and desktop, against the production
+build via `npm run preview` — three warmed runs each, because the first run against a cold
+edge cache scored 20 points lower and is not a measurement of anything. Home:
+**mobile 92–93, desktop 98–99, Accessibility / Best Practices / SEO 100 on both.**
+`/events`, `/raids`, `/map`, `/blog`, `/live`, `/about` are 100/100/100.
+
+Two findings, both fixed in `65f55cd`:
+
+- [x] ~~**A third-party cookie**, and the only thing between the branch and 100 on Best
+      Practices (79 mobile, 78 desktop).~~ The next meetup's cover art pointed straight at
+      `cdn.discordapp.com`, which sits behind Cloudflare's bot management and hands every
+      visitor a `__cf_bm` cookie — on a page that says there is no tracking on it. It arrived
+      with the redesign, when the meetup moved onto board post 1. Event art is proxied now
+      through `/img/discord/`, a sibling of the Leek Duck proxy with its own allowlist:
+      nothing outside `guild-events/` is fetchable, because
+      `cdn.discordapp.com/attachments/` is user-uploaded content. **The page now makes zero
+      third-party requests**, verified in the browser
+- [x] ~~**The hero wordmark shipped at 850px into a 380px box.**~~ Three widths behind a
+      srcset; a 1x screen now takes 41KB instead of 79KB. The meetup cover asked for
+      `size=1024` to fill a 309px plate and now has a srcset too
+
+> [!warning] Two things Lighthouse asks for here that are wrong
+> `fetchpriority="high"` on the hero and the render-blocking stylesheets. Both are already
+> settled in [[Bugs Worth Remembering]] — the first measured *worse* over three production
+> runs each way, and the second is an artefact of `wrangler dev` serving HTTP/1.1 without
+> Brotli, which the edge does not do. Neither was touched.
+
+`/go` scores SEO 63 and Best Practices 96, and **both are correct behaviour, not defects**:
+it carries `noindex` because it is the screen people install to their home screen, and it
+asks for location on mount because every action on it is "what is near me" and a prompt
+mid-flow is worse. Both are commented at the call site. Do not "fix" either.
+
+What remains is payload, and it is transport-independent — it does not go away at the edge:
+
+- [ ] **~549KB of oversized Leek Duck card art** on the home page: four event images served
+      at full size into cards a third the width. Same blocker as the 1.8MB photograph below
+      — resizing needs the edge image service, which needs the zone, which means the custom
+      domain. The proxy fetches the bytes but a Worker cannot resample them
+
+### From the 2026-08-10 audit, against production
+
+Accessibility 93 → **97** and SEO 92 → **100** are done and live. Best Practices was 100 then
+and is 100 again now.
 
 - [ ] **One community photograph is 1.8MB.** `legacy/2025gofest.jpg` is served at full size
       into a 400×300 grid tile, and is most of the page's 4.4MB. Lighthouse puts the
@@ -205,9 +245,10 @@ is transport-independent — it does not go away at the edge:
       closer than 24px apart. WCAG 2.5.8 exempts targets whose position is essential, which
       a geographic pin is; spreading them out to satisfy a checker would break the map. The
       cluster icons are already 38×38
-- [ ] **Mobile LCP is ~5s** against a ~1.5s FCP, and the hero logo is the LCP element at
-      102KB. Worth a look, but see [[Bugs Worth Remembering]] before reaching for
-      `fetchpriority` — that has already been tried and measured, and it made it worse
+- [x] ~~**Mobile LCP is ~5s** against a ~1.5s FCP, and the hero logo is the LCP element at
+      102KB.~~ Addressed 2026-09-05 by the srcset above, not by `fetchpriority`. Warmed
+      mobile LCP on the production build is now ~3.1s with FCP ~1.4s. The hero is still the
+      LCP element, which is correct — it is the first thing in the viewport
 
 ## Worth doing next
 
