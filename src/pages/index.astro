@@ -1992,6 +1992,27 @@ function homeWhen(event: CalendarEvent): string {
       padding-bottom: 0;
     }
   }
+  /*
+   * ...and no hairline over the credit while he is standing there.
+   *
+   * `.g-attribution` rules a 1px line across its own top, which is right on the
+   * game pages: it is fine print, and the line is what holds it apart from the
+   * data above. On this band it was ruling straight across Mew's face. He is
+   * bottom-anchored to the band at z −1, and from 768px he stands beside the
+   * credit rather than under it, so the line crossed him 38px below the crown
+   * of his head — measured at 1440, where he is 150×212 and the rule lands at
+   * his ear.
+   *
+   * The line goes rather than the art moving, because the line was the odd one
+   * out: it was the only full-width rule in the whole of `main`, on a page that
+   * separates every other section with space alone. The 56px above the credit
+   * is untouched, so nothing on the page moves and the credit is no less
+   * visible — the Leek Duck terms ask for visible credit, not for a border.
+   * The other five pages that render this component keep their hairline.
+   */
+  .calendar-band :global(.g-attribution) {
+    border-top: 0;
+  }
 
   /* --------------------------------------------------------- campsite art --
    * Magikarp, flopping, beside the Campsite panel. Pixel art at its trimmed
