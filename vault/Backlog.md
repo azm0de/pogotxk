@@ -189,11 +189,27 @@ different permissions.
 
 ## Lighthouse
 
-**Re-audited 2026-09-05** on the redesign branch, mobile and desktop, against the production
-build via `npm run preview` — three warmed runs each, because the first run against a cold
-edge cache scored 20 points lower and is not a measurement of anything. Home:
-**mobile 92–93, desktop 98–99, Accessibility / Best Practices / SEO 100 on both.**
-`/events`, `/raids`, `/map`, `/blog`, `/live`, `/about` are 100/100/100.
+**Re-audited 2026-09-05**, mobile and desktop. First against the production build locally
+(`npm run preview`), then — after the branch merged to `main` and Workers Builds deployed —
+**against production itself, which is the number that counts**:
+
+| Home, warmed | perf | a11y | best practices | SEO | FCP | LCP |
+|---|---|---|---|---|---|---|
+| **Production, mobile** | **91** | 100 | 100 | 100 | 1.7s | 3.3s |
+| **Production, desktop** | **98–100** | 100 | 100 | 100 | 0.5s | 0.8–1.0s |
+| Local preview, mobile | 92–93 | 100 | 100 | 100 | 1.4s | 3.1s |
+| Local preview, desktop | 98–99 | 100 | 100 | 100 | 0.4s | 0.9s |
+
+Mobile LCP was ~5s in August and is 3.3s now. Accessibility was 97 and is 100.
+
+> [!warning] Only warmed runs mean anything, on either host
+> The first run against a cold cache scored **71 mobile with a 7.3s LCP** on the very same
+> production deploy that scores 91/3.3s warm — and 73 locally against 92. Discard the first
+> run, every time. This is the same trap as the `wrangler dev` note in
+> [[Bugs Worth Remembering]], and it bites on production too, not just locally.
+
+`/events`, `/raids`, `/map`, `/blog`, `/live`, `/about` are 100/100/100 on the three
+transport-independent categories.
 
 Two findings, both fixed in `65f55cd`:
 
