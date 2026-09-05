@@ -147,7 +147,13 @@ export function phoneSignInTarget(
  * - `login_required` means *no Discord session in this browser* — the next
  *   screen is the email-and-password form, and members never type Discord
  *   credentials into our flow. They go to `/auth/device` instead, where they
- *   approve from a surface that already holds their session.
+ *   approve from a surface that already holds their session. **Discord has
+ *   never actually been observed sending this**: measured 2026-09-05, a
+ *   `prompt=none` request carrying no Discord cookie gets `200` and Discord's
+ *   own login page, not a redirect back here. The clause is kept because the
+ *   OIDC name costs nothing to honour and Discord's behaviour here is
+ *   undocumented enough to change, but it is not what protects phones — that
+ *   is `phoneSignInTarget`, which decides before leaving the site.
  * - Everything else in the needs-interaction family (`consent_required`,
  *   `account_selection_required`, …) renders approval or picker screens on an
  *   existing session. Those are wanted; the plain no-prompt retry stands.

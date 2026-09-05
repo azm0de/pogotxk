@@ -10,10 +10,18 @@ export const prerender = false;
  *
  * This page exists for browsing contexts whose cookie jar has never held a
  * Discord session — a fresh Safari, the installed home-screen app on iOS, a
- * Mac web app. The redirect flow cannot help there: Discord answers
- * `login_required` and its next screen is the email-and-password form, which
- * members never see in our flow. Here they tap through to discord.com/activate
- * (or open it on their phone) and press Approve inside the Discord app.
+ * Mac web app, and every phone browser. The redirect flow cannot help there:
+ * its next screen is the email-and-password form, which members never see in
+ * our flow. Here they tap through to discord.com/activate (or open it on their
+ * phone) and press Approve inside the Discord app.
+ *
+ * How members arrive: **every phone browser**, sent here by
+ * `phoneSignInTarget` before `/auth/login` ever redirects, and installed apps
+ * via `divertSignInToBrowser`. Not, in practice, by the callback catching
+ * `login_required` — this note used to say Discord answers that, and it does
+ * not. Measured 2026-09-05: `prompt=none` with no Discord cookie returns `200`
+ * and Discord's own login page, so the browser never comes back for the
+ * callback to route. That is the bug this page spent months unreachable behind.
  *
  * The page only ever handles the short user code. The device code — the
  * credential Discord redeems — lives in an HttpOnly cookie between polls and

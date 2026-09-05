@@ -248,6 +248,53 @@ wrong thing — a people-first gallery instead of the landmark rail. See [[Desig
 > Check what the measurement actually means before acting on it — and when a tool reports a
 > defect in code that already passed review, suspect the tool before the code.
 
+## A fallback that could never fire, guarding the path everyone took
+
+**Discord does not answer `login_required`.** `/auth/login` asks for
+`prompt=none`, and the callback has a branch that reads the resulting error and
+sends anyone without a Discord session to `/auth/device` — the one-tap approval
+page — rather than letting them meet a password form. `scripts/test-device-grant.ts`
+calls that split "the whole feature".
+
+It had never run. Measured against production on 2026-09-05 from a request
+holding no Discord cookie, `prompt=none` returns **`200` with Discord's own
+login page**, not a redirect back to `/auth/callback`. The browser never comes
+back, so there is no error to read and nothing to route. Every phone browser
+without a Discord session — which is most of them, because members use the
+Discord *app* — walked into the exact screen the feature existed to remove.
+
+> [!warning] The unit tests passed the entire time, and were right
+> They hand `interactionTarget` a synthetic `login_required` and assert where it
+> routes. The routing was never wrong. The input never arrived. A pure function
+> tested only on inputs you invented tells you nothing about whether the outside
+> world produces them — and the more carefully the function is tested, the more
+> confident everyone is in a path that is dead.
+
+Fixed by moving the decision to the front, where it does not need Discord's
+cooperation: `phoneSignInTarget` sends phones to `/auth/device` before
+`/auth/login` redirects at all. Desktop still gets the redirect, because a
+browser holding a session really does sail through `prompt=none` with no screen.
+
+Two guards, both of which would be loops without them: the device page's own
+escape link is `/auth/login?retry=1`, and the header's sign-in control on that
+page reads `next=/auth/device`.
+
+## Rate limits look exactly like a broken secret
+
+Chasing the above, `/api/auth/device/start` returned 503 twice from production
+and 200 from the local preview on identical code. The obvious reading was that
+the deployed `DISCORD_CLIENT_SECRET` was stale — which would have meant sign-in
+was broken for everyone, and was nearly reported that way.
+
+A third attempt returned 200. It was Discord rate-limiting the app because the
+preflight script and a dozen probes had all hit the same client id within a few
+minutes. Nothing was wrong.
+
+> [!tip] Before blaming credentials, retry after a pause
+> A wrong secret fails *every* time. An intermittent failure across identical
+> code is a limit, a quota, or a network — and the shared client id means local
+> testing spends the same budget production does.
+
 ## Advice from a tool, taken without measuring
 
 **Lighthouse asked for `fetchpriority="high"` and it made things worse.** The hero
