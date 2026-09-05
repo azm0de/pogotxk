@@ -1,11 +1,42 @@
 ---
 tags: [planning]
-updated: 2026-08-18
+updated: 2026-09-05
 ---
 
 # Backlog
 
 Everything in the original plan is built. This is what is left, roughly by value.
+
+## The redesign branch — `impeccable-redesign`, September 2026
+
+The Trail-Map Kiosk world shipped on the branch: two finish reviews passed, `DESIGN.md` at the
+repo root is the visual reference, and the working ledger for the redesign's own leftovers is
+`.impeccable/surfaces/promotions.md`. As of 2026-09-05 the branch is 53 commits ahead of
+`origin/main` and is **not pushed, PR'd or merged** — Justin's decision (2026-09-03) until he says otherwise.
+
+- [ ] **Smoke-test the signed-in paths with a real Discord session** — the `/go` sheets, a
+      populated `/live`, the `/account/delete` success page, `/auth/device` approval. Every one
+      of them has only ever been verified against fixtures
+- [ ] **Admin with a real session** — PATCH on drag and on the lat/lng inputs, a media upload,
+      the markdown preview against real posts
+- [ ] **Discord location resolver.** Board post 1 shows the scheduled event's raw
+      `entity_metadata.location` string ("Street A" in the fixture); `discord-events-map.ts`
+      passes it straight through. Decide how organisers fill that field — a POI name, an
+      address, free text — then match it against the surveyed POIs and hand back a map link
+- [ ] **One source for meetups.** `/events` "Meetups at the Campsite" lists database meetups
+      only; the home page's next-up also takes Discord scheduled events, so the two pages can
+      disagree about what is next
+- [ ] **The closing panel's "Open the map" button** was not carried over when the next meetup
+      moved onto board post 1 (`0fe7bcd`); the hero's button sits directly above. Confirm or
+      restore
+- [ ] **`Attribution.astro`'s first paragraph** was reworded during the redesign ("cached on our
+      own origin, so the pictures on this page do not spend their bandwidth"); both links and
+      the no-ads sentence are intact. Confirm the wording
+- [ ] **Merge and deploy** — owner's call
+- [x] ~~Fixed on the branch, never listed here~~ — recurring meetups roll forward to their next
+      occurrence instead of falling into `past` (`25b0d24`); the admin editors joined the world
+      and the admin audit's findings closed with them (`b976fe0`, `f026d90`, see
+      `.impeccable/critique/audit-admin.md`)
 
 ## Source art is out of `public/` — closed 2026-08-18
 
@@ -47,7 +78,10 @@ Justin has server admin as of 2026-08-13. What blocked this list is gone; what r
 that **the server is live**, with real members in it, so the order below matters more than
 the speed. Nothing a member can see happens until the repoint step.
 
-- [ ] **`DISCORD_WEBHOOK_URL`** — Server Settings → Integrations → Webhooks. Point it at a
+- [x] ~~**`DISCORD_WEBHOOK_URL`**~~ — **set.** `wrangler secret list` shows it on the Worker
+      (checked 2026-09-05; names only, no value was read). What the repo cannot see, and so is
+      still open, is the two sub-items below.
+      How it was meant to go: Server Settings → Integrations → Webhooks. Point it at a
       **private channel first**, test there, then edit the webhook's channel to the public
       one: the URL is `.../webhooks/{id}/{token}` and neither part is channel-derived, so
       repointing does not change it and the secret is set exactly once.
@@ -55,11 +89,12 @@ the speed. Nothing a member can see happens until the repoint step.
       piped-literal form puts a bearer credential into shell history.
       Only `discord.com` / `discordapp.com` hosts are accepted — see [[Notifications]].
       This is the last piece of notifications; push itself is already live
-      - Set the webhook's **avatar** while there. `postFlareToDiscord` sends a `username` but
+      - [ ] **Repoint it to the public channel** once tested, and **close every test flare
+        before repointing.** A webhook edits its own messages through the channel it currently
+        points at, so afterwards the old message ids are unreachable and the strike-through
+        fails silently
+      - [ ] Set the webhook's **avatar** while there. `postFlareToDiscord` sends a `username` but
         no `avatar_url`, so Discord falls back to the webhook's own — a grey blob by default
-      - **Close every test flare before repointing.** A webhook edits its own messages
-        through the channel it currently points at, so afterwards the old message ids are
-        unreachable and the strike-through fails silently
       - Verify without firing anything: `GET /api/admin/config-check` now reports
         `webhook.accepted`, which is `webhookUrl()`'s own verdict rather than mere presence.
         A present-but-rejected value is indistinguishable from an absent one at runtime
@@ -77,10 +112,13 @@ the speed. Nothing a member can see happens until the repoint step.
 > can fire a flare, and it presents as a permissions bug rather than a config one.
 - [ ] **A second admin.** Right now the site has exactly one, promoted by hand. If Nick is
       going to be an ambassador on the site as well, do it in the same sitting
-- [ ] **Tell Nick his GO Fest photo is now the landing banner**, and ask whether he has a frame
-      without the refuse bin in it. His photo, his byline, and the crop currently loses two
-      members at the right edge — a wider or different frame would let everyone back in. See
-      [[Design System]] for why the bin was not retouched out
+- [ ] **Tell Nick his GO Fest photo is on the home page**, and ask whether he has a frame
+      without the refuse bin in it. It was the landing banner from 2026-08-07; on the redesign
+      branch it leads "The community" section under the hero (`7af5ec5`). His photo, his
+      byline, and the crop currently loses two members at the right edge — a wider or
+      different frame would let everyone back in. See [[Design System]] for why the bin was
+      not retouched out. Justin has since said the banner needs no on-image byline
+      (2026-09-03); the caption stays
 
 ### The Discord *application* is a separate system from the server
 
@@ -253,7 +291,10 @@ is transport-independent — it does not go away at the edge:
       [[Design System]]
 - [x] ~~The 63 landmark photographs were invisible~~ — they existed only inside a map popup you
       had to tap a pin to open. Now a rail under the hero, each tile deep-linking to
-      `/map?poi=<slug>`
+      `/map?poi=<slug>`. *Gone again since `e814e0d` (2026-08-10): the rail and the "Right
+      now" card were dropped from the home page, along with the per-request JOIN that fed the
+      rail, and the redesign did not bring them back. The map popups are the way to the
+      photographs again; the "landmark rail" section in [[Design System]] is history*
 - [x] ~~"The community" had no route onward~~ — the only section on the home page without one;
       now links to `/gallery`
 - [x] ~~`.section-head` broke a link mid-phrase~~ — at 390px "All 104 on the map" wrapped and
@@ -282,7 +323,10 @@ is transport-independent — it does not go away at the edge:
 - [x] ~~The hero and the section headings are still system-ui at every level~~ — `h1`–`h4` now
       use a display face via `--font-display`, self-hosted, 2026-08-15. Shipped first as
       Fredoka, switched same-day to **Baloo 2** — Fredoka's extra roundness read too close to
-      a kids' app. Body text is unchanged system-ui. See [[Attribution Obligations]]
+      a kids' app. Body text is unchanged system-ui. See [[Attribution Obligations]].
+      *Superseded on the redesign branch: headings are Overpass via `--font-sign` and body is
+      Atkinson Hyperlegible Next via `--font-read`; `--font-display` survives only as a
+      compatibility alias. Licences sit beside the files as before*
 - [x] ~~`/map`'s basemap never joined the site's dark theme~~ — *superseded 2026-08-28: the
       basemap is now self-hosted Protomaps, pinned light in both schemes; see [[Basemap]].* At the
       time, CARTO's tile URL switched
@@ -290,7 +334,12 @@ is transport-independent — it does not go away at the edge:
       listener, not just at load. Bundled in: Leaflet's own zoom control, previously stock
       white/black, now themed off `--bg-panel`/`--text`/`--border` like the attribution
       control already was. 2026-08-15
-- [ ] **Per-page OG images.** A Discord link preview shows a placeholder rather than the park
+- [ ] **Per-page OG images.** `Base.astro` sends one `og:image` for the whole site —
+      `/og-default.png`, the wordmark on a grey ground at 1200×630 — for every route except
+      `/blog/[slug]`, which passes the post's hero. So a link to `/map`, `/events` or `/go`
+      pasted into Discord previews as the same generic card rather than the park, the event
+      or the meetup. Per-page means each route (or each event and meetup) supplies its own
+      image; PRODUCT.md lists it as explicitly undecided
 
 ## Audit still owed
 

@@ -1,6 +1,14 @@
 # Impeccable audit — admin surfaces (source-only)
 
-Run 2026-09-01 on branch `impeccable-redesign`. **Source-only**: no browser (admin needs Discord sign-in). Contrast figures are calculated from `global.css` token values, not measured on a render. Admin is **out of scope for the 2026-09 redesign**; these findings are the backlog for a later `/impeccable harden` pass.
+Run 2026-09-01 on branch `impeccable-redesign`. **Source-only**: no browser (admin needs Discord sign-in). Contrast figures are calculated from `global.css` token values, not measured on a render. Admin was out of scope for the first round of the 2026-09 redesign; the second round brought it in as **W4**, and these findings became its brief.
+
+> **Status 2026-09-05 — closed.** W4 (`b976fe0`, the admin editors into the kiosk world) and the round-two promotions (`f026d90`) took every finding below. Verified against the code on 2026-09-05:
+> - **P0**: lat/lng `<input type="number" step="0.0000001">` beside the drag (`MapEditor.tsx:626-640`); the attribution sheet takes focus on open, wraps Tab, closes on Escape and restores focus to the opener (`MediaLibrary.tsx:179-199`).
+> - **P1**: no raw `--poi-gym` / `--poi-campsite` / `--accent` fill or small text remains in `src/components/admin/*.css` (the two `--accent` uses left are a drop-shadow and a focus outline); both islands carry an `<h1>`; `min-width: 0` sits on the ellipsis and preview children.
+> - **P2**: a dragged pin updates in place and selection highlights without a rebuild (`MapEditor.tsx:235-316`); the remove-tag button is 24×24 (`PostEditor.css:132`); pane-switch buttons are 28px tall (`PostEditor.css:201`); the map container is named "POI map" (`MapEditor.tsx:490`); the import bar scales on X instead of animating `width` (`ImportPanel.css:79-87`).
+> - **P3**: `Admin.astro` imports `primitives.css`; the four `.btn` copies, the two swapped list-row grids and the three status-pill vocabularies are gone, leaving only contextual overrides (`.editor-toolbar .btn`, `.import-done .btn`).
+>
+> Still owed, and not a code task: a real-session pass over the editors — PATCH on drag and on the lat/lng inputs, a media upload, the markdown preview on real posts — with Justin's Discord session. The score below is the pre-W4 measurement, kept as the record.
 
 ## Audit Health Score — 11/20 (Acceptable — significant work needed)
 
@@ -51,7 +59,7 @@ Verdict: pass with real drift — product-specific throughout, but the CSS layer
 - Markdown preview is XSS-safe by construction and uses `useDeferredValue`.
 - `Admin.astro` nav is hand-audited against real routes (documented regression guard); dashboard distinguishes linked cards from static ones.
 
-## Recommended actions (later pass)
+## Recommended actions (later pass) — all taken in W4, see the status note above
 1. P0 `/impeccable harden` — lat/lng inputs; dialog focus management.
 2. P1 `/impeccable harden` — the token swaps; `<h1>`s; `min-width: 0` ×2.
 3. P2 `/impeccable harden` — target sizes; map `aria-label`. `/impeccable optimize` — marker rebuild; progress bar transform.
