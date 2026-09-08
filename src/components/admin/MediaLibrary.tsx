@@ -53,6 +53,29 @@ const FILTERS = [
   { id: 'needs-alt', label: 'Missing alt text' },
 ] as const;
 
+/**
+ * Which kinds owe a credit to someone else.
+ *
+ * `community_photo` is the press photography — Texarkana Gazette bylines and
+ * the like — where naming the photographer is a licensing obligation. `import`
+ * is whatever has not been classified yet, so it stays in until someone says
+ * otherwise.
+ *
+ * `photo` and `doc` are ours: the POI photographs were shot by members for this
+ * site, and a `doc` is our own paperwork. There is no third party to name, so
+ * an empty `credit` on one of those is not a gap.
+ *
+ * This distinction is the whole point. Counting every empty `credit` made the
+ * filter report 63 outstanding tasks — every POI photograph in the library —
+ * when the real number was zero, which is how a gap counter stops being read.
+ */
+const CREDIT_OWED: ReadonlySet<string> = new Set(['community_photo', 'import']);
+
+/** A credit that is genuinely missing, rather than simply not applicable. */
+function creditMissing(item: MediaItem): boolean {
+  return CREDIT_OWED.has(item.kind) && !item.credit;
+}
+
 type FilterId = (typeof FILTERS)[number]['id'];
 
 /** Everything inside the sheet that can take focus, in document order. */
@@ -140,7 +163,7 @@ export default function MediaLibrary() {
     return items.filter((item) => {
       if (filter === 'community_photo' && item.kind !== 'community_photo') return false;
       if (filter === 'photo' && item.kind !== 'photo') return false;
-      if (filter === 'needs-credit' && item.credit) return false;
+      if (filter === 'needs-credit' && !creditMissing(item)) return false;
       if (filter === 'needs-alt' && item.alt) return false;
       if (!q) return true;
       return [item.r2_key, item.alt, item.caption, item.credit, item.source_title]
@@ -154,7 +177,7 @@ export default function MediaLibrary() {
   const gaps = useMemo(() => {
     if (!items) return { credit: 0, alt: 0 };
     return {
-      credit: items.filter((i) => !i.credit).length,
+      credit: items.filter(creditMissing).length,
       alt: items.filter((i) => !i.alt).length,
     };
   }, [items]);
@@ -336,7 +359,7 @@ export default function MediaLibrary() {
               <span className="media-tile-meta">
                 <span className="media-tile-name">{item.r2_key.split('/').pop()}</span>
                 <span className="media-tile-flags">
-                  {!item.credit && <span className="badge media-flag--gap">No credit</span>}
+                  {creditMissing(item) && <span className="badge media-flag--gap">No credit</span>}
                   {!item.alt && <span className="badge">No alt</span>}
                   {item.kind === 'community_photo' && <span className="badge">Community</span>}
                 </span>
