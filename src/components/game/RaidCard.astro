@@ -13,7 +13,8 @@ import './game.css';
 import ShinyMark from './ShinyMark.astro';
 import TypeChips from './TypeChips.astro';
 import { proxiedImageUrl } from '~/lib/game-image';
-import { formatCp, type RaidBoss } from '~/lib/scrapedduck';
+import { type RaidBoss } from '~/lib/scrapedduck';
+import { formatCp } from '~/lib/game-format';
 
 interface Props {
   boss: RaidBoss;

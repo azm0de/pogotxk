@@ -17,13 +17,8 @@ import FeedStatus from '~/components/game/FeedStatus.astro';
 import JumpRow from '~/components/game/JumpRow.astro';
 import ResearchCard from '~/components/game/ResearchCard.astro';
 import '~/components/game/game.css';
-import {
-  getFeed,
-  groupSorted,
-  researchCategoryLabel,
-  researchCategoryRank,
-  slugifyLabel,
-} from '~/lib/scrapedduck';
+import { getFeed } from '~/lib/scrapedduck';
+import { groupSorted, researchCategoryLabel, researchCategoryRank, slugifyLabel } from '~/lib/game-format';
 
 export const prerender = false;
 

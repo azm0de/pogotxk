@@ -9,7 +9,8 @@
 import './game.css';
 import ShinyMark from './ShinyMark.astro';
 import { proxiedImageUrl } from '~/lib/game-image';
-import { formatCp, stripTags, type ResearchTask } from '~/lib/scrapedduck';
+import { type ResearchTask } from '~/lib/scrapedduck';
+import { formatCp, stripTags } from '~/lib/game-format';
 
 interface Props {
   task: ResearchTask;

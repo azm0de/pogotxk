@@ -14,7 +14,8 @@
 import './game.css';
 import ShinyMark from './ShinyMark.astro';
 import { proxiedImageUrl } from '~/lib/game-image';
-import { formatCp, type EggEntry } from '~/lib/scrapedduck';
+import { type EggEntry } from '~/lib/scrapedduck';
+import { formatCp } from '~/lib/game-format';
 
 interface Props {
   egg: EggEntry;

@@ -21,7 +21,8 @@ import JumpRow from '~/components/game/JumpRow.astro';
 import RaidCard from '~/components/game/RaidCard.astro';
 import TierBadge from '~/components/game/TierBadge.astro';
 import '~/components/game/game.css';
-import { getFeed, groupSorted, raidTierRank, slugifyLabel } from '~/lib/scrapedduck';
+import { getFeed } from '~/lib/scrapedduck';
+import { groupSorted, raidTierRank, slugifyLabel } from '~/lib/game-format';
 
 export const prerender = false;
 

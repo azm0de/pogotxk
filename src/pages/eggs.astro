@@ -15,7 +15,8 @@ import EggCard from '~/components/game/EggCard.astro';
 import FeedStatus from '~/components/game/FeedStatus.astro';
 import JumpRow from '~/components/game/JumpRow.astro';
 import '~/components/game/game.css';
-import { eggDistanceRank, getFeed, groupSorted, slugifyLabel, type EggEntry } from '~/lib/scrapedduck';
+import { getFeed, type EggEntry } from '~/lib/scrapedduck';
+import { eggDistanceRank, groupSorted, slugifyLabel } from '~/lib/game-format';
 
 export const prerender = false;
 
