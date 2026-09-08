@@ -18,7 +18,7 @@ import {
 } from '../src/lib/events';
 import {
   describeRecurrence,
-  markdownToText,
+  meetupDescriptionText,
   meetupToCalendarEvent,
   type Meetup,
 } from '../src/lib/db/meetups';
@@ -316,11 +316,11 @@ check(
 /* ---------------------------------------------------------- meetup text -- */
 
 console.log('\n== meetup helpers ==');
-check('markdown link becomes text plus URL', markdownToText('[map](https://x.test)'), 'map (https://x.test)');
-check('headings lose their hashes', markdownToText('## Raid hour'), 'Raid hour');
-check('bold loses its asterisks', markdownToText('the **pavilion**'), 'the pavilion');
-check('empty markdown is null', markdownToText('   '), null);
-check('null passes through', markdownToText(null), null);
+check('markdown link becomes text plus URL', meetupDescriptionText('[map](https://x.test)'), 'map (https://x.test)');
+check('headings lose their hashes', meetupDescriptionText('## Raid hour'), 'Raid hour');
+check('bold loses its asterisks', meetupDescriptionText('the **pavilion**'), 'the pavilion');
+check('empty markdown is null', meetupDescriptionText('   '), null);
+check('null passes through', meetupDescriptionText(null), null);
 
 check('no rule, no badge', describeRecurrence(null), null);
 check('weekly', describeRecurrence('FREQ=WEEKLY'), 'Weekly');

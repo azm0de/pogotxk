@@ -139,13 +139,28 @@ export function meetupLocation(meetup: Meetup): string | null {
 }
 
 /**
- * Markdown reduced to something readable as plain text.
+ * A meetup description reduced to something readable as plain text.
  *
  * Calendar clients show DESCRIPTION verbatim, and the events page renders it as
  * text rather than HTML — so this strips the syntax instead of rendering it,
  * which also means no user Markdown can ever become markup on the page.
+ *
+ * Named for the meetup rather than for Markdown, because `lib/markdown.ts`
+ * exports a *different* `markdownToText` and both were live: `index.astro`
+ * imported this one while `db/posts.ts` imported that one, four lines apart in
+ * some files. They are not interchangeable —
+ *
+ *   this one       `[map](https://x)` becomes `map (https://x)`; a URL that a
+ *                  reader cannot click has to be spelled out or it is lost, and
+ *                  a calendar DESCRIPTION is exactly that context. No limit.
+ *   lib/markdown   `[map](https://x)` becomes `map`; it builds an excerpt for a
+ *                  card, where a bare URL mid-sentence is noise. Truncates on a
+ *                  word boundary.
+ *
+ * Swapping them silently would put raw URLs into blog excerpts, or drop the
+ * only link out of a meetup's calendar entry. Renamed 2026-09-08.
  */
-export function markdownToText(md: string | null): string | null {
+export function meetupDescriptionText(md: string | null): string | null {
   if (!md) return null;
   const text = md
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1')
@@ -253,7 +268,7 @@ export function meetupToCalendarEvent(meetup: Meetup, base: URL): CalendarEvent 
 
 function buildDescription(meetup: Meetup, base: URL): string {
   const lines: string[] = [];
-  const body = markdownToText(meetup.descriptionMd);
+  const body = meetupDescriptionText(meetup.descriptionMd);
   if (body) lines.push(body);
   if (meetup.campfireUrl) lines.push(`Campfire: ${meetup.campfireUrl}`);
   if (meetup.poiSlug) lines.push(new URL(`/map?poi=${meetup.poiSlug}`, base).toString());
