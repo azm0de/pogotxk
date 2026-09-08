@@ -64,6 +64,13 @@ export interface AdminPost {
   createdAt: string;
   updatedAt: string;
   tags: string[];
+  /** The author asked for this to be announced to Discord. */
+  announce: boolean;
+  /**
+   * When the announcement was settled, or null while it is still owed. Read
+   * only — the console shows it, nothing sets it but the announcement claim.
+   */
+  announcedAt: string | null;
 }
 
 /**
@@ -72,9 +79,9 @@ export interface AdminPost {
  * also a chronological one. Kept as one constant because the index page, the
  * post page and the RSS feed must never disagree about what is public.
  */
-const NOW = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')";
+export const NOW = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')";
 
-const VISIBLE = `(
+export const VISIBLE = `(
   (p.status = 'published' AND (p.published_at IS NULL OR p.published_at <= ${NOW}))
   OR (p.status = 'scheduled' AND p.published_at IS NOT NULL AND p.published_at <= ${NOW})
 )`;
@@ -318,13 +325,15 @@ interface AdminRow {
   created_at: string;
   updated_at: string;
   tags: string | null;
+  announce_requested: number;
+  announced_at: string | null;
 }
 
 /** Everything except the body — see ADMIN_COLUMNS. */
 const ADMIN_LIST_COLUMNS = `p.id, p.slug, p.title, p.excerpt, p.status, p.pinned,
         p.hero_media_id, m.r2_key AS hero_key, p.published_at,
         COALESCE(u.global_name, u.username) AS author_name,
-        p.created_at, p.updated_at, ${TAGS_SQL}`;
+        p.created_at, p.updated_at, p.announce_requested, p.announced_at, ${TAGS_SQL}`;
 
 /**
  * The detail query, which is the only one that pulls the body.
@@ -336,7 +345,7 @@ const ADMIN_LIST_COLUMNS = `p.id, p.slug, p.title, p.excerpt, p.status, p.pinned
 const ADMIN_COLUMNS = `p.id, p.slug, p.title, p.excerpt, p.body_md, p.status, p.pinned,
         p.hero_media_id, m.r2_key AS hero_key, p.published_at,
         COALESCE(u.global_name, u.username) AS author_name,
-        p.created_at, p.updated_at, ${TAGS_SQL}`;
+        p.created_at, p.updated_at, p.announce_requested, p.announced_at, ${TAGS_SQL}`;
 
 /** Generous for a community blog, and bounded. */
 const ADMIN_LIST_LIMIT = 200;
@@ -358,6 +367,8 @@ function toAdmin(row: AdminRow): AdminPost {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     tags: splitTags(row.tags),
+    announce: row.announce_requested === 1,
+    announcedAt: row.announced_at,
   };
 }
 

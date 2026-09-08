@@ -10,6 +10,7 @@ import { env } from 'cloudflare:workers';
 import { ApiError, handler, intParam, json, noContent, readJson, requireRole } from '~/lib/api';
 import { diffFields, recordAudit } from '~/lib/db/audit';
 import { getPostForAdmin, replacePostTags } from '~/lib/db/posts';
+import { settleAnnouncement } from '~/lib/notify/announcements';
 import { uniqueSlugInTable } from '~/lib/slug';
 import { postInput, resolvePublishedAt } from './index';
 
@@ -50,11 +51,12 @@ export const PATCH = handler(async (ctx: APIContext) => {
     status,
     pinned: (input.pinned === undefined ? before.pinned : input.pinned) ? 1 : 0,
     published_at: resolvePublishedAt({ ...input, status }, before.publishedAt),
+    announce_requested: (input.announce === undefined ? before.announce : input.announce) ? 1 : 0,
   };
 
   await env.DB.prepare(
     `UPDATE posts SET slug = ?2, title = ?3, excerpt = ?4, body_md = ?5, hero_media_id = ?6,
-                      status = ?7, pinned = ?8, published_at = ?9,
+                      status = ?7, pinned = ?8, published_at = ?9, announce_requested = ?10,
                       updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
       WHERE id = ?1`,
   )
@@ -68,6 +70,7 @@ export const PATCH = handler(async (ctx: APIContext) => {
       next.status,
       next.pinned,
       next.published_at,
+      next.announce_requested,
     )
     .run();
 
@@ -87,6 +90,7 @@ export const PATCH = handler(async (ctx: APIContext) => {
         status: before.status,
         pinned: before.pinned ? 1 : 0,
         published_at: before.publishedAt,
+        announce_requested: before.announce ? 1 : 0,
       },
       next,
     ) ?? {};
@@ -108,7 +112,21 @@ export const PATCH = handler(async (ctx: APIContext) => {
     });
   }
 
-  return json({ id, slug: next.slug, status: next.status, publishedAt: next.published_at, tags, changed });
+  // Runs on every save, not only when `announce` was in the body: a post
+  // scheduled ahead with the box already ticked becomes announceable the moment
+  // an editor flips it to `published`, and the claim is a no-op for anything
+  // that has already been announced or was never asked for.
+  const announced = await settleAnnouncement(ctx, env, 'posts', id, !!next.announce_requested);
+
+  return json({
+    id,
+    slug: next.slug,
+    status: next.status,
+    publishedAt: next.published_at,
+    tags,
+    changed,
+    announced,
+  });
 });
 
 export const DELETE = handler(async (ctx: APIContext) => {

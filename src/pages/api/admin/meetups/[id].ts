@@ -2,6 +2,7 @@ import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
 import { ApiError, handler, intParam, json, noContent, readJson, requireRole } from '~/lib/api';
 import { diffFields, recordAudit } from '~/lib/db/audit';
+import { settleAnnouncement } from '~/lib/notify/announcements';
 import { zonedToUtc } from '~/lib/time';
 import { meetupInput } from './index';
 
@@ -22,6 +23,7 @@ interface MeetupRecord {
   campfire_url: string | null;
   recurrence_rule: string | null;
   status: string;
+  announce_requested: number;
 }
 
 async function loadMeetup(id: number): Promise<MeetupRecord> {
@@ -66,12 +68,18 @@ export const PATCH = handler(async (ctx: APIContext) => {
     recurrence_rule:
       input.recurrenceRule === undefined ? before.recurrence_rule : input.recurrenceRule,
     status: input.status ?? before.status,
+    announce_requested: (
+      input.announce === undefined ? before.announce_requested === 1 : input.announce
+    )
+      ? 1
+      : 0,
   };
 
   await env.DB.prepare(
     `UPDATE meetups SET title = ?2, description_md = ?3, starts_at = ?4, ends_at = ?5, tz = ?6,
                         poi_id = ?7, location_text = ?8, campfire_url = ?9, recurrence_rule = ?10,
-                        status = ?11, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                        status = ?11, announce_requested = ?12,
+                        updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
       WHERE id = ?1`,
   )
     .bind(
@@ -86,6 +94,7 @@ export const PATCH = handler(async (ctx: APIContext) => {
       next.campfire_url,
       next.recurrence_rule,
       next.status,
+      next.announce_requested,
     )
     .run();
 
@@ -100,7 +109,11 @@ export const PATCH = handler(async (ctx: APIContext) => {
     });
   }
 
-  return json({ id, changed: diff !== null, startsAt: next.starts_at });
+  // Every save, not only the ones carrying `announce`: a draft that was created
+  // with the box ticked becomes announceable the moment it is published here.
+  const announced = await settleAnnouncement(ctx, env, 'meetups', id, next.announce_requested === 1);
+
+  return json({ id, changed: diff !== null, startsAt: next.starts_at, announced });
 });
 
 export const DELETE = handler(async (ctx: APIContext) => {

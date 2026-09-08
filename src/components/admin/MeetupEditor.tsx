@@ -16,6 +16,8 @@ interface Meetup {
   campfire_url: string | null;
   recurrence_rule: string | null;
   status: 'draft' | 'published' | 'cancelled';
+  announce_requested: number;
+  announced_at: string | null;
 }
 
 interface PoiOption {
@@ -35,6 +37,10 @@ interface Form {
   locationText: string;
   campfireUrl: string;
   status: Meetup['status'];
+  /** "Also announce to Discord" — see notify/announcements.ts. */
+  announce: boolean;
+  /** When it was sent, or null while still owed. Never edited here. */
+  announcedAt: string | null;
 }
 
 /** One status vocabulary across the console; the word is always printed. */
@@ -54,7 +60,26 @@ const EMPTY: Form = {
   locationText: '',
   campfireUrl: '',
   status: 'draft',
+  announce: false,
+  announcedAt: null,
 };
+
+/**
+ * What a save says about the announcement. The same three states the post
+ * editor shows, for the same reason: the send is handed to `waitUntil`, so a
+ * save can report the intent and never the delivery.
+ */
+type AnnounceStatus = 'off' | 'queued' | 'disabled';
+
+interface Saved {
+  announced: AnnounceStatus;
+}
+
+function announceSuffix(status: AnnounceStatus): string {
+  if (status === 'queued') return ' · announcing to Discord';
+  if (status === 'disabled') return ' · no Discord webhook is configured';
+  return '';
+}
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -132,6 +157,8 @@ export default function MeetupEditor() {
       locationText: m.location_text ?? '',
       campfireUrl: m.campfire_url ?? '',
       status: m.status,
+      announce: m.announce_requested === 1,
+      announcedAt: m.announced_at,
     });
     setEditingId(m.id);
   };
@@ -150,16 +177,20 @@ export default function MeetupEditor() {
         locationText: form.locationText || null,
         campfireUrl: form.campfireUrl || null,
         status: form.status,
+        announce: form.announce,
       };
       if (editingId === 'new') {
-        await api('/api/admin/meetups', { method: 'POST', body: JSON.stringify(payload) });
-        notify('ok', 'Meetup created');
+        const created = await api<Saved>('/api/admin/meetups', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        notify('ok', `Meetup created${announceSuffix(created.announced)}`);
       } else {
-        await api(`/api/admin/meetups/${editingId}`, {
+        const saved = await api<Saved>(`/api/admin/meetups/${editingId}`, {
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
-        notify('ok', 'Meetup saved');
+        notify('ok', `Meetup saved${announceSuffix(saved.announced)}`);
       }
       await reload();
       setEditingId(null);
@@ -374,6 +405,46 @@ export default function MeetupEditor() {
                 <option value="cancelled">Cancelled</option>
               </select>
             </label>
+          </div>
+
+          {/*
+            Announcing is one-way: the embed cannot be recalled from a channel
+            with real members in it. So once sent this is a statement, not a
+            control. A cancelled meetup is deliberately never announced fresh —
+            the feed carries the cancellation, an embed would advertise it.
+          */}
+          <div className="announce-field">
+            {form.announcedAt ? (
+              <p className="announce-done">
+                Announced to Discord {formatInZone(form.announcedAt, form.tz)}
+              </p>
+            ) : (
+              <>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={form.announce}
+                    onChange={(e) => set('announce', e.target.checked)}
+                  />
+                  <span>Also announce to Discord</span>
+                </label>
+                <p className="announce-note">
+                  {/*
+                    Written out rather than interpolated from `status`: the
+                    statuses do not share a grammar. "while this is draft" was
+                    what interpolation produced, and "a cancelled" is what
+                    adding the article would produce for the other one.
+                  */}
+                  {!form.announce
+                    ? 'Meetups are not announced unless you ask.'
+                    : form.status === 'published'
+                      ? 'Sent once, when you save.'
+                      : form.status === 'draft'
+                        ? 'Nothing is sent while this is a draft.'
+                        : 'Cancelled meetups are never announced.'}
+                </p>
+              </>
+            )}
           </div>
 
           <div className="form-actions">

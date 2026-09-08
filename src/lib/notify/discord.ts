@@ -152,16 +152,33 @@ export async function postFlareToDiscord(
 export type FlareCloseOutcome = 'edited' | 'gone' | 'retry' | 'disabled';
 
 /**
+ * Whether an outbound webhook call is worth attempting again.
+ *
+ * The HTTP rules are identical for every write we make to Discord — editing an
+ * embed, posting a new one — so they are decided once here and the per-caller
+ * types differ only in what they call success. Two copies of this drifted
+ * apart is exactly how one sweep ends up retrying a 404 forever while another
+ * gives up on a 429.
+ *
+ * 429 is deliberately `retry` rather than `gone`: Discord rate-limits webhooks
+ * per channel, and a burst of expiring flares is precisely when this runs.
+ */
+export type DeliveryOutcome = 'ok' | 'gone' | 'retry';
+
+/**
  * Exported for testing: classifying an HTTP status is the whole decision, and
  * it should not require a network to verify.
- *
- * 429 is deliberately `retry` rather than `gone` — Discord rate-limits webhooks
- * per channel, and a burst of expiring flares is exactly when this runs.
  */
-export function closeOutcomeForStatus(status: number): FlareCloseOutcome {
-  if (status >= 200 && status < 300) return 'edited';
+export function deliveryOutcomeForStatus(status: number): DeliveryOutcome {
+  if (status >= 200 && status < 300) return 'ok';
   if (status === 401 || status === 403 || status === 404) return 'gone';
   return 'retry';
+}
+
+/** As above, in the close sweep's vocabulary. */
+export function closeOutcomeForStatus(status: number): FlareCloseOutcome {
+  const outcome = deliveryOutcomeForStatus(status);
+  return outcome === 'ok' ? 'edited' : outcome;
 }
 
 /** Strike through a flare's embed once it is closed or expired. */
@@ -233,16 +250,36 @@ export async function updateFlareEmbedInDiscord(
   }
 }
 
-/** Announce a published blog post or meetup. */
+/** What one announcement attempt did, and whether a later pass should retry. */
+export type AnnounceOutcome = 'posted' | 'gone' | 'retry' | 'disabled';
+
+export interface Announcement {
+  title: string;
+  description?: string;
+  /** Absolute; the embed title links here. */
+  url: string;
+  /** Absolute image URL, or omitted. Discord will not fetch a relative one. */
+  imageUrl?: string;
+}
+
+/**
+ * Announce a published blog post or meetup.
+ *
+ * Unlike the flare embeds, this reports its outcome rather than swallowing it.
+ * The caller has already claimed the row by stamping `announced_at`, so a
+ * silent failure here would not be "best effort" — it would be an announcement
+ * that is marked delivered and never sent. `retry` hands the row back; `gone`
+ * keeps it settled, because no number of retries fixes a deleted webhook.
+ */
 export async function announceToDiscord(
   env: Env,
-  announcement: { title: string; description?: string; url: string; imageUrl?: string },
-): Promise<void> {
+  announcement: Announcement,
+): Promise<AnnounceOutcome> {
   const url = webhookUrl(env);
-  if (!url) return;
+  if (!url) return 'disabled';
 
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -257,11 +294,16 @@ export async function announceToDiscord(
             timestamp: new Date().toISOString(),
           },
         ],
+        // The community Discord has real members in it. An announcement must
+        // never be able to @everyone because someone typed it in a post body.
         allowed_mentions: { parse: [] },
       }),
       signal: AbortSignal.timeout(5000),
     });
+    const outcome = deliveryOutcomeForStatus(res.status);
+    return outcome === 'ok' ? 'posted' : outcome;
   } catch {
-    /* Best effort. */
+    // Timeout or transport failure — nothing says the webhook is bad.
+    return 'retry';
   }
 }

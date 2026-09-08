@@ -10,6 +10,7 @@ import { env } from 'cloudflare:workers';
 import { z } from 'zod';
 import { ApiError, handler, json, readJson, requireRole } from '~/lib/api';
 import { recordAudit } from '~/lib/db/audit';
+import { settleAnnouncement } from '~/lib/notify/announcements';
 import { uniqueSlugInTable } from '~/lib/slug';
 import { DEFAULT_TZ, zonedToUtc } from '~/lib/time';
 
@@ -31,6 +32,12 @@ export const meetupInput = z.object({
   campfireUrl: z.string().url().max(500).nullable().optional().or(z.literal('')),
   recurrenceRule: z.string().trim().max(300).nullable().optional(),
   status: z.enum(['draft', 'published', 'cancelled']).optional(),
+  /**
+   * "Also announce to Discord." A request rather than an instruction — see the
+   * same field on `postInput`, and notify/announcements.ts. A `draft` meetup
+   * records the request and announces nothing until it is published.
+   */
+  announce: z.boolean().optional(),
 });
 
 export const GET = handler(async (ctx: APIContext) => {
@@ -39,7 +46,7 @@ export const GET = handler(async (ctx: APIContext) => {
   const rows = await env.DB.prepare(
     `SELECT m.id, m.slug, m.title, m.description_md, m.starts_at, m.ends_at, m.tz,
             m.poi_id, m.location_text, m.campfire_url, m.recurrence_rule, m.status,
-            m.updated_at, p.name AS poi_name
+            m.updated_at, m.announce_requested, m.announced_at, p.name AS poi_name
        FROM meetups m
        LEFT JOIN pois p ON p.id = m.poi_id
       ORDER BY m.starts_at DESC`,
@@ -73,8 +80,9 @@ export const POST = handler(async (ctx: APIContext) => {
 
   const row = await env.DB.prepare(
     `INSERT INTO meetups (zone_id, slug, title, description_md, starts_at, ends_at, tz,
-                          poi_id, location_text, campfire_url, recurrence_rule, status, created_by)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                          poi_id, location_text, campfire_url, recurrence_rule, status,
+                          created_by, announce_requested)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
      RETURNING id`,
   )
     .bind(
@@ -91,6 +99,7 @@ export const POST = handler(async (ctx: APIContext) => {
       input.recurrenceRule ?? null,
       input.status ?? 'draft',
       user.id,
+      input.announce ? 1 : 0,
     )
     .first<{ id: number }>();
 
@@ -101,8 +110,10 @@ export const POST = handler(async (ctx: APIContext) => {
     action: 'create',
     entity: 'meetup',
     entityId: row.id,
-    diff: { title: input.title, startsAt },
+    diff: { title: input.title, startsAt, announce: !!input.announce },
   });
 
-  return json({ id: row.id, slug, startsAt, endsAt }, 201);
+  const announced = await settleAnnouncement(ctx, env, 'meetups', row.id, !!input.announce);
+
+  return json({ id: row.id, slug, startsAt, endsAt, announced }, 201);
 });

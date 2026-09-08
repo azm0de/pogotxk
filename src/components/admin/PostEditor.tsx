@@ -22,6 +22,14 @@ interface Form {
   tags: string[];
   heroMediaId: number | null;
   publishedAtLocal: string;
+  /** "Also announce to Discord" — a request; see notify/announcements.ts. */
+  announce: boolean;
+  /**
+   * When the announcement was actually sent, or null while it is still owed.
+   * Never edited here — it is what turns the toggle into a statement of fact
+   * rather than an offer, so an author cannot ask twice for the same embed.
+   */
+  announcedAt: string | null;
 }
 
 const EMPTY: Form = {
@@ -34,6 +42,8 @@ const EMPTY: Form = {
   tags: [],
   heroMediaId: null,
   publishedAtLocal: '',
+  announce: false,
+  announcedAt: null,
 };
 
 type PaneMode = 'write' | 'split' | 'preview';
@@ -68,6 +78,28 @@ function StarIcon({ filled }: { filled: boolean }) {
   );
 }
 
+/** A drawn megaphone, for the announce toggle. Same vocabulary as the star. */
+function AnnounceIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M4 9v6h3l7 4V5L7 9H4z"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={filled ? 0 : 2}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17.5 8.5a5 5 0 010 7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** A drawn remove mark; the world does not use glyphs as icons. */
 function RemoveIcon() {
   return (
@@ -81,6 +113,26 @@ function RemoveIcon() {
       />
     </svg>
   );
+}
+
+/**
+ * What a save says about the announcement, mirroring the server's three states.
+ * Deliberately never claims the embed has landed — the send is handed to
+ * `waitUntil`, exactly as the flare fan-out is, so the save cannot know.
+ */
+type AnnounceStatus = 'off' | 'queued' | 'disabled';
+
+interface Saved {
+  announced: AnnounceStatus;
+}
+
+function announceSuffix(status: AnnounceStatus): string {
+  if (status === 'queued') return ' · announcing to Discord';
+  // Worth saying out loud rather than failing quietly: the author ticked the
+  // box and nothing is going to happen until a webhook exists. The request is
+  // kept, so it will go out once one does.
+  if (status === 'disabled') return ' · no Discord webhook is configured';
+  return '';
 }
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -199,6 +251,8 @@ export default function PostEditor() {
       tags: post.tags,
       heroMediaId: post.heroMediaId,
       publishedAtLocal: post.publishedAt ? utcToZoned(post.publishedAt) : '',
+      announce: post.announce,
+      announcedAt: post.announcedAt,
     });
 
     setBodyLoading(true);
@@ -265,21 +319,25 @@ export default function PostEditor() {
         heroMediaId: form.heroMediaId,
         publishedAtLocal: form.publishedAtLocal || null,
         tz: DEFAULT_TZ,
+        announce: form.announce,
       };
 
+      let announced: AnnounceStatus = 'off';
       if (editingId === 'new') {
-        const created = await api<{ id: number }>('/api/admin/posts', {
+        const created = await api<Saved & { id: number }>('/api/admin/posts', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        notify('ok', 'Post created');
+        announced = created.announced;
+        notify('ok', `Post created${announceSuffix(announced)}`);
         setEditingId(created.id);
       } else {
-        await api(`/api/admin/posts/${editingId}`, {
+        const saved = await api<Saved>(`/api/admin/posts/${editingId}`, {
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
-        notify('ok', 'Post saved');
+        announced = saved.announced;
+        notify('ok', `Post saved${announceSuffix(announced)}`);
       }
       await reload();
     } catch (err) {
@@ -490,6 +548,45 @@ export default function PostEditor() {
                 <StarIcon filled={form.pinned} />
                 {form.pinned ? 'Pinned to the top' : 'Pin to the top'}
               </button>
+            </div>
+
+            {/*
+              Announcing is a one-way door — an embed cannot be recalled from a
+              channel with real members in it — so once it has been sent this
+              stops being a control and becomes a statement. Untickable, and it
+              says when. Before that it is an ordinary toggle: the message goes
+              out when the post is public, which for a scheduled post is later.
+            */}
+            <div className="pin-field">
+              <span className="pin-label">Discord</span>
+              {form.announcedAt ? (
+                <p className="announce-done">
+                  <AnnounceIcon filled />
+                  Announced {formatInZone(form.announcedAt, DEFAULT_TZ)}
+                </p>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn pin-toggle"
+                    aria-pressed={form.announce}
+                    aria-describedby="announce-note"
+                    onClick={() => set('announce', !form.announce)}
+                  >
+                    <AnnounceIcon filled={form.announce} />
+                    {form.announce ? 'Announcing to Discord' : 'Also announce to Discord'}
+                  </button>
+                  <p className="announce-note" id="announce-note">
+                    {form.announce
+                      ? form.status === 'draft'
+                        ? 'Nothing is sent while this is a draft.'
+                        : form.status === 'scheduled'
+                          ? 'Sent once the publish time passes and someone loads the site.'
+                          : 'Sent once, when you save.'
+                      : 'Posts are not announced unless you ask.'}
+                  </p>
+                </>
+              )}
             </div>
           </div>
 

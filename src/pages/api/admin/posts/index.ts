@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { ApiError, handler, json, readJson, requireRole } from '~/lib/api';
 import { recordAudit } from '~/lib/db/audit';
 import { listPostsForAdmin, replacePostTags } from '~/lib/db/posts';
+import { settleAnnouncement } from '~/lib/notify/announcements';
 import { uniqueSlugInTable } from '~/lib/slug';
 import { DEFAULT_TZ, zonedToUtc } from '~/lib/time';
 
@@ -36,6 +37,19 @@ export const postInput = z.object({
     .nullable()
     .optional(),
   tz: z.string().min(1).optional(),
+  /**
+   * "Also announce to Discord."
+   *
+   * A request, not an instruction: it records that the author wants an
+   * announcement, and the announcement itself happens when the post is
+   * actually public — immediately for a live post, on a later read for a
+   * scheduled one. See notify/announcements.ts.
+   *
+   * Turning it off never un-sends anything, and never re-arms a post that has
+   * already been announced; `announced_at` is a separate column for exactly
+   * that reason.
+   */
+  announce: z.boolean().optional(),
 });
 
 export type PostInput = z.infer<typeof postInput>;
@@ -100,8 +114,8 @@ export const POST = handler(async (ctx: APIContext) => {
 
   const row = await env.DB.prepare(
     `INSERT INTO posts (slug, title, excerpt, body_md, hero_media_id, status, pinned,
-                        author_id, published_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                        author_id, published_at, announce_requested)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
      RETURNING id`,
   )
     .bind(
@@ -114,6 +128,7 @@ export const POST = handler(async (ctx: APIContext) => {
       input.pinned ? 1 : 0,
       user.id,
       publishedAt,
+      input.announce ? 1 : 0,
     )
     .first<{ id: number }>();
 
@@ -126,8 +141,10 @@ export const POST = handler(async (ctx: APIContext) => {
     action: 'create',
     entity: 'post',
     entityId: row.id,
-    diff: { title: input.title, slug, status, publishedAt, tags },
+    diff: { title: input.title, slug, status, publishedAt, tags, announce: !!input.announce },
   });
 
-  return json({ id: row.id, slug, status, publishedAt, tags }, 201);
+  const announced = await settleAnnouncement(ctx, env, 'posts', row.id, !!input.announce);
+
+  return json({ id: row.id, slug, status, publishedAt, tags, announced }, 201);
 });

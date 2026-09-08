@@ -79,3 +79,33 @@
 .meetup-repeat {
   color: var(--text-muted);
 }
+
+/* ---------------------------------------------------------- announcing -- */
+
+.announce-field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* The checkbox row is the shared `.check` primitive from `Admin.astro` — a
+   checkbox and its words on one line, with the row as the 32px target. Written
+   bespoke here first, which did not work: `.admin-form label` is (0,1,1) and a
+   bare `.announce-check` is (0,1,0), so `display: grid` won and the words
+   stacked under the box. The same specificity trap `.legal p` and `.prose p`
+   both sprang during the redesign; the answer is the existing primitive, not a
+   louder selector. */
+
+/* What the toggle will do. Muted and small — a consequence, not a label. */
+.announce-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+/* Once sent, the control is replaced by this. Ink, not red: a settled fact. */
+.announce-done {
+  margin: 0;
+  font-weight: 700;
+  color: var(--text);
+}
