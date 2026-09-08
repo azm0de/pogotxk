@@ -1,6 +1,6 @@
 ---
 tags: [history, quality]
-updated: 2026-08-10
+updated: 2026-09-08
 ---
 
 # Bugs Worth Remembering
@@ -142,6 +142,41 @@ inside a collapsed cluster ignores `openPopup()` outright.
 **Reconnect backoff never escalated.** It reset on socket `open` rather than on a connection
 proving stable, so a flapping socket retried roughly once a second forever — each cycle firing a
 D1-backed fetch — and never reached the polling fallback.
+
+## `.dev.vars` holds real credentials, and local dev sends real messages
+
+**A local smoke test of the "also announce" toggle posted a real embed into the community
+Discord.** `.dev.vars` carries a working `DISCORD_WEBHOOK_URL` — it has since 2026-08-15, so
+flares could be exercised end to end — and `wrangler dev` loads it like any other binding. The
+announcement path has no sandbox, no dry-run and no "local" branch: `webhookUrl(env)` found a
+valid `discord.com` URL, so `announceNow` did exactly what it is built to do.
+
+Nothing was wrong with the code. What was wrong was the assumption that a local database means
+a local blast radius.
+
+> **Local D1, local R2 and local KV are Miniflare. `fetch` is not.** Every binding in
+> `.dev.vars` that points at somebody else's server — the webhook, the bot token, the OAuth
+> client — reaches the real thing from `npm run dev`, and an outbound message cannot be rolled
+> back by deleting the row that caused it.
+
+Deleting the post afterwards does not unsend the embed, and unlike a flare there is no
+`discord_message_id` stored for an announcement, so nothing can go back and edit it either. The
+row is gone; the message is not.
+
+What to do instead, in order of preference:
+
+1. **Test the builders, not the send.** `postAnnouncement` and `meetupAnnouncement` are pure and
+   asserted in `scripts/test-announce.ts`. That is where the interesting decisions live.
+2. **Comment out `DISCORD_WEBHOOK_URL` in `.dev.vars`** before exercising a save. The feature
+   reports `disabled` and keeps the request pending, which is itself the behaviour worth
+   checking.
+3. **If a real send must be exercised, point the local webhook at a private channel of your
+   own** — not the one production uses. The URL is `.../webhooks/{id}/{token}` and neither part
+   is channel-derived, so this is a separate webhook, not a repoint of the live one.
+
+Related, and the reason this is filed rather than shrugged off: [[Notifications]] records that
+the production webhook is still expected to be pointing at a **private test channel** until the
+repoint step in [[Backlog]] is done. That is the only reason this landed somewhere quiet.
 
 ## Quietly broken config
 

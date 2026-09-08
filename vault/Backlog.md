@@ -1,6 +1,6 @@
 ---
 tags: [planning]
-updated: 2026-09-05
+updated: 2026-09-08
 ---
 
 # Backlog
@@ -11,8 +11,13 @@ Everything in the original plan is built. This is what is left, roughly by value
 
 The Trail-Map Kiosk world shipped on the branch: two finish reviews passed, `DESIGN.md` at the
 repo root is the visual reference, and the working ledger for the redesign's own leftovers is
-`.impeccable/surfaces/promotions.md`. As of 2026-09-05 the branch is 53 commits ahead of
-`origin/main` and is **not pushed, PR'd or merged** — Justin's decision (2026-09-03) until he says otherwise.
+`.impeccable/surfaces/promotions.md`.
+
+**Merged and deployed.** `impeccable-redesign` is an ancestor of `main`, `main` is level with
+`origin/main`, and the Lighthouse table below was measured against production *after* the
+deploy. The paragraph that used to sit here said the branch was "not pushed, PR'd or merged" —
+true when written on 2026-09-05, and left standing for three days after it stopped being true.
+The branch still exists locally; nothing depends on it.
 
 - [ ] **Smoke-test the signed-in paths with a real Discord session** — the `/go` sheets, a
       populated `/live`, the `/account/delete` success page, `/auth/device` approval. Every one
@@ -25,14 +30,18 @@ repo root is the visual reference, and the working ledger for the redesign's own
       address, free text — then match it against the surveyed POIs and hand back a map link
 - [ ] **One source for meetups.** `/events` "Meetups at the Campsite" lists database meetups
       only; the home page's next-up also takes Discord scheduled events, so the two pages can
-      disagree about what is next
-- [ ] **The closing panel's "Open the map" button** was not carried over when the next meetup
-      moved onto board post 1 (`0fe7bcd`); the hero's button sits directly above. Confirm or
-      restore
+      disagree about what is next. Now also decides what "announce a meetup" means: the new
+      toggle announces **database** meetups, and a Discord scheduled event is already in Discord
+      by definition — so the two sources must not both be able to announce the same outing
+- [x] ~~**The closing panel's "Open the map" button**~~ — confirmed, not restored. It was a
+      decision rather than an oversight and the code says so: `index.astro:624` records that the
+      panel folds up the meetup itself — cover art, name, time, place, RSVP — and that "the
+      hero's own map button is a scroll above this". Nothing to do; this was open only because
+      the reasoning lived in a comment and not here
 - [ ] **`Attribution.astro`'s first paragraph** was reworded during the redesign ("cached on our
       own origin, so the pictures on this page do not spend their bandwidth"); both links and
       the no-ads sentence are intact. Confirm the wording
-- [ ] **Merge and deploy** — owner's call
+- [x] ~~**Merge and deploy** — owner's call~~ — done; see above
 - [x] ~~Fixed on the branch, never listed here~~ — recurring meetups roll forward to their next
       occurrence instead of falling into `past` (`25b0d24`); the admin editors joined the world
       and the admin audit's findings closed with them (`b976fe0`, `f026d90`, see
@@ -151,8 +160,8 @@ different permissions.
       password manager share, never chat or email, then `npx wrangler secret put
       DISCORD_CLIENT_SECRET` and paste at the prompt — the piped-literal form puts a
       credential in shell history
-- [ ] **The app has no icon** (`icon: null`). Every member's first impression of this project
-      is a blank square on the Discord consent screen. Upload the Poké Ball logo
+- [x] ~~**The app has no icon** (`icon: null`)~~ — uploaded by Justin, 2026-09-08, to **both**
+      the PogoTXK app and the PoGo TXK Events app. The consent screen is no longer a blank square
 
 > [!note] None of this blocks signing in
 > `DISCORD_BOOTSTRAP_ADMIN_ID` short-circuits `resolveRole` to `admin` regardless of guild
@@ -274,20 +283,32 @@ and is 100 again now.
       needs adding separately in the Developer Portal. Until then `site` deliberately names the
       `workers.dev` host, because pointing it at a domain that 404s is exactly what broke every
       subscribe link (see [[Bugs Worth Remembering]])
-- [ ] **Announce posts and meetups to Discord.** `announceToDiscord` exists and has no caller —
-      wire the "also announce" toggle in the post editor to it
+- [x] ~~**Announce posts and meetups to Discord.**~~ — built 2026-09-08. Both editors carry an
+      "also announce to Discord" toggle; `0003_announcements.sql` adds `announce_requested` (did
+      the author ask) and `announced_at` (settled, and the concurrency claim). A live post
+      announces on save; a scheduled one rides a sweep off the home page read, because this
+      Worker still has no cron. Claim-then-send, exactly as the flare-closure sweep does, so a
+      save racing a page load cannot post the same embed twice — verified against local D1: two
+      passes, the second claims nothing. Builders are pure and asserted in
+      `scripts/test-announce.ts`, including that the "is this post public" predicate still
+      matches the read model's own. See [[Notifications]]
 - [x] ~~Media library page (`/admin/media`)~~ — built 2026-08-06. Browse everything in R2,
       filter by kind or by what is missing, and edit alt text, caption, credit and the
       source-attribution fields. Added `PATCH /api/admin/media/[id]`, which did not exist:
       credits were captured on upload and then frozen, so fixing one meant SQL against
       production. **63 of 72 items still have no credit** — the filter counts them
-- [ ] **The "no credit" filter over-reports.** Those 63 are exactly the POI photographs, which
-      are the community's own and owe no credit; all 9 community photos are credited. The filter
-      reads as 63 outstanding tasks when the real number is zero. It should exempt
-      `kind = 'photo'`, or say "no credit recorded" rather than implying one is missing
-- [ ] **Settings page (`/admin/settings`).** Same story, but with no API either. Social links,
-      hero copy, theme colours, Code of Conduct PDF. It is the only `adminOnly` nav entry the
-      layout was built for
+- [x] ~~**The "no credit" filter over-reports.**~~ — fixed 2026-09-08. `MediaLibrary.tsx` now
+      names which kinds owe a credit at all: `community_photo` (press photography, where the
+      byline is a licensing obligation) and `import` (unclassified). `photo` and `doc` are ours
+      — the POI photographs were shot by members for this site, so an empty `credit` on one is
+      not a gap. The count, the filter and the on-tile badge all read the same predicate, so
+      they cannot disagree. 63 outstanding tasks became 0, which is the true number
+- [ ] **Settings page (`/admin/settings`)** — *waiting on a decision, not on time.* Social
+      links, hero copy, theme colours, Code of Conduct PDF; no page and no API, and it is the
+      only `adminOnly` nav entry the layout was built for. `PRODUCT.md` lists it under
+      **explicitly undecided**, so this is not simply unbuilt — nobody has settled whether the
+      site wants a settings table at all, or whether these belong in `wrangler.jsonc` where a
+      change is reviewable in git. Worth answering before anyone writes the schema
 - [ ] **Community POI problem reports.** `poi_reports` and the moderation queue exist in the
       schema; no UI yet. Report-only by decision (2026-08-15) — a visitor can flag that an
       existing POI moved, closed or has wrong info, never propose a new one. `poi_id` is
@@ -304,10 +325,13 @@ and is 100 again now.
 - [x] ~~`SEQUENCE` can decrease~~ — pinned for global events, still derived for meetups
 - [ ] **Photo carousel** — the API and schema support multiple photos per POI; nothing uploads a
       second one yet, so the UI is unbuilt
-- [ ] **`src/lib/scrapedduck.ts` cannot be unit tested.** It imports `cloudflare:workers` at
-      module scope, alongside ~10 pure helpers (`raidTierRank`, `relativeTime`, `formatCp`…).
-      Splitting the presentation helpers into their own module would make them testable, but it
-      rewrites imports across six components — a refactor, not a fix
+- [x] ~~**`src/lib/scrapedduck.ts` cannot be unit tested.**~~ — split 2026-09-08. The nine pure
+      helpers moved to `src/lib/game-format.ts`, which imports nothing from `cloudflare:workers`;
+      `scrapedduck.ts` keeps the KV cache and the fetch, and imports the formatting rather than
+      the reverse. It was **thirteen** import sites, not six, but they were mechanical and the
+      typecheck caught the lot. `scripts/test-game-format.ts` adds 60 assertions, most of them
+      about degrading on bad upstream data — the payload is a third-party scrape written to KV
+      *before* the page renders, so a throw would outlive the bad upstream commit
 - [x] ~~Events page uses `Astro.site` in prod~~ — it now always builds calendar links from the
       request origin. The old behaviour shipped six subscribe links that 404'd
 - [x] ~~Open redirect via `next=`~~ — `/\host` and tab-smuggled variants are blocked, the
@@ -391,12 +415,15 @@ and is 100 again now.
       listener, not just at load. Bundled in: Leaflet's own zoom control, previously stock
       white/black, now themed off `--bg-panel`/`--text`/`--border` like the attribution
       control already was. 2026-08-15
-- [ ] **Per-page OG images.** `Base.astro` sends one `og:image` for the whole site —
-      `/og-default.png`, the wordmark on a grey ground at 1200×630 — for every route except
-      `/blog/[slug]`, which passes the post's hero. So a link to `/map`, `/events` or `/go`
-      pasted into Discord previews as the same generic card rather than the park, the event
-      or the meetup. Per-page means each route (or each event and meetup) supplies its own
-      image; PRODUCT.md lists it as explicitly undecided
+- [ ] **Per-page OG images** — *waiting on a decision, not on time.* `Base.astro` sends one
+      `og:image` for the whole site — `/og-default.png`, the wordmark on a grey ground at
+      1200×630 — for every route except `/blog/[slug]`, which passes the post's hero. So a link
+      to `/map`, `/events` or `/go` pasted into Discord previews as the same generic card rather
+      than the park, the event or the meetup. `PRODUCT.md` lists it under **explicitly
+      undecided**. The question is not how but how far: one hand-made card per static route is
+      an afternoon, one generated per event and per meetup needs an image pipeline the Worker
+      cannot run without the zone. **Now more visible than it was:** the announcement embeds
+      link back to the site, so every announced post and meetup is a Discord unfurl
 
 ## Audit still owed
 

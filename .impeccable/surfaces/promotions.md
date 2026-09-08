@@ -36,7 +36,7 @@ Owner: main thread. **Applied 2026-09-02 (during W2, files disjoint from W2 owne
 - [x] `src/components/map/MapPreview.tsx:57` placeholder inline `color: var(--text-muted)` measures 2.03:1 on `--map-canvas` in dark; W1-A forced `--ink-700 !important` from the page. Fix in the component (a fixed ink, as `.map-loading` uses) and drop the page override (W1-A). *Fixed ink in the component (`MapPreview.tsx:12`); no `--ink-700` override left in `index.astro`.*
 - [x] `EventCard.astro` `.event-title-link` is 23px tall, 1px under the floor (W1-A measured) — `min-height: 24px` or `.target` (main thread, W3.5). *`padding-block: 1px` given back as negative margin, `EventCard.css:411`.*
 - [x] `MapView.css` `.cluster`/`.cluster-wrap` collide with the `.cluster` primitive — sent to W2-A to rename `.map-cluster`. *Renamed: `.map-cluster-wrap` / `.map-cluster`, `MapView.css:349, 360`.*
-- [ ] `src/pages/index.astro` ~L1648: W1-A's local `.actions` workaround can now go back to the `.cluster` primitive, since the map no longer owns that name. Its comment still says `MapView.css:257` owns `.cluster`, which is no longer true. Code follow-up, not a doc one.
+- [x] `src/pages/index.astro`: W1-A's local `.actions` workaround is gone — both call sites use the `.cluster` primitive, and the stale comment claiming `MapView.css:257` owns `.cluster` went with it. Safe because W2-A's rename to `.map-cluster` landed; the primitive's `--cluster-gap` default is `--space-2`, which is exactly what the local rule set. *Done 2026-09-08.*
 - [x] **Owner question:** the GO Fest banner carries no photographer byline in code (the vault says the photo has a named photographer); W1-A kept the caption text as-is rather than invent a credit. Ask Justin for the byline and add it to the `.credit`. *Answered 2026-09-03: no byline needed.*
 - [x] Vault/plan drift: the landmark rail and the "Right now" card were dropped in `e814e0d`; `vault/Design System.md` and `Backlog.md` still describe them. *`Design System.md` carries a superseded-by-`DESIGN.md` callout that names the rail; `Backlog.md`'s rail entry annotated 2026-09-05.*
 
@@ -66,6 +66,15 @@ Owner: main thread. **Applied 2026-09-02 (during W2, files disjoint from W2 owne
 
 ## Fonts
 - [x] Atkinson regular/italic files were swapped at download; swapped back on disk 2026-09-02 (regular = 33,996 B, italic = 37,644 B). Any wave that screenshotted "oblique body text" before the swap should be re-checked.
+
+## Verified closed, 2026-09-08
+
+- The documenter's note that `global.css:204, 370` still carried a **stale CARTO comment** does not
+  hold any more. Both were read: L197 already says "the basemap is the self-hosted Protomaps
+  extract in its light flavor in both themes", and L370 says "first on CARTO Voyager, now on the
+  self-hosted Protomaps extract". The remaining CARTO mention at L204 is provenance — the token
+  `--map-canvas: #e9e6e0` *was* tuned against Voyager's land colour, and saying so is why the
+  value is defensible. Nothing to fix; leaving accurate history in place.
 
 ## Known pane limitation
 - Custom-width `resize_window` breaks `navigate`; presets only. True 1280–1440 captures for the finish: try resizing *after* navigation, screenshot, then reset before the next navigate.
