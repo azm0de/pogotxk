@@ -217,8 +217,49 @@ Mobile LCP was ~5s in August and is 3.3s now. Accessibility was 97 and is 100.
 > run, every time. This is the same trap as the `wrangler dev` note in
 > [[Bugs Worth Remembering]], and it bites on production too, not just locally.
 
-`/events`, `/raids`, `/map`, `/blog`, `/live`, `/about` are 100/100/100 on the three
-transport-independent categories.
+### Re-audited 2026-09-08, before shipping the announcement work
+
+Every public route, warmed, mobile and desktop, against the production build locally. Perf is
+**directional only** here for the reason in the `wrangler dev` warning below; a11y, best
+practices and SEO are transport-independent and these numbers hold at the edge.
+
+| route | mobile perf / a11y / bp / seo | desktop perf / a11y / bp / seo |
+|---|---|---|
+| `/` | 93 / 100 / 100 / 100 | 99 / 100 / 100 / 100 |
+| `/blog` | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `/eggs` | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `/events` | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `/raids` | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `/research` | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `/live` | 99 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `/about` | 98 / 100 / 100 / 100 | 100 / 100 / 100 / 100 |
+| `/map` | 94 / **96** / 100 / 100 | 98 / **97** / 100 / 100 |
+| `/go` | 99 / 100 / **96** / **63** | 100 / 100 / **96** / **66** |
+
+Home is unchanged from the 2026-09-05 local numbers to the decimal — 93 mobile, 99 desktop,
+FCP 1.4s, LCP 3.1s — so the announcement sweep on the home page read costs nothing measurable.
+It is `waitUntil`-ed off the response path and claims nothing when nothing is pending.
+
+The two sub-100s are both the documented deliberate ones: `/map`'s `target-size` and `/go`'s
+`noindex` plus its geolocation prompt. Neither was touched.
+
+> [!note] This entry used to claim `/map` was 100 on all three
+> It is **96 mobile / 97 desktop on accessibility**, and always was — `target-size` fails on
+> the marker clusters, which is the exemption recorded two sections below. The old sentence
+> was written from the routes that *were* clean and never re-checked against `/map` itself.
+> A blanket "100/100/100" that quietly excludes the one interesting route is worse than no
+> number.
+
+**Fixed in this pass:** `/admin/posts` was **98** on accessibility — `heading-order`, an `h1`
+running straight to the `h3` post titles. The only `h2` on the page lived inside the editor
+form, which is rendered only while something is being edited, so the resting state of the page
+skipped a level and a screen reader reached a stack of post titles with nothing having said
+what the list was. The list is now a `<section>` under an `h2`, exactly as the meetup editor's
+Upcoming/Past lists already were. 100 now. `/admin/meetups` and `/admin/media` were already 100.
+
+> [!warning] Admin SEO scores of 50–54 are correct
+> Those pages are `noindex` and behind a session. Lighthouse has no category for "deliberately
+> not indexed" and marks it down; ignore it there, exactly as on `/go`.
 
 Two findings, both fixed in `65f55cd`:
 

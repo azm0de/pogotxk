@@ -656,6 +656,21 @@ export default function PostEditor() {
         </form>
       )}
 
+      {/*
+        The list is a section with its own heading, the way the meetup editor's
+        Upcoming/Past lists are.
+
+        Not decoration: the row titles below are `h3`, and the only `h2` on this
+        page lives inside the editor form — which is rendered only while
+        something is being edited. So the resting state of the page ran h1
+        straight to h3, and a screen reader arrived at a stack of post titles
+        with nothing having said what the list was. No count here, unlike the
+        meetup sections: the filter chips directly beneath carry one each, and
+        the active one already reports exactly this number.
+      */}
+      <section aria-labelledby="posts-list-heading">
+      <h2 id="posts-list-heading" className="posts-list-heading">Posts</h2>
+
       <div className="posts-filters" role="group" aria-label="Filter by status">
         {STATUS_FILTERS.map((value) => (
           <button
@@ -727,6 +742,7 @@ export default function PostEditor() {
           })}
         </ul>
       )}
+      </section>
     </div>
   );
 }

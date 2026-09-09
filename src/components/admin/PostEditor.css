@@ -296,6 +296,13 @@
 
 /* ------------------------------------------------------------------ list -- */
 
+/* Sized to match `.meetups section h2`, so the two list pages read as one
+   console rather than as two components that grew separately. */
+.posts-list-heading {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xl);
+}
+
 .posts-filters {
   display: flex;
   flex-wrap: wrap;
