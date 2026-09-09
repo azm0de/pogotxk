@@ -240,6 +240,18 @@ Home is unchanged from the 2026-09-05 local numbers to the decimal — 93 mobile
 FCP 1.4s, LCP 3.1s — so the announcement sweep on the home page read costs nothing measurable.
 It is `waitUntil`-ed off the response path and claims nothing when nothing is pending.
 
+**Confirmed against production after the deploy** (2026-09-09T01:26Z, worker version
+`9b675fa6`), warmed, which is the number that counts:
+
+| Home, warmed | perf | a11y | best practices | SEO | FCP | LCP | TBT | CLS |
+|---|---|---|---|---|---|---|---|---|
+| Production, mobile | **91** | 100 | 100 | 100 | 1.8s | 3.4s | 0ms | 0 |
+| Production, desktop | **98** | 100 | 100 | 100 | 0.6s | 0.9s | 0ms | 0 |
+
+Identical to the 2026-09-05 production run inside run-to-run noise (91 / 1.7s / 3.3s mobile,
+98–100 / 0.5s / 0.8–1.0s desktop). Nothing in the announcement work, the `game-format` split or
+the `.cluster` change moved a number. Zero accessibility failures on either.
+
 The two sub-100s are both the documented deliberate ones: `/map`'s `target-size` and `/go`'s
 `noindex` plus its geolocation prompt. Neither was touched.
 
