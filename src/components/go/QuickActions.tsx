@@ -294,6 +294,15 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
   const canPost = user && user.role !== 'guest';
 
   const [pois, setPois] = useState<MapPoi[]>([]);
+  /**
+   * Whether the POI fetch has finished, either way.
+   *
+   * `pois.length === 0` cannot answer that question: it is equally what "not
+   * back yet", "the fetch failed" and "this zone has no POIs" look like. The
+   * deep-link resolver below has to tell them apart, or it waits forever for a
+   * list that is never coming.
+   */
+  const [poisSettled, setPoisSettled] = useState(false);
   const [flares, setFlares] = useState<Flare[]>([]);
   const [mine, setMine] = useState<Record<string, string>>({});
   /**
@@ -398,7 +407,10 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
     fetch('/api/map.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
       .then((r) => r.json() as Promise<{ pois?: MapPoi[] }>)
       .then((d) => setPois(d.pois ?? []))
-      .catch(() => setPois([]));
+      .catch(() => setPois([]))
+      // Both outcomes settle it: what the deep-link resolver needs to know is
+      // that no more POIs are coming, not that any arrived.
+      .finally(() => setPoisSettled(true));
 
     fetch('/api/game/raids.json', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
       .then((r) => r.json() as Promise<{ data?: { name: string; tier: string }[] }>)
@@ -426,6 +438,15 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
    * transition anyway, but the ref makes "already tried" durable against
    * anything else that might someday re-trigger the effect.
    *
+   * It waits on the POI fetch having SETTLED, not on it having produced
+   * anything. Waiting for a non-empty list meant a failed, slow or empty
+   * /api/map.json silently swallowed `?action=` — the installed app's
+   * "Flare a gym" home-screen shortcut, and the return leg of a signed-out
+   * tile tap. Both carry only a kind, which needs no POI to honour, and both
+   * are tapped in exactly the conditions that make that fetch fail: a phone
+   * at a gym on park wifi. The tap appeared to do nothing and dropped the
+   * trainer on the picker they had already used.
+   *
    * The two links are resolved together, poi first, so `?action=raid&poi=…`
    * from the map's own future "flare a raid at this gym" link lands with
    * BOTH already answered: `chooseLocation` records the poi as the trainer's
@@ -443,7 +464,7 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
   useEffect(() => {
     if (deepLinkResolvedRef.current) return;
     if (!initialPoi && !initialAction) return;
-    if (pois.length === 0) return;
+    if (!poisSettled) return;
     deepLinkResolvedRef.current = true;
 
     if (initialPoi) {
@@ -454,7 +475,7 @@ export default function QuickActions({ user, initialPoi, initialAction }: QuickA
       const def = ACTIONS.find((a) => a.kind === initialAction);
       if (def) openAction(def);
     }
-  }, [pois, initialPoi, initialAction, canPost]);
+  }, [pois, poisSettled, initialPoi, initialAction, canPost]);
 
   // --- push notifications ---------------------------------------------------
   useEffect(() => {
