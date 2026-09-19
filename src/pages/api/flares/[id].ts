@@ -15,7 +15,13 @@ import { z } from 'zod';
 import { ApiError, handler, intParam, json, requireRole, requireUser } from '~/lib/api';
 import { hasRole } from '~/lib/auth/types';
 import { recordAudit } from '~/lib/db/audit';
-import { getFlare, getFlareOwnership, isoNow } from '~/lib/db/flares';
+import {
+  flareCarriesBoss,
+  flareCarriesTier,
+  getFlare,
+  getFlareOwnership,
+  isoNow,
+} from '~/lib/db/flares';
 import { notifyLiveBoard } from '~/do/LiveBoard';
 import { closeFlareInDiscord } from '~/lib/notify/flare-closures';
 import { updateFlareEmbedInDiscord, type FlareNotification } from '~/lib/notify/discord';
@@ -136,11 +142,14 @@ export const PATCH = handler(async (ctx: APIContext) => {
     // be attached to a trade flare through the back door, where the create path
     // deliberately drops it — and the board would render a field the UI has no
     // way to have produced.
-    const bossAllowed = flare.kind === 'raid' || flare.kind === 'remote_invites';
-    if (input.boss !== undefined && !bossAllowed) {
+    //
+    // "Mirrors" is meant literally: both routes and the client's own gating ask
+    // these two functions, so the rule has one definition rather than three
+    // that agree until somebody changes one of them.
+    if (input.boss !== undefined && !flareCarriesBoss(flare.kind)) {
       throw new ApiError(422, 'That kind of flare does not carry a boss');
     }
-    if (input.tier !== undefined && flare.kind !== 'raid') {
+    if (input.tier !== undefined && !flareCarriesTier(flare.kind)) {
       throw new ApiError(422, 'Only a raid carries a tier');
     }
     if (input.boss === undefined && input.tier === undefined) {
