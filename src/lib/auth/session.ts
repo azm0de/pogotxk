@@ -192,7 +192,19 @@ export async function destroySession(db: D1Database, token: string | undefined):
   await db.prepare('DELETE FROM sessions WHERE id = ?1').bind(await sha256(token)).run();
 }
 
-/** Housekeeping for the cron trigger. */
+/**
+ * Bulk-delete lapsed sessions.
+ *
+ * Nothing calls this. It was written for a cron trigger that was removed
+ * deliberately (`refreshAllFeeds` in lib/scrapedduck.ts is the other orphan of
+ * it), so lapsed rows are only cleared lazily, by `getSessionUser` deleting one
+ * when somebody presents its cookie. That is correct but not exhaustive: a row
+ * whose owner never returns stays forever. Harmless — an expired row can never
+ * authenticate — but it does mean the table only grows.
+ *
+ * Kept because the sweep is right and the day a `scheduled` handler exists this
+ * is what it should call. See vault/Why there is no cron.md.
+ */
 export async function pruneExpiredSessions(db: D1Database): Promise<number> {
   const res = await db
     .prepare("DELETE FROM sessions WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now')")

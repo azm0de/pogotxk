@@ -1,6 +1,6 @@
 ---
 tags: [history, quality]
-updated: 2026-09-08
+updated: 2026-09-19
 ---
 
 # Bugs Worth Remembering
@@ -177,6 +177,41 @@ What to do instead, in order of preference:
 Related, and the reason this is filed rather than shrugged off: [[Notifications]] records that
 the production webhook is still expected to be pointing at a **private test channel** until the
 repoint step in [[Backlog]] is done. That is the only reason this landed somewhere quiet.
+
+### What the test suite does about it — 2026-09-19
+
+The Worker test layer runs against `wrangler.jsonc`, so it inherits exactly the hazard above.
+`wrangler.configPath` does not merely read the config: the pool hands it to
+`unstable_getMiniflareWorkerOptions`, which calls `getVarsForDev`, which resolves `.dev.vars`
+next to the config file and folds **every key in it** into the bindings as a secret. A test that
+raised a flare would post an embed to the community channel, and an embed cannot be unsent.
+
+Three rails, in the order they catch things:
+
+1. **`vitest.config.ts` blanks the credentials.** Miniflare merges worker options with
+   `Object.assign` and the pool passes ours second, so every key named there beats the
+   `.dev.vars` value of the same name. The webhook, the bot token and all three VAPID values go
+   to `''`; `DISCORD_BOOTSTRAP_ADMIN_ID` goes with them, because a real id would silently make
+   one Discord account permanently admin inside the tests.
+2. **`test/00-safety.test.ts` proves it blanked**, rather than assuming. Named `00-` so it is
+   the first thing anyone sees fail. It asserts on the *length* and never the value — a failure
+   here means the real credential is loaded, and Vitest prints what it compared, so comparing
+   the string itself would put the live webhook in the terminal and in whatever captured it.
+   It then goes further and checks that **no** binding under any name resolves to a Discord
+   host, and that the delivery paths refuse to send even so.
+3. **`test/setup.ts` makes any outbound `fetch` throw**, for every host. Blanking credentials
+   only closes the Discord paths; `getFeed` reaches raw.githubusercontent.com from inside a
+   route, so a test that meant to check a status code would otherwise hit a third party. The
+   stub is reinstalled before every test, which is what bounds `mockDiscord()` to the one test
+   that asked for it.
+
+Measured, not assumed: with the override removed the var arrives **121 characters long and
+pointing at `discord.com`** — the live webhook, present and usable, exactly as feared.
+
+> **None of this protects `wrangler dev`.** The rails live in the Vitest config and the test
+> setup, so anyone doing browser work against a built worker is back to the situation at the top
+> of this section and must blank the value in `.dev.vars` themselves first. See
+> [[Local Development]].
 
 ## Quietly broken config
 

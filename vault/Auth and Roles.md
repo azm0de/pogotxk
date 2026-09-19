@@ -1,6 +1,6 @@
 ---
 tags: [architecture, security]
-updated: 2026-08-19
+updated: 2026-09-19
 ---
 
 # Auth and Roles
@@ -145,12 +145,24 @@ empty jar.
 
 ## Tests
 
-`npm test` covers role resolution, the bootstrap override, the optional member-role gate, the
-role hierarchy, and PKCE. 23 checks in `scripts/test-auth.ts`, plus the installed-app sign-in
-handoff in `scripts/test-signin-surface.ts` and the device grant — bodies, response mapping,
-cookie payload, and the `login_required` routing split — in `scripts/test-device-grant.ts`.
+Both layers, and they cover different halves of this. See [[Local Development]].
+
+`npm test` covers the decisions that are pure functions: role resolution, the bootstrap
+override, the optional member-role gate, the role hierarchy, PKCE and the `safeNext` guard —
+68 checks in `scripts/test-auth.ts` — plus the installed-app sign-in handoff in
+`scripts/test-signin-surface.ts` and the device grant's bodies, response mapping, cookie
+payload and `login_required` routing split in `scripts/test-device-grant.ts`.
+
+`npm run test:worker` covers the parts that only exist as a request crossing a boundary, which
+is most of this note: `test/auth/` drives `/auth/login`, `/auth/callback`, logout, the device
+grant, the Android exchange, the state cookie and `src/middleware.ts` itself through
+`SELF.fetch`, with Discord mocked and sessions minted by the real `createSession`. The
+authorisation gate in front of `/admin` is asserted as a full route × method × caller matrix in
+`test/admin/`, and then a second time with the middleware removed, so a handler that defends
+itself is distinguishable from one that only looks defended.
+
 `scripts/preflight-device-grant.ts` re-checks whether Discord's device endpoint accepts the
-app, shape-only, no secrets printed.
+app, shape-only, no secrets printed. It is not in either chain — it talks to Discord.
 
 ## See also
 
