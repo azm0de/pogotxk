@@ -487,9 +487,13 @@ Done.
   iterations   ${iterations}
   sessions     ${revokeSessions ? 'revoked' : 'left alone'}
 
-Sign in at /auth/owner. Nothing links to that page, and it carries
-noindex — which is the only thing keeping it out of a search index, since
-there is no robots.txt.
+Sign in at /admin/login.
+
+That path is not a secret and is not protecting anything: the repository is
+public, so anyone can read it there. Nothing links to the page and it carries
+noindex, which keeps a password form out of the nav and out of a search index
+— tidiness, not defence. The password you just set and the lockout behind it
+are what hold the door.
 `);
 } finally {
   rl.close();

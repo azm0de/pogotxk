@@ -1,10 +1,25 @@
 /**
- * The owner's password sign-in.
+ * The owner's password sign-in, posted to by `/admin/login`.
  *
  * The break-glass door. Discord OAuth is the front entrance and this is not a
- * second one — nothing links here, no member ever sees it, and it exists for
- * the day Discord is down, the guild is misconfigured, or the one bootstrap
- * account is gone. See `migrations/0004_owner_password.sql`.
+ * second one — it exists for the day Discord is down, the guild is
+ * misconfigured, or the one bootstrap account is gone. See
+ * `migrations/0004_owner_password.sql`.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS IS NOT UNDER `/api/admin/`
+ * ---------------------------------------------------------------------------
+ *
+ * The form it serves is the one door a signed-out visitor needs, and every path
+ * under `/api/admin/` is gated by the middleware's role check — so a route
+ * there would answer 401 to precisely the caller it exists for. It would also
+ * owe a row in `test/admin/surface.ts`, a table about who may act on the admin
+ * console, which is not the question this route answers.
+ *
+ * Under `/api/auth/` it sits with `device/` and `mobile.ts` instead: the other
+ * routes that turn a credential into a session. Neither the path nor its
+ * obscurity is a control — the repository is public — and the password and the
+ * lockout below are what actually hold the door.
  *
  * ---------------------------------------------------------------------------
  * NOT `handler()` FROM `~/lib/api`
@@ -83,7 +98,7 @@ function back(kind: Failure, next: string): Response {
   // '/' is the page's own default; sending it makes for a longer URL and no
   // difference in behaviour.
   if (next !== '/') params.set('next', next);
-  return seeOther(`/auth/owner?${params}`);
+  return seeOther(`/admin/login?${params}`);
 }
 
 interface CredentialRow extends StoredHash {
@@ -178,7 +193,7 @@ export async function POST(ctx: APIContext): Promise<Response> {
    *
    * It leaks nothing about the password either: this response is byte-identical
    * whether the submitted password was right or wrong, which is the headline
-   * assertion in `test/auth/owner-login.test.ts`.
+   * assertion in `test/auth/admin-login.test.ts`.
    */
   if (isLocked(row.locked_until, now)) return back('locked', next);
 

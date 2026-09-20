@@ -1,6 +1,6 @@
 ---
 tags: [reference]
-updated: 2026-09-19
+updated: 2026-09-20
 ---
 
 # Platform Limits and Traps
@@ -25,7 +25,8 @@ declares no `limits` block. It is CPU, not wall clock, so waiting on D1 or `fetc
 nothing and pure computation costs everything — and `waitUntil` does **not** escape it: the
 work is deferred past the response but billed to the same request. Measured here on
 2026-09-19, PBKDF2-HMAC-SHA256 inside workerd runs at **0.53 ms per 1,000 iterations**, so
-100,000 rounds is ~53 ms and does not fit. Workers Paid raises the default to 30 s. See
+100,000 rounds is ~53 ms and does not fit — which is why `DEFAULT_ITERATIONS` is 10,000 (~5 ms),
+the schema's floor. Workers Paid raises the default to 30 s. See
 [[Auth and Roles#The second door]].
 
 **10 D1 databases** on the free plan. Hit at project start.
@@ -50,7 +51,7 @@ URL when the content type is `x-www-form-urlencoded`, `multipart/form-data` or `
 
 So sending JSON is what makes a cross-site POST *possible*, not what makes it safe. For
 ordinary `fetch` callers that is a convenience; for anything that accepts credentials it is a
-hole, which is why `/api/auth/owner` accepts form encoding only and answers 415 to JSON.
+hole, which is why `/api/auth/admin-login` accepts form encoding only and answers 415 to JSON.
 
 **`<slot name="head" />` must exist** or a page's `<Fragment slot="head">` is silently discarded
 — invisible in a browser, only showing up as missing metadata in a scraper.

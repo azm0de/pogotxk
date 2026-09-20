@@ -1,6 +1,6 @@
 ---
 tags: [architecture, security]
-updated: 2026-09-19
+updated: 2026-09-20
 ---
 
 # Auth and Roles
@@ -8,7 +8,7 @@ updated: 2026-09-19
 Discord is the sign-in method for everyone. The community already lives there, so guild
 membership *is* the membership check — see [[Why Discord is the identity provider]].
 
-There is one other door, and it is not for members: the owner's password at `/auth/owner`.
+There is one other door, and it is not for members: the owner's password at `/admin/login`.
 See [[#The second door]].
 
 ## Flow
@@ -32,8 +32,33 @@ Scopes requested: `identify` and `guilds.members.read`. No email, no messages, n
 
 ## The second door
 
-`/auth/owner` is a password login for one account. Nothing links to it, no member ever sees it,
-and it exists for the day Discord sign-in cannot produce an admin.
+`/admin/login` is a password login for one account, and it exists for the day Discord sign-in
+cannot produce an admin.
+
+> [!important] The path is not a secret, and nothing may be built on the idea that it is
+> The repository (`azm0de/pogotxk`) is **public**, so every path written in it is public
+> knowledge the moment it is committed. An unguessable path was considered for this page and
+> rejected on exactly that ground: there is nowhere to hide one.
+>
+> So `/admin/login` is fixed and ordinary. Nothing links to it and it carries `noindex`, which
+> keeps a password form out of the nav and out of a search index — tidiness, not defence.
+> **The password and the lockout are the controls.** If a future change is ever justified by
+> "nobody knows the URL", that justification is false and the change is unsafe.
+
+The page sits under `/admin` and the POST route deliberately does not.
+
+- `/admin/login` is inside the admin gate, so it needs an exemption to be reachable at all:
+  `isAdminLoginPath` in `src/lib/auth/admin-path.ts`, wired into `src/middleware.ts` beside the
+  import exemption. It is an **exact string match**, not a prefix and not `isUnder` — either of
+  those would carry `/admin/login/anything` or `/admin/logins` out of the gate with it, turning
+  one deliberate hole into an open-ended one nobody would have to notice. `admin-path.test.ts`
+  pins the near-misses; `admin-login.test.ts` pins them again through the real stack.
+- `POST /api/auth/admin-login` is **not** under `/api/admin/`, because everything there is
+  gated and a gated login route would answer 401 to precisely the signed-out visitor it is for.
+  It sits with `device/` and `mobile.ts` instead — the other routes that turn a credential into
+  a session.
+- It is **not** in `Admin.astro`'s nav. That layout is for signed-in admins, and every entry in
+  its list must resolve to a page they can reach.
 
 > [!danger] Why it had to exist
 > `DISCORD_GUILD_ID` is set and the `DISCORD_ROLE_*` ids are not. So `resolveRole` falls
@@ -61,16 +86,20 @@ the same claim `/auth/device` makes.
   known-answer vector is asserted in *both* test layers, which is what actually proves the
   hash written from Node verifies inside workerd.
 
-> [!warning] The iteration count does not currently fit the free plan
+> [!warning] The iteration count is the CPU budget's floor, so it is not what makes this hard
 > Measured inside workerd on 2026-09-19: PBKDF2 here is linear at **0.53 ms per 1,000
-> iterations**, so `DEFAULT_ITERATIONS = 100_000` costs about **53 ms of CPU**. A Worker on the
-> free plan gets **10 ms per invocation** and `wrangler.jsonc` sets no `limits` block, so the
-> plan default applies. A sign-in at 100k would be killed mid-derivation.
+> iterations**. This account is on Workers Free, confirmed from the dashboard, which caps a
+> request at **10 ms of CPU** — so the 100,000 this started at wanted roughly five times the
+> budget and would have been killed mid-derivation. `DEFAULT_ITERATIONS` is now **10,000**
+> (~5 ms), which is also the floor the schema enforces.
 >
-> Left as a decision rather than quietly lowered. Workers Paid ($5/month) raises the default
-> budget to 30 s, where OWASP's 600,000 fits comfortably; staying free means dropping to the
-> schema floor of 10,000 (~5 ms) and leaning on the setter script's 16-character minimum and
-> the lockout instead. The full numbers are in the comment above `DEFAULT_ITERATIONS`.
+> Be straight about what that costs. Online guessing is stopped by the lockout, not the cost.
+> Offline, against a leaked dump, 10,000 rounds buys very little, so **the password's own
+> entropy has to carry it** — which is why the setter leads with a generated six-word
+> passphrase and says plainly that a memorable password is not well protected here. Workers
+> Paid ($5/month) raises the budget to 30 s, where OWASP's 600,000 fits comfortably; raising
+> the constant then costs one line and invalidates no stored hash, because the count lives in
+> the row. The full numbers are in the comment above `DEFAULT_ITERATIONS`.
 
 ### `role_locked`
 
@@ -113,7 +142,7 @@ the username.
 ### What it refuses to say
 
 A wrong password, an unknown username, a username with no credential, and a row too corrupt to
-check are all the same answer: `303` to `/auth/owner?error=bad`, byte for byte. An unknown
+check are all the same answer: `303` to `/admin/login?error=bad`, byte for byte. An unknown
 username burns a real derivation first so the timing matches — measured at 56 ms against the
 wrong-password path's 60 ms, the 4 ms being two D1 writes.
 
@@ -260,7 +289,7 @@ empty jar.
 - Session tokens are random 256-bit values; **only their SHA-256 is stored**.
 - Cookies are `HttpOnly`, `Secure`, `SameSite=Lax`. Not `Strict` — the OAuth callback is a
   cross-site top-level navigation and Strict would drop the cookie on the way back.
-- `next=` accepts same-origin paths only, so it cannot become an open redirect. On `/auth/owner`
+- `next=` accepts same-origin paths only, so it cannot become an open redirect. On `/admin/login`
   the argument is stronger than on the callback: the value arrives from a form field the
   submitter controls entirely, and `safeNext` runs at the moment it becomes a `Location`.
 - PKCE S256, verified against the RFC 7636 test vector in `scripts/test-auth.ts`.
@@ -268,14 +297,20 @@ empty jar.
 - Passwords are stored as PBKDF2-HMAC-SHA256 with a per-row salt and cost. `verifyPassword`
   **never throws**: a corrupt row answers `false`, because a 500 that happens for one username
   and not others is an oracle.
-- `/api/auth/owner` accepts `application/x-www-form-urlencoded` and nothing else. Astro's origin
+- `/api/auth/admin-login` accepts `application/x-www-form-urlencoded` and nothing else. Astro's origin
   check is content-type dependent and **skips `application/json` entirely** (see
   [[Platform Limits and Traps]]), so accepting JSON there would remove the only CSRF protection
-  the route has. `/auth/owner` carries no JavaScript at all, for the same reason and two others:
+  the route has. `/admin/login` carries no JavaScript at all, for the same reason and two others:
   it is reached when things are already broken, and a password that never touches app code
   cannot be logged by it.
-- `/auth/owner` carries `noindex, nofollow`. The page is publicly reachable by design and there
-  is no `public/robots.txt`, so that tag is the only thing keeping it out of a search index.
+- `/admin/login` carries `noindex, nofollow`. The page is publicly reachable by design and there
+  is no `public/robots.txt`, so that tag is the only thing keeping it out of a search index —
+  and keeping it out of a search index is *all* it does. The path itself is not a control; see
+  [[#The second door]].
+- The admin gate exempts `/admin/login` by **exact match** and nothing else under `/admin`.
+  `/admin/login/`, `/admin/login/extra`, `/admin/logins` and `/admin/login-notes` all still
+  redirect a signed-out visitor to Discord sign-in, which is what makes the exemption one page
+  wide rather than a section.
 - Account deletion drops the password credential and clears `role_locked`. It has to be
   explicit: `deleteAccount` anonymises by `UPDATE` and never `DELETE`s the `users` row, so
   `admin_credentials`' `ON DELETE CASCADE` never fires.
@@ -295,7 +330,7 @@ primitives and lockout schedule in `scripts/test-owner-password.ts`.
 is most of this note: `test/auth/` drives `/auth/login`, `/auth/callback`, logout, the device
 grant, the Android exchange, the state cookie, the owner password door and `src/middleware.ts`
 itself through `SELF.fetch`, with Discord mocked and sessions minted by the real
-`createSession`. `owner-login.test.ts` asserts the same known-answer vector the tsx suite does,
+`createSession`. `admin-login.test.ts` asserts the same known-answer vector the tsx suite does,
 which is the only thing that really proves the setter script and the Worker derive the same
 bytes; it also pins the byte-identical refusals and `role_locked` **with its control**. The
 authorisation gate in front of `/admin` is asserted as a full route × method × caller matrix in

@@ -8,10 +8,30 @@ export const prerender = false;
 /**
  * The owner's password sign-in form.
  *
- * The break-glass door, and nothing links to it. Members sign in with Discord;
- * this page exists for the day that is not possible — Discord down, the guild
- * misconfigured, the one bootstrap account gone. See
- * `migrations/0004_owner_password.sql` for why a second door exists at all.
+ * The break-glass door. Members sign in with Discord; this page exists for the
+ * day that is not possible — Discord down, the guild misconfigured, the one
+ * bootstrap account gone. See `migrations/0004_owner_password.sql` for why a
+ * second door exists at all.
+ *
+ * ---------------------------------------------------------------------------
+ * THE PATH IS NOT A SECRET, AND IS NOT PROTECTING ANYTHING
+ * ---------------------------------------------------------------------------
+ *
+ * `/admin/login` is fixed, unlinked and `noindex`, and none of that makes it
+ * confidential. The repository is public, so every path written in it is public
+ * knowledge the moment it is committed; an unguessable path was considered and
+ * rejected for exactly that reason. What protects this door is the password and
+ * the lockout behind it — nothing else may be weakened on the theory that the
+ * URL is hard to find, because it is not.
+ *
+ * Unlinked and `noindex` are tidiness, not defence: they keep a password form
+ * out of the nav and out of a search index, and that is the whole of what they
+ * are worth.
+ *
+ * Sitting under `/admin` means the gate in `src/middleware.ts` would bounce the
+ * signed-out visitor this page exists for. `isAdminLoginPath` in
+ * `~/lib/auth/admin-path` is the exemption that stops it, matched exactly so it
+ * covers this path and no other.
  *
  * ---------------------------------------------------------------------------
  * NO JAVASCRIPT ON THIS PAGE. AT ALL.
@@ -98,7 +118,7 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
       to be long and unmemorable, which only works if a password manager can
       store and fill it.
     */}
-    <form class="panel owner-form" method="post" action="/api/auth/owner">
+    <form class="panel owner-form" method="post" action="/api/auth/admin-login">
       <input type="hidden" name="next" value={next} />
 
       <div class="field">

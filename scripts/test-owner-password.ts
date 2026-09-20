@@ -8,7 +8,7 @@
  * `~/` alias, which is what lets this run under plain `tsx` — and what lets
  * `scripts/set-admin-password.ts` write a hash the Worker can actually verify.
  * The route's own behaviour (status codes, cookies, the counter's SQL) needs a
- * runtime and lives in `test/auth/owner-login.test.ts`.
+ * runtime and lives in `test/auth/admin-login.test.ts`.
  */
 
 import {
@@ -48,7 +48,7 @@ console.log('\n== PBKDF2-HMAC-SHA256 known-answer vector ==');
 /*
  * The load-bearing assertion in this file.
  *
- * `test/auth/owner-login.test.ts` makes the identical claim inside workerd. Two
+ * `test/auth/admin-login.test.ts` makes the identical claim inside workerd. Two
  * runtimes, one vector, one function: that pair is what proves the hash this
  * script writes from Node is the hash the Worker will verify, rather than
  * hoping that sharing a module is enough. If either side ever drifts — a

@@ -1,6 +1,6 @@
 ---
 tags: [runbook]
-updated: 2026-09-19
+updated: 2026-09-20
 ---
 
 # Local Development
@@ -47,7 +47,7 @@ It writes a real `users` + `sessions` row using the same SHA-256-of-token scheme
 To exercise the owner password door instead:
 
 ```bash
-npm run set:password -- --create localowner    # then sign in at /auth/owner
+npm run set:password -- --create localowner    # then sign in at /admin/login
 ```
 
 > [!danger] `set:password` refuses to run outside a real console, and that is the point
@@ -180,7 +180,7 @@ lands on an empty table and says nothing.
 >
 > Worth knowing which way round that is: JSON is not the *protected* shape, it is the shape
 > Astro's origin check **skips entirely**. Convenient for a `fetch` caller, a hole for anything
-> that accepts credentials — which is why `/api/auth/owner` takes form encoding only. See
+> that accepts credentials — which is why `/api/auth/admin-login` takes form encoding only. See
 > [[Platform Limits and Traps]].
 
 > [!note] A test's non-GET request needs an `origin` header

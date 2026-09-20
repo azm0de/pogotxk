@@ -1,5 +1,12 @@
 /**
- * `/auth/owner` and `POST /api/auth/owner` — the break-glass door.
+ * `/admin/login` and `POST /api/auth/admin-login` — the break-glass door.
+ *
+ * The page is under `/admin` and the route deliberately is not. The page is
+ * exempted from the role gate by `isAdminLoginPath`, matched exactly, so a
+ * signed-out visitor can reach it; the route stays outside `/api/admin/`
+ * because a gated one would answer 401 to that same visitor. Neither path is a
+ * secret — the repository is public — so the password and the lockout asserted
+ * below are the entirety of what holds this door.
  *
  * Driven through `SELF.fetch` rather than by importing the handler, because
  * most of what matters here lives in the response envelope: the status, the
@@ -34,7 +41,7 @@ import {
 } from '../helpers/factories';
 
 const ORIGIN = 'https://pogotxk.test';
-const API = `${ORIGIN}/api/auth/owner`;
+const API = `${ORIGIN}/api/auth/admin-login`;
 const FORM_TYPE = 'application/x-www-form-urlencoded';
 
 /** A form-encoded POST with the `Origin` a browser would send. */
@@ -246,7 +253,7 @@ describe('what it refuses, and how little it says', () => {
     const res = await post({ username: cred.username, password: 'not the password at all' });
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/auth/owner?error=bad');
+    expect(res.headers.get('location')).toBe('/admin/login?error=bad');
     expect(res.headers.getSetCookie()).toHaveLength(0);
     expect(await sessionCount()).toBe(0);
   });
@@ -308,7 +315,7 @@ describe('what it refuses, and how little it says', () => {
     const res = await post({ username: 'admin', password: 'hunter2hunter2hunter2' });
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/auth/owner?error=bad');
+    expect(res.headers.get('location')).toBe('/admin/login?error=bad');
     expect(await sessionCount()).toBe(0);
     // No credential means no counter to bound the writes, so nothing is logged.
     expect(await auditActions()).toEqual([]);
@@ -326,7 +333,7 @@ describe('what it refuses, and how little it says', () => {
     const res = await post({ username: cred.username, password: cred.password });
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/auth/owner?error=bad');
+    expect(res.headers.get('location')).toBe('/admin/login?error=bad');
     expect(await sessionCount()).toBe(0);
   });
 
@@ -371,7 +378,7 @@ describe('what it refuses, and how little it says', () => {
     ]) {
       const res = await post(fields as Record<string, string>);
       expect(res.status).toBe(303);
-      expect(res.headers.get('location')).toBe('/auth/owner?error=bad');
+      expect(res.headers.get('location')).toBe('/admin/login?error=bad');
     }
 
     // Nothing was counted: there was no credential to check, so there is no
@@ -406,7 +413,7 @@ describe('the lockout', () => {
 
     for (let i = 0; i < 5; i++) {
       const res = await post({ username: cred.username, password: `wrong ${i}` });
-      expect(res.headers.get('location')).toBe('/auth/owner?error=bad');
+      expect(res.headers.get('location')).toBe('/admin/login?error=bad');
     }
 
     const row = await readCredential(env.DB, owner);
@@ -414,7 +421,7 @@ describe('the lockout', () => {
     expect(row?.locked_until).not.toBeNull();
 
     const sixth = await post({ username: cred.username, password: 'wrong again' });
-    expect(sixth.headers.get('location')).toBe('/auth/owner?error=locked');
+    expect(sixth.headers.get('location')).toBe('/admin/login?error=locked');
   });
 
   it('REFUSES A CORRECT PASSWORD WHILE LOCKED', async () => {
@@ -437,7 +444,7 @@ describe('the lockout', () => {
     const res = await post({ username: cred.username, password: cred.password });
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/auth/owner?error=locked');
+    expect(res.headers.get('location')).toBe('/admin/login?error=locked');
     expect(res.headers.getSetCookie()).toHaveLength(0);
     expect(await sessionCount()).toBe(0);
     expect((await readCredential(env.DB, owner))?.failed_attempts).toBe(5);
@@ -649,7 +656,7 @@ describe('role_locked, against Discord', () => {
 
     // Even with the correct password, nothing is minted.
     const res = await post({ username: cred.username, password: cred.password });
-    expect(res.headers.get('location')).toBe('/auth/owner?error=bad');
+    expect(res.headers.get('location')).toBe('/admin/login?error=bad');
     expect(res.headers.getSetCookie()).toHaveLength(0);
 
     // And a session that somehow existed would still resolve to nobody.
@@ -713,11 +720,24 @@ describe('what shapes of request it accepts', () => {
 
 /* ---------------------------------------------------------------- the page */
 
-describe('GET /auth/owner', () => {
-  it('renders anonymously, carries noindex, and posts to the API', async () => {
-    const res = await SELF.fetch(`${ORIGIN}/auth/owner`, { redirect: 'manual' });
+describe('GET /admin/login', () => {
+  it('renders the form to a signed-out visitor, carries noindex, and posts to the API', async () => {
+    /*
+     * THE POINT OF THE EXEMPTION, AND THE ONLY TEST THAT WOULD NOTICE ITS LOSS.
+     *
+     * This page sits under `/admin`, so the middleware's role gate covers it by
+     * default and would answer a signed-out visitor with a 302 to `/auth/login`
+     * — the Discord door they are here because they cannot use.
+     * `isAdminLoginPath` is what stops that, and if it were dropped or the wire
+     * in `src/middleware.ts` removed, nothing else in this suite would fail:
+     * every other assertion here drives the API route, which is not under
+     * `/admin` at all. So the status is checked, and then the form itself,
+     * because a 200 that rendered an error shell would also be a dead door.
+     */
+    const res = await SELF.fetch(`${ORIGIN}/admin/login`, { redirect: 'manual' });
 
     expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
     const html = await res.text();
 
     // The only thing keeping a password form out of a search index: the page
@@ -726,9 +746,43 @@ describe('GET /auth/owner', () => {
     expect(html).toContain('noindex');
 
     expect(html).toContain('method="post"');
-    expect(html).toContain('action="/api/auth/owner"');
+    expect(html).toContain('action="/api/auth/admin-login"');
+    expect(html).toContain('name="username"');
+    expect(html).toContain('type="password"');
     expect(html).toContain('autocomplete="username"');
     expect(html).toContain('autocomplete="current-password"');
+  });
+
+  it('is reachable enough to actually sign in through, end to end', async () => {
+    /*
+     * The two halves joined. The assertions above prove the page renders and
+     * the ones at the top of this file prove the route accepts a password; this
+     * is the one that fails if the `action` on the form and the path of the
+     * route ever stop agreeing — a rename on one side only, which is exactly
+     * the mistake a move like this invites.
+     */
+    const owner = await seedUser(env.DB, { role: 'admin' });
+    const cred = await seedAdminCredential(env.DB, owner);
+
+    const html = await (await SELF.fetch(`${ORIGIN}/admin/login`)).text();
+    const action = /action="([^"]+)"/.exec(html)?.[1];
+    expect(action).toBeDefined();
+
+    const res = await SELF.fetch(
+      jsonRequest(`${ORIGIN}${action}`, {
+        body: new URLSearchParams({
+          username: cred.username,
+          password: cred.password,
+          next: '/admin/posts',
+        }).toString(),
+        headers: { 'content-type': FORM_TYPE },
+      }),
+      { redirect: 'manual' },
+    );
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/admin/posts');
+    expect(sessionTokenOf(res)).toBeDefined();
   });
 
   it('carries no script of its own', async () => {
@@ -737,7 +791,7 @@ describe('GET /auth/owner', () => {
      * so it must not need a bundle to have loaded and run. Asserted rather than
      * merely intended, because an island is one `client:load` away.
      */
-    const res = await SELF.fetch(`${ORIGIN}/auth/owner`, { redirect: 'manual' });
+    const res = await SELF.fetch(`${ORIGIN}/admin/login`, { redirect: 'manual' });
     const html = await res.text();
 
     const body = html.slice(html.indexOf('<main'));
@@ -745,18 +799,18 @@ describe('GET /auth/owner', () => {
   });
 
   it('shows a real explanation for locked, and one flat sentence for bad', async () => {
-    const locked = await (await SELF.fetch(`${ORIGIN}/auth/owner?error=locked`)).text();
+    const locked = await (await SELF.fetch(`${ORIGIN}/admin/login?error=locked`)).text();
     expect(locked).toContain('role="alert"');
     expect(locked).toContain('locked');
 
-    const bad = await (await SELF.fetch(`${ORIGIN}/auth/owner?error=bad`)).text();
+    const bad = await (await SELF.fetch(`${ORIGIN}/admin/login?error=bad`)).text();
     expect(bad).toContain('role="alert"');
     expect(bad).toContain('did not match');
   });
 
   it('ignores an error value it did not emit', async () => {
     const html = await (
-      await SELF.fetch(`${ORIGIN}/auth/owner?error=%3Cscript%3Ealert(1)%3C%2Fscript%3E`)
+      await SELF.fetch(`${ORIGIN}/admin/login?error=%3Cscript%3Ealert(1)%3C%2Fscript%3E`)
     ).text();
 
     expect(html).not.toContain('role="alert"');
@@ -768,13 +822,55 @@ describe('GET /auth/owner', () => {
     const { seedSession } = await import('../helpers/factories');
     const token = await seedSession(env.DB, admin);
 
-    const res = await SELF.fetch(`${ORIGIN}/auth/owner?next=/admin/posts`, {
+    const res = await SELF.fetch(`${ORIGIN}/admin/login?next=/admin/posts`, {
       headers: { cookie: authCookie(token) },
       redirect: 'manual',
     });
 
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('/admin/posts');
+  });
+});
+
+/* ----------------------------------------------------------- the exemption */
+
+describe('the hole the page sits in is exactly one path wide', () => {
+  /*
+   * `admin-path.test.ts` pins `isAdminLoginPath` exhaustively as a function.
+   * This is the other half — that the predicate is what the request actually
+   * meets — and it is the one worth having here, because the whole reason this
+   * page moved under `/admin` was to be a fixed, ordinary path rather than a
+   * secret one. A fixed path is only safe if the gate around it is intact.
+   */
+  it.each([
+    // The trailing slash first, because it is the one a reader doubts: Astro's
+    // `trailingSlash` defaults to `ignore`, so it is fair to wonder whether the
+    // request is normalised before the middleware sees it. It is not — the
+    // middleware reads `/admin/login/` verbatim and the equality check says no.
+    ['the trailing-slash form', '/admin/login/'],
+    ['a path nested below it', '/admin/login/extra'],
+    ['a deeper one still', '/admin/login/extra/deeper'],
+    ['a name that merely starts the same', '/admin/logins'],
+    ['and another', '/admin/login-notes'],
+  ])('%s is still gated: %s', async (_label, path) => {
+    // Every one of these passes `startsWith('/admin/login')`, which is the
+    // implementation a hurried reader would reach for. None of them is exempt.
+    expect(path.startsWith('/admin/login')).toBe(true);
+
+    const res = await SELF.fetch(`${ORIGIN}${path}`, { redirect: 'manual' });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(`/auth/login?next=${encodeURIComponent(path)}`);
+  });
+
+  it('and the ordinary console pages are untouched by it', async () => {
+    // The control. Without this the test above could pass against a gate that
+    // had stopped working altogether, since a 302 to sign-in is also what a
+    // broken exemption would produce for everything.
+    const res = await SELF.fetch(`${ORIGIN}/admin/posts`, { redirect: 'manual' });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/auth/login?next=%2Fadmin%2Fposts');
   });
 });
 
