@@ -1,6 +1,6 @@
 ---
 tags: [reference]
-updated: 2026-08-05
+updated: 2026-09-19
 ---
 
 # Routes
@@ -27,8 +27,10 @@ updated: 2026-08-05
 |---|---|
 | `/auth/login` | Starts Discord OAuth. Renders a config diagnostic when unconfigured |
 | `/auth/callback` | Completes it |
+| `/auth/device` | RFC 8628 approval, for a browser whose jar holds no Discord session |
 | `/auth/logout` | Ends the session |
 | `/auth/error` | Human-readable failure |
+| `/auth/owner` | The owner's password form. Unlinked, `noindex`, no JavaScript — see [[Auth and Roles#The second door]] |
 
 ## Admin — `ambassador` or better
 
@@ -48,6 +50,7 @@ updated: 2026-08-05
 | `GET /api/me.json` | public | Current session or null |
 | `GET /api/game/[feed].json` | public | `raids` \| `eggs` \| `research` \| `events` |
 | `GET /api/flares` | public | Active flares |
+| `POST /api/auth/owner` | public | The owner password login. Form encoding only, 415 otherwise; every answer is a 303 |
 | `POST /api/flares` | member | Fire one |
 | `PATCH /api/flares/[id]` | member | RSVP or close |
 | `GET /api/flares/socket` | public | WebSocket upgrade → Durable Object |
