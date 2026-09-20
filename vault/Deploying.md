@@ -1,14 +1,31 @@
 ---
 tags: [runbook]
-updated: 2026-08-05
+updated: 2026-09-19
 ---
 
 # Deploying
 
-**Push to `main`.** Workers Builds picks it up and deploys. No workflow file, no API tokens in
-GitHub. A deploy takes 60–90 seconds from push.
+**Push to `main`.** Workers Builds picks it up and deploys. No API tokens in GitHub, and nothing
+in GitHub triggers the deploy. A deploy takes 60–90 seconds from push.
 
 Manual, if ever needed: `npm run deploy`.
+
+> [!warning] CI does not gate the deploy
+> `.github/workflows/ci.yml` runs typecheck and both test layers on a push to `main` and on every
+> pull request. It is a **signal, not a gate**: Workers Builds watches the repository directly and
+> starts the moment the push lands, so a deploy and its CI run race each other and the deploy wins.
+> A red cross appears next to a commit that is already live.
+>
+> That is fine for a pull request, which is where the checks actually earn their keep. If you want
+> a failing test to genuinely stop a release, the commands have to run *inside* the Workers Builds
+> build command, in front of `npm run build`, so a non-zero exit fails the build itself:
+>
+> ```
+> npm ci && npm run cf-typegen && npm run typecheck && npm test && npm run test:worker && npm run build
+> ```
+>
+> The cost is roughly a minute and a half added to every deploy. Untried so far — the trade is
+> real and it is a choice, not an oversight.
 
 > [!danger] Know which URL you are testing
 > `https://pogotxk.gnomelabz.workers.dev` — **production**, updates on every deploy

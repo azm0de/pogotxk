@@ -1,0 +1,70 @@
+# Runs the checks that nothing ran before.
+#
+# Production deploys from Workers Builds on a push to `main`, and that is a
+# separate system from this one: a red cross here does NOT stop it. This
+# workflow buys a signal on a pull request and a record on `main`, not a gate.
+# To actually block a bad deploy, the same commands have to go in front of
+# `npm run build` in the Workers Builds build command — see Deploying.
+#
+# Everything below runs with no secrets, no Cloudflare account and no network
+# beyond the registry. That is not an accident and it is worth keeping: it was
+# verified by moving `.dev.vars` aside and running the whole thing without it.
+# `npm test` used to fetch pokemontxk.com, which is why dry-run-import left the
+# chain; if a suite ever starts needing the network again, this file is where
+# it will first go red.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches local development. There is no `engines` field to read, so
+          # this is the only place the version is stated — if that changes, it
+          # changes here.
+          node-version: 22
+          cache: npm
+
+      # `ci` rather than `install`: it installs exactly the lockfile and fails
+      # if package.json has drifted from it, which is the behaviour worth having
+      # on a build machine. It also sidesteps the arborist crash that `npm i`
+      # hits on this project when it has to resolve vitest 4's optional peers.
+      - run: npm ci
+
+      # worker-configuration.d.ts is gitignored and typecheck cannot run without
+      # it, so this has to come first on a clean checkout. It reads wrangler.jsonc
+      # locally — no account, no network.
+      - name: Generate Worker types
+        run: npm run cf-typegen
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The hand-rolled suites. They are chained with && inside the script, so
+      # this stops at the first failing one and the rest go unreported — worth
+      # knowing when reading a red log.
+      - name: Unit suites
+        run: npm test
+
+      # Builds first, because the LIVE Durable Object binding resolves against
+      # the built entry: the class is only exported onto it by the Vite plugin
+      # during `astro build`. A bare `vitest run` here would test a dist that
+      # does not exist.
+      - name: Worker suites
+        run: npm run test:worker
