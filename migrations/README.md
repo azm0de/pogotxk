@@ -38,6 +38,10 @@ today.
 
 Nothing is broken: `wrangler` sorts by filename, and `0002_flare_discord_close`
 sorts after `0002_poi_reports_report_only` deterministically, matching the
-order they were actually applied in. The next new migration is
-**`0003_*`** — `0003` was never claimed by either of these, despite the
-appearance of a gap.
+order they were actually applied in. `0003` was never claimed by either of
+these, despite the appearance of a gap, and `0003_announcements.sql` has since
+taken it. The next free number is therefore whatever follows the highest file
+present — **`0005_*`** as of `0004_owner_password.sql`. Read the directory
+rather than this line; a number written down here goes stale the moment
+somebody ships a migration without editing it, which is exactly what happened
+to the previous version of this paragraph.
