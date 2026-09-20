@@ -10,18 +10,17 @@
  */
 
 import type { APIContext } from 'astro';
+import { timingSafeEqual } from '~/lib/auth/password';
 import { hasRole } from '~/lib/auth/types';
 
-/** Constant-time comparison so a wrong token cannot be recovered by timing. */
-function timingSafeEqual(a: string, b: string): boolean {
-  const ab = new TextEncoder().encode(a);
-  const bb = new TextEncoder().encode(b);
-  // Compare lengths without early return, then bytes.
-  let diff = ab.length ^ bb.length;
-  const n = Math.max(ab.length, bb.length);
-  for (let i = 0; i < n; i++) diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0);
-  return diff === 0;
-}
+/*
+ * The constant-time comparison used to live here, byte-wise and private. It now
+ * lives in `~/lib/auth/password`, which needed the same primitive and has to
+ * stay importable by plain `tsx` — so the dependency points that way rather
+ * than this one, and there is exactly one copy in the repo. That module also
+ * prefers workerd's native `crypto.subtle.timingSafeEqual` where it exists, so
+ * this check got slightly better by moving.
+ */
 
 export function requireImportToken(request: Request, env: Env): Response | null {
   const expected = (env as unknown as { IMPORT_TOKEN?: string }).IMPORT_TOKEN;
