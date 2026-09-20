@@ -1,0 +1,242 @@
+---
+import Base from '~/layouts/Base.astro';
+import { safeNext } from '~/lib/auth/next';
+import { hasRole } from '~/lib/auth/types';
+
+export const prerender = false;
+
+/**
+ * The owner's password sign-in form.
+ *
+ * The break-glass door, and nothing links to it. Members sign in with Discord;
+ * this page exists for the day that is not possible — Discord down, the guild
+ * misconfigured, the one bootstrap account gone. See
+ * `migrations/0004_owner_password.sql` for why a second door exists at all.
+ *
+ * ---------------------------------------------------------------------------
+ * NO JAVASCRIPT ON THIS PAGE. AT ALL.
+ * ---------------------------------------------------------------------------
+ *
+ * Three reasons, each sufficient on its own:
+ *
+ * 1. **It is the break-glass door**, so it is reached at exactly the moment
+ *    other things are broken. A form that needs a bundle to have loaded, parsed
+ *    and run is a form that can fail for the same reasons the rest of the site
+ *    just did. A plain `<form>` posts from a browser with scripting off, from a
+ *    text browser, and from a half-loaded page.
+ * 2. **A form-encoded body is the more protected option.** Astro's origin check
+ *    polices form-like content types and skips `application/json` entirely
+ *    (`vault/Platform Limits and Traps.md`), so the `fetch`-and-JSON shape the
+ *    rest of this app uses would *remove* the CSRF protection here rather than
+ *    add anything.
+ * 3. **The password never passes through app code.** With no script, the value
+ *    goes from the input straight into the request body. Nothing can read it,
+ *    buffer it, put it in a state object, or carry it into an error report.
+ */
+
+const next = safeNext(Astro.url.searchParams.get('next'));
+
+// Already able to reach the console — there is nothing here for them, and a
+// sign-in form shown to somebody already signed in is just a confusing dead
+// end. Same shape as `/auth/device`'s early return.
+if (hasRole(Astro.locals.user, 'ambassador')) return Astro.redirect(next, 302);
+
+// Only the two the API route emits. Anything else in the query string is
+// somebody poking at it, and gets no message.
+const raw = Astro.url.searchParams.get('error');
+const error = raw === 'bad' || raw === 'locked' ? raw : null;
+---
+
+<Base title="Owner sign-in">
+  <Fragment slot="head">
+    {/*
+      The page is publicly reachable — it has to be, or it is no use on the day
+      the other door is shut — and there is no `public/robots.txt`. This tag is
+      therefore the only thing keeping a password form out of a search index.
+      `<slot name="head" />` exists at Base.astro:105; without it this would be
+      silently discarded, which is invisible in a browser.
+    */}
+    <meta name="robots" content="noindex, nofollow" />
+  </Fragment>
+
+  <section class="owner container">
+    <header class="owner-head">
+      <h1>Owner sign-in</h1>
+    </header>
+
+    <p class="lede">
+      This is the spare key. Everyone else signs in with <a class="target" href="/auth/login"
+        >Discord</a
+      >.
+    </p>
+
+    {
+      error && (
+        <div class="notice" role="alert">
+          {error === 'locked' ? (
+            <>
+              <p>
+                <strong>Too many wrong attempts, so this is locked for a little while.</strong>
+              </p>
+              <p>
+                Five wrong passwords lock the account for a minute, and each further wrong attempt
+                after that locks it for longer — up to an hour, never more. Nothing else has
+                changed: the password still works, and waiting is the whole of the fix. Signing in
+                with Discord is unaffected.
+              </p>
+            </>
+          ) : (
+            <p>That username and password did not match.</p>
+          )}
+        </div>
+      )
+    }
+
+    {/*
+      Plain POST to the API route. No `fetch`, no island, no `client:` directive.
+      `autocomplete` is set on both fields on purpose: this credential is meant
+      to be long and unmemorable, which only works if a password manager can
+      store and fill it.
+    */}
+    <form class="panel owner-form" method="post" action="/api/auth/owner">
+      <input type="hidden" name="next" value={next} />
+
+      <div class="field">
+        <label for="owner-username">Username</label>
+        <input
+          id="owner-username"
+          name="username"
+          type="text"
+          autocomplete="username"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          required
+        />
+      </div>
+
+      <div class="field">
+        <label for="owner-password">Password</label>
+        <input
+          id="owner-password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+      </div>
+
+      <button class="btn btn--primary" type="submit">Sign in</button>
+    </form>
+
+    <p class="fallback">
+      There is no reset link and no recovery email, by design — this door does not depend on any
+      other service being up. Setting a new password is
+      <code>npm run set:password</code>, run against the database.
+    </p>
+  </section>
+</Base>
+
+<style>
+  /* Follows /auth/device's conventions: a narrow reading measure, the reading
+     face rather than the signage face, and the narrow container. */
+  .owner {
+    --read-measure: min(var(--measure), 60ch);
+    max-width: var(--container-narrow);
+    padding-block: var(--space-section) var(--space-16);
+    font-family: var(--font-read);
+  }
+  .owner > * + * {
+    margin-block-start: var(--space-5);
+  }
+
+  .owner-head {
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--text);
+  }
+  .owner h1 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--display-lg);
+    font-weight: 800;
+    line-height: var(--lh-display);
+    letter-spacing: var(--tracking-display);
+  }
+
+  .lede {
+    margin: 0;
+    max-width: var(--read-measure);
+    font-size: var(--text-lg);
+    line-height: var(--lh-body);
+  }
+
+  /* The message is a status, so it is quiet — a rule in the live-text red
+     rather than a filled alarm. `--live-text` inverts correctly in dark mode
+     and is the token already used for urgent text elsewhere. */
+  .notice {
+    max-width: var(--read-measure);
+    padding: var(--space-4);
+    border-left: 4px solid var(--live-text);
+    background: var(--bg-sunken);
+    border-radius: var(--radius-sm);
+  }
+  .notice p {
+    margin: 0;
+    font-size: var(--text-md);
+    line-height: var(--lh-body);
+  }
+  .notice p + p {
+    margin-block-start: var(--space-3);
+  }
+
+  .owner-form {
+    display: grid;
+    gap: var(--space-5);
+    max-width: var(--read-measure);
+    justify-items: start;
+  }
+
+  .field {
+    display: grid;
+    gap: var(--space-2);
+    width: 100%;
+  }
+  .field label {
+    font-size: var(--text-sm);
+    font-weight: 700;
+  }
+  .field input {
+    /* `min-width: 0` so a grid item cannot be widened past its track by its own
+       intrinsic size — the trap that produces horizontal scroll at 375px.
+       48px clears the 24px target floor with room to spare. */
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: var(--space-2) var(--space-4);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--bg-panel);
+    color: var(--text);
+    font-family: var(--font-read);
+    /* 16px, not the 14px `--text-md` the rest of this page uses for secondary
+       text. Below 16px iOS Safari zooms the viewport on focus, and a zoomed
+       viewport is horizontal scroll on a 375px screen — the exact thing the
+       accessibility floor forbids. */
+    font-size: var(--text-base);
+  }
+
+  .fallback {
+    margin: 0;
+    max-width: var(--read-measure);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    line-height: var(--lh-body);
+  }
+  .fallback code {
+    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    font-size: 0.95em;
+    /* Wrapping rather than scrolling: a long command in a narrow column is the
+       other common source of horizontal scroll on a phone. */
+    overflow-wrap: anywhere;
+  }
+</style>
