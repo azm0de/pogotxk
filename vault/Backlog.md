@@ -405,15 +405,22 @@ right, and these are the ones where it probably is not.
       by waiting on that fetch having *settled* rather than having produced anything. React
       islands have no test layer at all; covering this needs jsdom or Playwright, which is a new
       dependency and a decision of its own
-- [ ] **The built worker entry calls `WebAssembly.compile` at module scope**, which workerd
-      forbids — **in production too**, not only under test. `es-module-lexer` ships its parser
-      as a base64 blob and Astro's Actions runtime pulls it in whether or not this app uses
-      Actions. Nothing awaits the promise, so on the deployed Worker the rejection is discarded
-      in silence; under Vitest it surfaces as an unhandled rejection and fails the whole run
-      with no failing test to point at. `test/wasm-shim.ts` neutralises it for tests by handing
-      that one call a promise that never settles. Worth chasing on the production side — this is
-      the test harness surfacing something production hides, which is the good direction for a
-      harness to fail in
+- [x] **The built worker entry calls `WebAssembly.compile` at module scope.** `es-module-lexer`
+      ships its parser as a base64 blob and Astro's Actions runtime pulls it in whether or not
+      this app uses Actions. Under Vitest it surfaces as an unhandled rejection and fails the
+      whole run with no failing test to point at, which `test/wasm-shim.ts` neutralises by
+      handing that one call a promise that never settles.
+
+      **This was first written up here as a production bug as well. It is not.** workerd forbids
+      WASM compilation during *startup*, not during a request, and the deployed Worker evaluates
+      that module inside a request — so the compile succeeds there. It is the test pool that
+      evaluates modules at startup, which is why the harness sees a rejection production never
+      has. Investigated 2026-09-19 after the first write-up asserted the opposite on no evidence.
+
+      Worth keeping as a lesson rather than a to-do: "the test harness surfaced something
+      production hides" was a tidy story, and it was wrong. The harness and production differ in
+      *when* the module is evaluated, and that difference alone explained it. See
+      [[Bugs Worth Remembering]].
 - [ ] **The flare→Discord and close→Discord paths are unverified end to end.** Both are
       unit-covered and mock-covered, and `test/00-safety.test.ts` exists precisely to guarantee
       that no automated run can reach Discord — so no real embed, edit or strike-through has
