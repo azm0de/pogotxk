@@ -357,9 +357,17 @@ describe('bindings the suites depend on', () => {
     expect((await env.MEDIA.list()).objects).toEqual([]);
 
     // The schema survives the emptying, which is the other half of the deal.
+    //
+    // Counted against the migrations the pool actually read off disk rather
+    // than against a literal. The literal was `4`, and it went stale the moment
+    // a fifth migration shipped — which says nothing about whether the schema
+    // survived, only that somebody forgot to edit this line. Comparing to
+    // `TEST_MIGRATIONS.length` asserts the thing worth asserting: every
+    // migration in `migrations/` was applied, and `d1_migrations` still knows it.
+    const expected = (env as unknown as { TEST_MIGRATIONS: unknown[] }).TEST_MIGRATIONS.length;
     const migrated = await env.DB.prepare('SELECT COUNT(*) AS count FROM d1_migrations').first<{
       count: number;
     }>();
-    expect(migrated?.count).toBe(4);
+    expect(migrated?.count).toBe(expected);
   });
 });

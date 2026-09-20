@@ -17,6 +17,12 @@
  * can mint the session for you in a single call. `asToken` is the synchronous
  * form for when you already hold a token.
  *
+ * `seedAdminCredential` follows the same rule for the same reason: it calls the
+ * app's own `hashPassword`, so a test cannot prove something about a hashing
+ * scheme that does not ship. Its default iteration count is the schema's floor
+ * rather than the production constant, which is only possible because the cost
+ * is stored per row.
+ *
  * The other thing in here is not a factory at all: `jsonRequest` and its two
  * signed-in forms, which exist because every non-GET request through
  * `SELF.fetch` needs an `Origin` header or Astro refuses it. That is a fact
@@ -24,6 +30,7 @@
  * request builders instead of being rediscovered in each suite.
  */
 
+import { hashPassword } from '~/lib/auth/password';
 import { createSession, SESSION_COOKIE, sha256 } from '~/lib/auth/session';
 import type { Role, Team } from '~/lib/auth/types';
 import { expiryFor, type FlareKind, type FlareRsvpState } from '~/lib/db/flares';
@@ -84,6 +91,8 @@ export interface SeedUserOptions {
   banReason?: string | null;
   createdAt?: string;
   lastSeenAt?: string | null;
+  /** Pins the role against Discord — see `upsertUser`'s CASE. */
+  roleLocked?: boolean;
 }
 
 /** A `users` row exactly as D1 returns it. */
@@ -103,6 +112,7 @@ export interface SeededUser {
   created_at: string;
   updated_at: string;
   last_seen_at: string | null;
+  role_locked: number;
 }
 
 export async function seedUser(db: D1Database, opts: SeedUserOptions = {}): Promise<SeededUser> {
@@ -113,8 +123,8 @@ export async function seedUser(db: D1Database, opts: SeedUserOptions = {}): Prom
     .prepare(
       `INSERT INTO users (discord_id, username, global_name, avatar_hash, team, trainer_code,
                           trainer_level, trainer_name, role, is_banned, ban_reason,
-                          created_at, updated_at, last_seen_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12, ?13)
+                          created_at, updated_at, last_seen_at, role_locked)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12, ?13, ?14)
        RETURNING *`,
     )
     .bind(
@@ -131,6 +141,7 @@ export async function seedUser(db: D1Database, opts: SeedUserOptions = {}): Prom
       opts.banReason ?? null,
       createdAt,
       opts.lastSeenAt ?? null,
+      opts.roleLocked ? 1 : 0,
     )
     .first<SeededUser>();
 
@@ -204,6 +215,118 @@ export async function asUser(
   init: RequestInit = {},
 ): Promise<Request> {
   return asToken(await seedSession(db, user), url, init);
+}
+
+/* -------------------------------------------------------- admin credentials */
+
+export interface SeedAdminCredentialOptions {
+  username?: string;
+  password?: string;
+  /**
+   * Defaults to the schema's floor rather than to `DEFAULT_ITERATIONS`, so a
+   * suite of twenty logins is twenty cheap derivations instead of twenty
+   * hundred-thousand-round ones. This works *only* because the cost lives in
+   * the row: `verifyPassword` reads the count it finds rather than assuming
+   * one, which is the same property that lets the constant be raised in
+   * production without invalidating the owner's existing hash.
+   *
+   * It is 10,000 and not lower because two independent floors say so — the
+   * `CHECK (iterations >= 10000)` in `0004_owner_password.sql`, which refuses
+   * the INSERT outright, and the identical check inside `verifyPassword`, which
+   * would answer `false` for anything cheaper even if the row existed.
+   */
+  iterations?: number;
+  failedAttempts?: number;
+  lockedUntil?: string | null;
+  lastFailedAt?: string | null;
+  lastSuccessAt?: string | null;
+  /**
+   * Written over the real values after the insert, for the corrupt-row cases.
+   * `salt` and `hash` are unconstrained TEXT, so a non-base64url salt or a
+   * truncated hash is genuinely reachable in production and worth testing;
+   * `algorithm` and `iterations` are not, because their CHECK constraints
+   * refuse a bad value on INSERT and on UPDATE alike.
+   */
+  salt?: string;
+  hash?: string;
+}
+
+export interface SeededCredential {
+  username: string;
+  /** The plaintext, so a test can sign in with it. Never stored. */
+  password: string;
+  userId: number;
+  iterations: number;
+}
+
+/**
+ * Gives `user` a password credential.
+ *
+ * Calls the app's own `hashPassword`, for the same reason `seedSession` calls
+ * the real `createSession`: there is one hashing scheme in this repo, and a
+ * factory that reimplemented it could prove something true about a second one
+ * that does not ship. Overrides are applied afterwards with an UPDATE, which is
+ * also how a locked or corrupt row is made.
+ */
+export async function seedAdminCredential(
+  db: D1Database,
+  user: Ref,
+  opts: SeedAdminCredentialOptions = {},
+): Promise<SeededCredential> {
+  const n = next();
+  const userId = refId(user);
+  const username = opts.username ?? `owner${n}`;
+  const password = opts.password ?? `seeded passphrase ${n} long enough`;
+  const iterations = opts.iterations ?? 10_000;
+
+  const stored = await hashPassword(password, iterations);
+
+  await db
+    .prepare(
+      `INSERT INTO admin_credentials
+         (user_id, username, algorithm, iterations, salt, hash,
+          failed_attempts, locked_until, last_failed_at, last_success_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+    )
+    .bind(
+      userId,
+      username,
+      stored.algorithm,
+      stored.iterations,
+      opts.salt ?? stored.salt,
+      opts.hash ?? stored.hash,
+      opts.failedAttempts ?? 0,
+      opts.lockedUntil ?? null,
+      opts.lastFailedAt ?? null,
+      opts.lastSuccessAt ?? null,
+    )
+    .run();
+
+  return { username, password, userId, iterations };
+}
+
+/** The `admin_credentials` row as D1 returns it — for asserting on the state. */
+export interface SeededCredentialRow {
+  user_id: number;
+  username: string;
+  algorithm: string;
+  iterations: number;
+  salt: string;
+  hash: string;
+  failed_attempts: number;
+  locked_until: string | null;
+  last_failed_at: string | null;
+  last_success_at: string | null;
+}
+
+export async function readCredential(
+  db: D1Database,
+  user: Ref,
+): Promise<SeededCredentialRow | null> {
+  return db
+    .prepare('SELECT * FROM admin_credentials WHERE user_id = ?1')
+    .bind(refId(user))
+    .first<SeededCredentialRow>();
 }
 
 /* --------------------------------------------------------- write requests */
