@@ -23,21 +23,54 @@ export const ALGORITHM = 'pbkdf2-sha256';
 /**
  * PBKDF2 iterations for a newly written hash.
  *
- * PROVISIONAL, and low on purpose. OWASP's 2023 floor for PBKDF2-HMAC-SHA256 is
- * 600,000; this is deliberately far below it, because a Cloudflare Worker on
- * the free plan gets **10 ms of CPU per request** — there is no `limits` block
- * in `wrangler.jsonc`, so the plan default applies — and PBKDF2 costs roughly
- * 10 ms per 100,000 iterations. 600k would not be a slow login, it would be a
- * login that can never complete.
+ * ---------------------------------------------------------------------------
+ * PROVISIONAL. THIS NUMBER DOES NOT FIT THE FREE PLAN. MEASURED, NOT GUESSED.
+ * ---------------------------------------------------------------------------
  *
- * Because the cost is stored per row, raising this constant is a one-line
- * change that invalidates nothing: `verifyPassword` uses the row's own count,
- * and `needsRehash` plus the login route re-derive at the new one on the next
- * successful sign-in.
+ * Timed inside workerd on 2026-09-19 (Miniflare, Windows dev box, three runs at
+ * each count, warmed up first — an unwarmed isolate charges the first
+ * derivation about five times over):
  *
- * The other half of the trade is the setter script's 16-character minimum. A
- * 16-character passphrase carries far more entropy than any iteration count can
- * buy back, and these two numbers were chosen together.
+ *     10,000 iterations    ~5 ms
+ *     50,000               ~27 ms
+ *    100,000               ~53 ms
+ *    200,000              ~107 ms
+ *    600,000              ~318 ms   (OWASP's 2023 floor)
+ *
+ * Linear at roughly **0.53 ms per 1,000 iterations**.
+ *
+ * This deployment is on the **free plan** — `wrangler.jsonc` has no `limits`
+ * block, so the plan default applies, and the free plan's default is **10 ms of
+ * CPU per invocation**. (The free tier is what `import-legacy.ts` and
+ * `import-media.ts` split themselves in half for, to stay under the 50-subrequest
+ * free-plan cap.) PBKDF2 is pure CPU, so all of it counts.
+ *
+ * So at 100,000 a sign-in wants about five times the CPU the request is
+ * allowed, and would be killed mid-derivation. That is not a slow login, it is
+ * a login that can never succeed. The only count that fits at all is the
+ * schema's floor of 10,000 — about 5 ms, leaving roughly 5 ms for the rest of
+ * the request and no margin whatever.
+ *
+ * The value is left here rather than quietly lowered, because the real fix is a
+ * decision about the plan rather than about this line:
+ *
+ *   * **Workers Paid, $5/month** — the default CPU budget becomes 30 seconds,
+ *     600,000 fits with three orders of magnitude to spare, and the
+ *     subrequest chunking above stops being necessary too. The recommendation.
+ *   * **Stay free, and drop this to 10,000** — defensible only because of the
+ *     other two controls: the setter script enforces a 16-character minimum, so
+ *     the *password* carries the entropy rather than the iteration count, and
+ *     five wrong guesses shut the door for up to an hour.
+ *
+ * A Durable Object for the derivation is sometimes suggested as a third way.
+ * Treat it with suspicion: DO storage is billed separately, but the CPU ceiling
+ * per invocation follows the account's plan, so on the free plan it very likely
+ * buys nothing. Measure before believing it.
+ *
+ * Whatever is chosen, changing it is a one-line change that invalidates
+ * nothing. The cost is stored per row: `verifyPassword` uses the count it
+ * finds, and `needsRehash` plus the login route re-derive at the new one on the
+ * next successful sign-in.
  */
 export const DEFAULT_ITERATIONS = 100_000;
 

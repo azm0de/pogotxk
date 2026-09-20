@@ -108,10 +108,17 @@ export async function POST(ctx: APIContext): Promise<Response> {
     });
   }
 
-  // Parsed as a query string rather than through `formData()`: the content type
-  // is already pinned above, so there is no multipart case to handle, and this
-  // way there is no parser here that can be surprised by one.
-  const form = new URLSearchParams(await request.text());
+  /*
+   * Parsed as a query string rather than through `formData()`: the content type
+   * is already pinned above, so there is no multipart case to handle, and this
+   * way there is no parser here that can be surprised by one.
+   *
+   * Decoded from the raw bytes rather than with `request.text()`, which workerd
+   * warns about on any body whose content type is not text-ish — a warning it
+   * prints once per request, which in a test run is dozens of lines between a
+   * real failure and whoever is reading for it.
+   */
+  const form = new URLSearchParams(new TextDecoder().decode(await request.arrayBuffer()));
 
   // Validated at the moment it becomes a `Location`, exactly as
   // `callback.ts:149` does — and the argument is stronger here, because this
