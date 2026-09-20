@@ -129,9 +129,15 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
       <button class="btn btn--primary" type="submit">Sign in</button>
     </form>
 
+    {/*
+      `{' '}` rather than a plain line break before the inline element: Astro
+      trims the newline-plus-indent, so "is" and the command ran together as
+      "isnpm run set:password". Same idiom device.astro uses before its
+      <strong>, and for the same reason.
+    */}
     <p class="fallback">
       There is no reset link and no recovery email, by design — this door does not depend on any
-      other service being up. Setting a new password is
+      other service being up. Setting a new password is{' '}
       <code>npm run set:password</code>, run against the database.
     </p>
   </section>
