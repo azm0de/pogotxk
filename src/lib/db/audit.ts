@@ -6,7 +6,22 @@
  * copy of the database.
  */
 
-export type AuditAction = 'create' | 'update' | 'delete' | 'archive' | 'restore' | 'import';
+/**
+ * `login` and `lockout` are the owner password door's two events. No migration
+ * was needed to add them: `audit_log.action` is an unconstrained `TEXT` column
+ * (`0001_initial.sql`), so the union here is the only thing narrowing it — and
+ * widening the union rather than casting at the call site is what keeps that
+ * list the actual vocabulary instead of a suggestion.
+ */
+export type AuditAction =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'archive'
+  | 'restore'
+  | 'import'
+  | 'login'
+  | 'lockout';
 
 export interface AuditEntry {
   actorId: number | null;
