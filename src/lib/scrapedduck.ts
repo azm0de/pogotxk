@@ -145,7 +145,12 @@ export type FeedEntry<F extends FeedName> = FeedTypes[F];
 
 const KV_PREFIX = 'scrapedduck:v1:';
 
-/** How long a cached copy counts as current. Matches the 30-minute cron. */
+/**
+ * How long a cached copy counts as current. Nothing refreshes on a timer — the
+ * next read past this window is what refetches, so this is the longest a reader
+ * can be shown data without anyone going back to upstream. See
+ * vault/Why there is no cron.md.
+ */
 const FRESH_MS = 30 * 60 * 1000;
 
 /**
@@ -180,7 +185,7 @@ export interface FeedOptions {
   kv?: KVNamespace;
   /** Hand in `Astro.locals.cfContext.waitUntil` to keep the KV write off the response path. */
   waitUntil?: (promise: Promise<unknown>) => void;
-  /** Refetch even if the cached copy is still fresh. Used by the cron. */
+  /** Refetch even if the cached copy is still fresh. Only `refreshAllFeeds` sets it. */
   force?: boolean;
 }
 
@@ -300,12 +305,21 @@ export interface RefreshSummary {
 }
 
 /**
- * Refresh every feed. Call this from the Worker's `scheduled` handler — the
- * cron already fires every 30 minutes, which is ~192 upstream requests a day
- * against a 5000/hour limit, and GitHub caches raw files for 5 minutes anyway.
+ * Refresh every feed, ignoring the freshness window.
  *
- * `target` lets the scheduled handler pass the env it was handed; it falls back
- * to the ambient binding for callers already inside a request.
+ * Nothing calls this. It was written for a `scheduled` handler behind a
+ * 30-minute cron; that cron was removed deliberately and the handler with it, so
+ * this and its `force` option are the last of it (`pruneExpiredSessions` in
+ * lib/auth/session.ts is the other orphan). Kept rather than deleted because
+ * `getFeed` riding the read path is a choice, not a limitation — if a scheduled
+ * refresh is ever wanted, this is the shape it takes, and the arithmetic that
+ * made it safe still holds: one pass is ~192 upstream requests a day against a
+ * 5000/hour limit, and GitHub caches raw files for five minutes anyway.
+ *
+ * `target` lets a scheduled handler pass the env it was handed; it falls back to
+ * the ambient binding for callers already inside a request.
+ *
+ * See vault/Why there is no cron.md.
  */
 export async function refreshAllFeeds(
   target?: Pick<Cloudflare.Env, 'CACHE'>,

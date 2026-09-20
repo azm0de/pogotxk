@@ -1,6 +1,6 @@
 ---
 tags: [planning]
-updated: 2026-09-08
+updated: 2026-09-19
 ---
 
 # Backlog
@@ -369,6 +369,82 @@ and is 100 again now.
       map editor. See [[Data Model]]
 - [ ] **KMZ import in admin.** Their source of truth is Google Earth. `lib/kml.ts` was planned
       and never built — upload a KMZ, diff against the database, approve changes
+
+## What the test suite turned up — 2026-09-19
+
+Writing the Worker test layer (858 Vitest tests, on top of 559 tsx assertions — see
+[[Local Development]]) surfaced these. Every one of them is something the suite **pins rather
+than endorses**: a test that records current behaviour is not a decision that the behaviour is
+right, and these are the ones where it probably is not.
+
+- [ ] **Every flare kind is pushed under the `raid` topic.** `src/pages/api/flares/index.ts`
+      calls `sendPush(env, 'raid', …)` whatever the flare is — a trade, a meetup, a plea for
+      help. `push_subs.topics_json` supports `raid|meetup|post` and `POST /api/push/subscribe`
+      accepts a partial list, but no UI produces one, so every subscription carries all three
+      and nobody currently misses anything. That is the only reason this is not already a bug.
+      The day a per-topic control ships, a trainer who unticks raids also stops hearing "meet me
+      here" — and will never find out they did. Needs a product decision rather than a patch:
+      either the topic follows the kind, or the subscribe endpoint stops offering a narrowing it
+      cannot honour
+- [ ] **The middleware's `next` drops the query string.** `src/middleware.ts` builds it from
+      `context.url.pathname` alone, so `/admin/posts?status=draft` becomes
+      `next=%2Fadmin%2Fposts` and a filtered link loses its filter across sign-in. Small, and
+      deliberately not a change to make in passing: widening what goes into `next` widens the
+      open-redirect surface, and this codebase has shipped that bug twice already (see
+      [[Bugs Worth Remembering]]). Whatever is added has to go through `safeNext` and be
+      asserted there
+- [ ] **`requireImportToken` is case-sensitive on the auth scheme.** `src/lib/admin-auth.ts`
+      tests `header.startsWith('Bearer ')`, so `bearer <token>` is refused although RFC 7235
+      says the scheme is case-insensitive. It errs strict, which is the safe direction, and the
+      only caller is our own importer — filed so that the next person staring at a 401 with a
+      correct token knows where to look
+- [ ] **`/go?action=` has no automated coverage**, despite a demonstrated real failure mode. It
+      was silently swallowed whenever the POI fetch failed or the zone came back empty — which
+      is exactly the condition it gets tapped in, a phone at a gym on park wifi — so the
+      home-screen shortcut appeared to do nothing. Fixed in `src/components/go/QuickActions.tsx`
+      by waiting on that fetch having *settled* rather than having produced anything. React
+      islands have no test layer at all; covering this needs jsdom or Playwright, which is a new
+      dependency and a decision of its own
+- [x] **The built worker entry calls `WebAssembly.compile` at module scope.** `es-module-lexer`
+      ships its parser as a base64 blob and Astro's Actions runtime pulls it in whether or not
+      this app uses Actions. Under Vitest it surfaces as an unhandled rejection and fails the
+      whole run with no failing test to point at, which `test/wasm-shim.ts` neutralises by
+      handing that one call a promise that never settles.
+
+      **This was first written up here as a production bug as well. It is not.** workerd forbids
+      WASM compilation during *startup*, not during a request, and the deployed Worker evaluates
+      that module inside a request — so the compile succeeds there. It is the test pool that
+      evaluates modules at startup, which is why the harness sees a rejection production never
+      has. Investigated 2026-09-19 after the first write-up asserted the opposite on no evidence.
+
+      Worth keeping as a lesson rather than a to-do: "the test harness surfaced something
+      production hides" was a tidy story, and it was wrong. The harness and production differ in
+      *when* the module is evaluated, and that difference alone explained it. See
+      [[Bugs Worth Remembering]].
+- [ ] **The flare→Discord and close→Discord paths are unverified end to end.** Both are
+      unit-covered and mock-covered, and `test/00-safety.test.ts` exists precisely to guarantee
+      that no automated run can reach Discord — so no real embed, edit or strike-through has
+      ever been observed by a test, by design. The gap is deliberate and it is still a gap: the
+      only way to close it is a private webhook of your own, by hand, once. Pairs with the
+      repoint step under **Discord server admin** above
+- [ ] **`pruneExpiredSessions` is dead code.** `src/lib/auth/session.ts`, commented
+      "Housekeeping for the cron trigger" — a cron this Worker does not have and is not getting
+      ([[Why there is no cron]]). Nothing calls it. Expiry is enforced on read, so no session is
+      ever honoured past its date and nothing is *wrong*; what accumulates is dead rows. Either
+      give it the read-path sweep the rest of this codebase uses, or delete it and the comment
+- [ ] **`sessions.user_agent_hash` is written and never read.** Set on every `createSession`,
+      described in `0001_initial.sql` as a "coarse hijack signal, not PII". Nothing compares it
+      to anything, so it is a signal that cannot signal. Either it becomes a check during
+      session resolution or it should stop being collected
+
+> [!note] Two migrations are numbered `0002_`, and that is deliberate
+> Noticed again while pointing `readD1Migrations` at `migrations/`. It was investigated on
+> 2026-08-16 and the reasoning is written out in `migrations/README.md`: D1 records applied
+> migrations by exact filename, so renaming either one makes wrangler treat it as new and rerun
+> it — and `0002_poi_reports_report_only.sql` opens with `DROP TABLE IF EXISTS poi_reports`.
+> `readD1Migrations` orders by `parseInt` of the prefix, so the pair compares equal and keeps
+> directory order, which is harmless because they touch different tables. **Do not "fix" it.**
+> The next migration is `0003_*`, and `0003_announcements.sql` already took it.
 
 ## Known rough edges
 

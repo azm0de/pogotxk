@@ -1,6 +1,6 @@
 ---
 tags: [decision]
-updated: 2026-08-05
+updated: 2026-09-19
 ---
 
 # Why there is no cron
@@ -31,6 +31,31 @@ The only cost of having no cron is that the first visitor after the freshness wi
 the upstream fetch.
 
 > A permanent error stream is a worse trade than a cold cache.
+
+## Riding the read is the pattern, not the workaround
+
+This is now a theme rather than one decision, and it is worth recognising on sight: **when
+something has to happen at a moment nobody is necessarily making a request, it is attached to
+the next read of a page that already had to do the work.** Three places do it, and they differ
+only in which read they ride and how hot that read is.
+
+| What | Rides | How promptly |
+|---|---|---|
+| ScrapedDuck feed refresh — `getFeed`, `src/lib/scrapedduck.ts` | Any page showing raids, eggs, research or events | First visitor past the 30-minute freshness window |
+| Discord close sweep — `sweepFlareDiscordClosures`, `src/lib/notify/flare-closures.ts` | `GET /api/flares` | Seconds — every open board polls it, and every socket reconnect hits it |
+| Announcement sweep — `sweepAnnouncements`, `src/lib/notify/announcements.ts` | The home page read | Cold. A 6 PM post announces on the first load *after* 6 PM |
+
+The shared properties are what make it safe: the work is **idempotent**, it is **bounded** (ten
+embeds a pass, three announcements), it runs **off the response path** under `waitUntil`, and
+anything that must not happen twice is **claimed inside the selecting statement** so a second
+concurrent reader sees no rows.
+
+The shared honesty is that none of it is a scheduler. A flare's embed settles within seconds
+because somebody is always looking at the board; a scheduled post waits for a visitor. It is
+still sent, and still sent exactly once — but [[Notifications]] is right to say it should not be
+sold as a clock. The cache has the matching caveat: `HARD_TTL_S` would expire the KV entry
+outright after seven days of zero traffic, leaving the stale-fallback with nothing to fall back
+to.
 
 ## If it is ever added back
 

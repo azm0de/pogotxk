@@ -8,6 +8,7 @@
 
 import { defineMiddleware } from 'astro:middleware';
 import { env } from 'cloudflare:workers';
+import { isAdminPath, isImportPath } from '~/lib/auth/admin-path';
 import { getSessionUser, SESSION_COOKIE, touchSession } from '~/lib/auth/session';
 import { hasRole } from '~/lib/auth/types';
 
@@ -32,13 +33,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   // Admin surface. The API routes answer 403 so fetch() callers get a usable
-  // status; page routes bounce through sign-in and come back.
-  if (path.startsWith('/admin') || path.startsWith('/api/admin/')) {
-    // The legacy import endpoints carry their own bearer-token guard, used to
-    // seed a fresh deployment before anyone can sign in.
-    const isImportRoute = path.startsWith('/api/admin/import-');
-
-    if (!isImportRoute && !hasRole(context.locals.user, 'ambassador')) {
+  // status; page routes bounce through sign-in and come back. Which paths
+  // count, and why the boundary matters, is in ~/lib/auth/admin-path.
+  if (isAdminPath(path)) {
+    if (!isImportPath(path) && !hasRole(context.locals.user, 'ambassador')) {
       if (path.startsWith('/api/')) {
         return new Response(JSON.stringify({ error: 'Forbidden' }), {
           status: context.locals.user ? 403 : 401,

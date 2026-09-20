@@ -17,6 +17,8 @@ import { ApiError, handler, json, readJson, requireRole } from '~/lib/api';
 import {
   expiryFor,
   FLARE_KINDS,
+  flareCarriesBoss,
+  flareCarriesTier,
   getFlare,
   getViewerRsvps,
   hasDuplicateFlare,
@@ -33,8 +35,14 @@ import { FLARE_KIND_LABEL } from '~/lib/db/flares';
 
 export const prerender = false;
 
-/** Notification copy. Kept next to the send so the two never drift apart. */
-function pushTitle(flare: FlareNotification): string {
+/**
+ * Notification copy. Kept next to the send so the two never drift apart.
+ *
+ * Exported because the wording is the whole of what a trainer sees on a locked
+ * phone, and asserting it through `sendPush` would need a VAPID pair the tests
+ * deliberately do not have.
+ */
+export function pushTitle(flare: FlareNotification): string {
   if (flare.kind === 'raid') return flare.boss ? `🔥 ${flare.boss} raid` : '🔥 Raid starting';
   if (flare.kind === 'remote_invites') {
     return flare.needed ? `📣 ${flare.needed} remote invites` : '📣 Remote invites';
@@ -42,10 +50,27 @@ function pushTitle(flare: FlareNotification): string {
   return `${FLARE_KIND_LABEL[flare.kind]} at the park`;
 }
 
-function pushBody(flare: FlareNotification): string {
+export function pushBody(flare: FlareNotification): string {
   const where = flare.poi?.name ?? 'Spring Lake Park';
   const who = flare.author ? ` — ${flare.author.name}` : '';
   return flare.note ? `${where}: ${flare.note}` : `${where}${who}`;
+}
+
+/**
+ * Text that is nothing but whitespace is nothing.
+ *
+ * zod trims, so `"   "` arrives here as `""` — and `?? null` keeps it, because
+ * an empty string is not nullish. That would leave two spellings of "no boss"
+ * in one column, and anything that later asks `boss IS NULL` would be right
+ * about half the rows. PATCH {action:'edit'} has always stored a cleared field
+ * as NULL; this is the same rule on the way in.
+ *
+ * Both clients already trim before posting, which is why nothing looked wrong.
+ * The API is public and the Android bubble is a third caller, so the rule
+ * belongs on this side of it.
+ */
+function nullIfBlank(value: string | null | undefined): string | null {
+  return value || null;
 }
 
 export const flareInput = z.object({
@@ -124,10 +149,15 @@ export const POST = handler(async (ctx: APIContext) => {
       // Mewtwo") but nowhere else — it would be noise on a trade card. The /go
       // screen asks for it on both, so dropping it for invites would silently
       // discard something the user typed.
-      input.kind === 'raid' || input.kind === 'remote_invites' ? (input.boss ?? null) : null,
-      input.kind === 'raid' ? (input.tier ?? null) : null,
+      //
+      // Asked of `flareCarriesBoss` rather than spelled out again: the same
+      // predicate decides which buttons the client renders and which fields
+      // PATCH will accept, and three copies of one rule is how a kind ends up
+      // offered a field the API then refuses.
+      flareCarriesBoss(input.kind) ? nullIfBlank(input.boss) : null,
+      flareCarriesTier(input.kind) ? nullIfBlank(input.tier) : null,
       input.kind === 'remote_invites' ? (input.needed ?? null) : null,
-      input.note ?? null,
+      nullIfBlank(input.note),
       user.id,
       expiryFor(input.kind, input.minutes),
     )

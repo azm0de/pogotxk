@@ -1,6 +1,6 @@
 ---
 tags: [index]
-updated: 2026-08-10
+updated: 2026-09-19
 ---
 
 # PoGo TXK
@@ -73,4 +73,7 @@ phones, the **Leafeon and Espeon forest video** behind the hero, the community p
 into its own section, clickable event cards linking back to Leek Duck, and Poké Ball favicon and
 app icons. See [[Design System]].
 
-Production runs whatever is on `main`; a push deploys in 60–90 seconds. `npm test` is 9 suites.
+Production runs whatever is on `main`; a push deploys in 60–90 seconds. Tests are in two layers:
+`npm test` is 15 tsx suites over the pure helpers, and `npm run test:worker` is 858 Vitest tests
+running inside workerd against real bindings. `npm run test:all` runs both. See
+[[Local Development]].

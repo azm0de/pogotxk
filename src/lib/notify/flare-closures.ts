@@ -41,8 +41,12 @@ import { markFlareClosedInDiscord, webhookUrl } from '~/lib/notify/discord';
  * dozen flares within the same minute. A bounded pass keeps any single request
  * cheap and lets the next read pick up the remainder — the work is idempotent,
  * so spreading it out costs nothing.
+ *
+ * Exported so a test asserts against this number rather than its own copy of
+ * it: a second copy is how "the bound is respected" quietly becomes "the bound
+ * used to be ten".
  */
-const SWEEP_LIMIT = 10;
+export const SWEEP_LIMIT = 10;
 
 /** Result counts, for logging and for the tests. */
 export interface SweepResult {

@@ -17,7 +17,12 @@ Astro 7 (SSR) + React islands on **Cloudflare Workers**.
 | `CACHE` | KV (`pogotxk-cache`) | ScrapedDuck payloads, cached settings |
 | `LIVE` | Durable Object | Live board — flares + presence over WebSocket |
 
-Cron `*/30 * * * *` refreshes the ScrapedDuck feed into KV.
+**There is no cron**, deliberately. Work a scheduler would normally do rides the next read
+instead: `getFeed` re-fetches the ScrapedDuck feed when the cached copy passes a 30-minute
+freshness window, and keeps serving the last good copy — flagged stale — when upstream is
+unreachable. The same shape settles Discord embeds after a flare ends (on `GET /api/flares`)
+and announces scheduled posts (on the home page read). The trade, and its one cost, are in
+[`vault/Why there is no cron.md`](<vault/Why there is no cron.md>).
 
 ## Local development
 
@@ -36,6 +41,20 @@ To exercise the real Workers runtime instead:
 ```bash
 npm run build && npm run preview
 ```
+
+## Tests
+
+Two layers, and `npm run test:all` runs both.
+
+```bash
+npm test             # 15 tsx suites, 559 assertions — pure helpers, no runtime
+npm run test:worker  # astro build && vitest run — 858 tests inside workerd
+```
+
+The Vitest layer exists because 21 of the 22 API routes, and the middleware, reach
+`cloudflare:workers` at module scope — which plain `tsx` cannot import at all. It is therefore
+the only layer that can touch a route, a binding or the authorisation gate. Which layer a new
+test belongs in is in [`vault/Local Development.md`](<vault/Local Development.md>).
 
 ## Deploying
 

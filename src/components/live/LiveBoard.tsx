@@ -1158,7 +1158,17 @@ export default function LiveBoard({
                 </div>
               </div>
 
-              {form.kind === 'raid' && (
+              {/*
+                Boss and tier are two rules, not one. A remote-invites flare
+                carries a boss — `flareCarriesBoss` says so, PATCH enforces it,
+                the correction form below already asks with it, and /go's own
+                sheet has a Boss field on that kind. Only a raid carries a tier.
+                Hanging both off `kind === 'raid'` made this the one surface
+                where a remote-invites flare could not name what it was for, so
+                the same flare raised here showed up on /go's board as the bare
+                word "Remote invites" where one raised there showed the boss.
+              */}
+              {flareCarriesBoss(form.kind) && (
                 <div className="live-fields">
                   <div className="live-field">
                     <label className="live-label" htmlFor={`${uid}-boss`}>
@@ -1173,19 +1183,21 @@ export default function LiveBoard({
                       maxLength={80}
                     />
                   </div>
-                  <div className="live-field">
-                    <label className="live-label" htmlFor={`${uid}-tier`}>
-                      Tier
-                    </label>
-                    <input
-                      id={`${uid}-tier`}
-                      className="live-input"
-                      value={form.tier}
-                      onChange={(e) => setField('tier', e.target.value)}
-                      placeholder="e.g. 5"
-                      maxLength={24}
-                    />
-                  </div>
+                  {flareCarriesTier(form.kind) && (
+                    <div className="live-field">
+                      <label className="live-label" htmlFor={`${uid}-tier`}>
+                        Tier
+                      </label>
+                      <input
+                        id={`${uid}-tier`}
+                        className="live-input"
+                        value={form.tier}
+                        onChange={(e) => setField('tier', e.target.value)}
+                        placeholder="e.g. 5"
+                        maxLength={24}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
