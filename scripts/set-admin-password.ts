@@ -399,10 +399,14 @@ possible at all, that is what --create is for.`,
   console.log(`
 Now the password. It is not echoed, and it is never printed or logged.
 
-  * Minimum 16 characters. There is no reset link and no recovery email, so a
-    long passphrase is what carries the security here rather than the iteration
-    count, which a Worker's CPU budget caps.
-  * Press Enter on an empty prompt to have one generated for you.
+  * RECOMMENDED: press Enter on an empty prompt and let one be generated.
+    Six random words, about 77 bits. That is the intended way to use this.
+  * Minimum 16 characters if you type your own. There is no reset link and no
+    recovery email, so the password's own entropy is what carries the security
+    here — the iteration count cannot, because this account's Workers plan caps
+    a request at 10 ms of CPU and the count had to fit inside it. A *memorable*
+    16-character password is not well protected by that; a generated passphrase
+    is, because 2^77 guesses is out of reach whatever the multiplier.
 `);
 
   let password = await hidden(rl, 'Password: ');

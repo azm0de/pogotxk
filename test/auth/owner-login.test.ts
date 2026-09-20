@@ -512,28 +512,62 @@ describe('the lockout', () => {
 
 /* --------------------------------------------------------------- rehashing */
 
+/*
+ * The RAISE itself cannot be exercised end to end right now, and that is a
+ * property of the configuration rather than a gap in the code.
+ *
+ * `DEFAULT_ITERATIONS` currently sits at 10,000, which is also the floor the
+ * schema enforces (`CHECK (iterations >= 10000)` in 0004). So no row can
+ * legally exist that is cheaper than the constant, and there is nothing for a
+ * login to raise. The moment the constant goes up — which is what happens if
+ * this account ever moves to Workers Paid — a cheap row becomes expressible and
+ * this suite should grow the raise case back.
+ *
+ * Until then the branch is covered where it can be: `needsRehash` is tested
+ * directly over counts above, at and below the target in
+ * scripts/test-owner-password.ts, which builds a `StoredHash` in memory and is
+ * not bound by the CHECK constraint.
+ *
+ * What IS testable here, and worth pinning, is the no-op half — because getting
+ * that wrong would rewrite the credential on every single sign-in, burning a D1
+ * write and a fresh salt each time for nothing.
+ */
 describe('rehashing on a successful login', () => {
-  it('raises a cheap row to the current constant, and it still verifies', async () => {
+  it('leaves a row that is already at the constant untouched', async () => {
     const owner = await seedUser(env.DB, { role: 'admin' });
-    const cred = await seedAdminCredential(env.DB, owner, { iterations: 10_000 });
+    const cred = await seedAdminCredential(env.DB, owner, {
+      iterations: DEFAULT_ITERATIONS,
+    });
 
     const before = await readCredential(env.DB, owner);
-    expect(before?.iterations).toBe(10_000);
+    expect(before?.iterations).toBe(DEFAULT_ITERATIONS);
 
     const res = await post({ username: cred.username, password: cred.password });
     expect(res.status).toBe(303);
 
     const after = await readCredential(env.DB, owner);
     expect(after?.iterations).toBe(DEFAULT_ITERATIONS);
-    expect(after?.salt).not.toBe(before?.salt);
-    expect(after?.hash).not.toBe(before?.hash);
+    expect(after?.salt).toBe(before?.salt);
+    expect(after?.hash).toBe(before?.hash);
     expect(await verifyPassword(cred.password, after!)).toBe(true);
+  });
 
-    // And the second login leaves it alone — this fires once per raise of the
-    // constant, not on every sign-in.
-    const second = await post({ username: cred.username, password: cred.password });
-    expect(second.status).toBe(303);
-    expect((await readCredential(env.DB, owner))?.hash).toBe(after?.hash);
+  it('does not downgrade a row that is more expensive than the constant', async () => {
+    // A credential set while the account was on a larger CPU budget must not be
+    // quietly weakened by a later sign-in. `needsRehash` is a floor, not an
+    // equality check, and this is the test that says so.
+    const owner = await seedUser(env.DB, { role: 'admin' });
+    const cred = await seedAdminCredential(env.DB, owner, { iterations: 20_000 });
+
+    const before = await readCredential(env.DB, owner);
+    expect(before?.iterations).toBe(20_000);
+
+    const res = await post({ username: cred.username, password: cred.password });
+    expect(res.status).toBe(303);
+
+    const after = await readCredential(env.DB, owner);
+    expect(after?.iterations).toBe(20_000);
+    expect(after?.hash).toBe(before?.hash);
   });
 });
 

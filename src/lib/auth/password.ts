@@ -39,11 +39,14 @@ export const ALGORITHM = 'pbkdf2-sha256';
  *
  * Linear at roughly **0.53 ms per 1,000 iterations**.
  *
- * This deployment is on the **free plan** — `wrangler.jsonc` has no `limits`
- * block, so the plan default applies, and the free plan's default is **10 ms of
- * CPU per invocation**. (The free tier is what `import-legacy.ts` and
- * `import-media.ts` split themselves in half for, to stay under the 50-subrequest
- * free-plan cap.) PBKDF2 is pure CPU, so all of it counts.
+ * This deployment is on the **free plan**. That was first inferred from the code
+ * — `wrangler.jsonc` has no `limits` block, so the plan default applies, and
+ * `import-legacy.ts` and `import-media.ts` split themselves in half to stay
+ * under the 50-subrequest free-plan cap — and then **confirmed from the
+ * Cloudflare dashboard on 2026-09-19**: the Usage panel offers an Upgrade
+ * button and reports `$0.00` billable with no billable usage incurred.
+ * The free plan's default is **10 ms of CPU per invocation**, and PBKDF2 is
+ * pure CPU, so all of it counts.
  *
  * So at 100,000 a sign-in wants about five times the CPU the request is
  * allowed, and would be killed mid-derivation. That is not a slow login, it is
@@ -51,28 +54,40 @@ export const ALGORITHM = 'pbkdf2-sha256';
  * schema's floor of 10,000 — about 5 ms, leaving roughly 5 ms for the rest of
  * the request and no margin whatever.
  *
- * The value is left here rather than quietly lowered, because the real fix is a
- * decision about the plan rather than about this line:
+ * So 10,000 — the schema's floor — is not a preference. It is the only count
+ * that fits the budget this account actually has, and it leaves roughly 5 ms
+ * for the rest of the request.
  *
- *   * **Workers Paid, $5/month** — the default CPU budget becomes 30 seconds,
- *     600,000 fits with three orders of magnitude to spare, and the
- *     subrequest chunking above stops being necessary too. The recommendation.
- *   * **Stay free, and drop this to 10,000** — defensible only because of the
- *     other two controls: the setter script enforces a 16-character minimum, so
- *     the *password* carries the entropy rather than the iteration count, and
- *     five wrong guesses shut the door for up to an hour.
+ * BE HONEST ABOUT WHAT THAT COSTS. At 10,000 the iteration count is not what
+ * makes this credential hard to crack, and pretending otherwise is how a
+ * system ends up with a false sense of its own safety. Against an *online*
+ * attacker the lockout does the work — five wrong guesses shut the door for up
+ * to an hour, and the multiplier is irrelevant. Against an *offline* attacker
+ * holding a leaked D1 dump, 10,000 iterations buys roughly a 60x slowdown over
+ * a bare hash, which against a memorable password is close to nothing.
+ *
+ * What carries the security here is therefore **the password's own entropy**,
+ * which is why `scripts/set-admin-password.ts` enforces a 16-character floor
+ * and offers to generate a six-word passphrase (~77 bits). At 77 bits an
+ * attacker needs 2^77 derivations whatever the multiplier is, and the low count
+ * stops mattering. A *memorable* 16-character password is a different story and
+ * this configuration does not protect one well. Use the generated passphrase.
+ *
+ * THE UPGRADE PATH, should the plan ever change. Workers Paid ($5/month) lifts
+ * the budget to 30 seconds, where OWASP's 600,000 fits with three orders of
+ * magnitude to spare — and it would also retire the subrequest chunking in
+ * `import-legacy.ts` and `import-media.ts`. Raising this is then a one-line
+ * change that invalidates nothing: the cost is stored per row, so
+ * `verifyPassword` keeps using the count it finds, and `needsRehash` plus the
+ * login route re-derive the stored credential at the new count on the next
+ * successful sign-in. Nobody has to reset a password.
  *
  * A Durable Object for the derivation is sometimes suggested as a third way.
  * Treat it with suspicion: DO storage is billed separately, but the CPU ceiling
  * per invocation follows the account's plan, so on the free plan it very likely
  * buys nothing. Measure before believing it.
- *
- * Whatever is chosen, changing it is a one-line change that invalidates
- * nothing. The cost is stored per row: `verifyPassword` uses the count it
- * finds, and `needsRehash` plus the login route re-derive at the new one on the
- * next successful sign-in.
  */
-export const DEFAULT_ITERATIONS = 100_000;
+export const DEFAULT_ITERATIONS = 10_000;
 
 /** 128 bits. Enough that two rows never share a salt; not a secret. */
 export const SALT_BYTES = 16;
