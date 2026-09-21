@@ -148,10 +148,32 @@ process.on('SIGINT', () => {
 const WRANGLER = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 
 function wrangler(args: string[]): string {
-  return execFileSync(process.execPath, [WRANGLER, ...args], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  try {
+    return execFileSync(process.execPath, [WRANGLER, ...args], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    /*
+     * wrangler reports a failed statement as JSON on stdout and exits non-zero,
+     * so execFileSync throws and the useful sentence — "UNIQUE constraint
+     * failed: admin_credentials.username" — ends up buried in a Node stack
+     * trace under `output[1]`. Dig it out and lead with it. The operator of this
+     * script is standing at a prompt, not reading a core dump.
+     */
+    const e = err as { stdout?: string; output?: (string | null)[] };
+    const text = e.stdout ?? e.output?.[1] ?? '';
+    const at = text.indexOf('{');
+    if (at !== -1) {
+      try {
+        const parsed = JSON.parse(text.slice(at)) as { error?: { text?: string } };
+        if (parsed.error?.text) die(`D1 refused the statement:\n\n  ${parsed.error.text}`);
+      } catch {
+        /* not JSON after all — fall through to the original error */
+      }
+    }
+    throw err;
+  }
 }
 
 const TARGET = ['d1', 'execute', 'pogotxk-db', remote ? '--remote' : '--local'];
@@ -439,8 +461,41 @@ possible at all, that is what --create is for.`,
   /* ---- the login username for the credential row ---- */
 
   const suggested = user.username.toLowerCase().replace(/[^a-z0-9._-]/g, '');
-  const answer = (await ask(rl, `\nLogin username [${suggested || 'owner'}]: `)).trim();
-  const loginName = assertName('login username', (answer || suggested || 'owner').toLowerCase());
+
+  /*
+   * Ask until the name is actually free.
+   *
+   * `admin_credentials.username` is UNIQUE across every admin, so a name
+   * already spoken for is a real conflict rather than a preference. The check
+   * lives HERE, in front of the password prompt, because the alternative is
+   * what happened on 2026-09-21: the collision surfaced from SQLite at the
+   * INSERT, which is after the operator has confirmed a production write,
+   * chosen a passphrase and typed it back — all of it thrown away by a
+   * constraint that was knowable before any of it was asked for.
+   *
+   * Looping rather than dying for the same reason. Being sent back to the shell
+   * to redo the confirmations is a punishment for a typo.
+   */
+  let loginName = '';
+  for (;;) {
+    const answer = (await ask(rl, `\nLogin username [${suggested || 'owner'}]: `)).trim();
+    loginName = assertName('login username', (answer || suggested || 'owner').toLowerCase());
+
+    const clash = rows<{ discord_id: string; username: string }>(
+      d1Read(
+        `SELECT u.discord_id, u.username
+           FROM admin_credentials c JOIN users u ON u.id = c.user_id
+          WHERE c.username = '${loginName}' AND c.user_id <> ${user.id}`,
+      ),
+    )[0];
+
+    if (!clash) break;
+
+    console.log(
+      `\n  "${loginName}" is already the login name for ${clash.username} (${clash.discord_id}).` +
+        `\n  Login names are unique across all admins — pick another.\n`,
+    );
+  }
 
   /* ---- the password ---- */
 
