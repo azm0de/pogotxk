@@ -45,6 +45,17 @@ export function anonymizedIdentity(userId: number): { discordId: string; usernam
  * this runs, resolves to "Deleted user" with no Discord identity behind it.
  * That is the same shape as the change log's existing promise: the entry
  * stays, the link to a real person does not.
+ *
+ * **Explicitly NOT left alone: `admin_credentials`, and `users.role_locked`.**
+ * `admin_credentials.user_id` carries `ON DELETE CASCADE`, which reads like it
+ * covers this and does not: this function anonymises by `UPDATE` and never
+ * `DELETE`s the row, so the cascade never fires. A password credential would
+ * survive, still valid, still `role_locked`, now attached to a row reading
+ * "Deleted user" at `role = 'guest'` — and the owner login would hand whoever
+ * knows that password a session as it, then the lock would hold the role
+ * against every correction Discord tried to make. Deleting the credential and
+ * clearing the lock is the only thing that makes "this account can no longer
+ * act" true through both doors rather than only the Discord one.
  */
 export async function deleteAccount(db: D1Database, userId: number): Promise<void> {
   const { discordId, username } = anonymizedIdentity(userId);
@@ -62,11 +73,15 @@ export async function deleteAccount(db: D1Database, userId: number): Promise<voi
            trainer_level = NULL,
            trainer_name  = NULL,
            role          = 'guest',
+           role_locked   = 0,
            updated_at    = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
          WHERE id = ?3`,
       )
       .bind(discordId, username, userId),
     db.prepare('DELETE FROM sessions WHERE user_id = ?1').bind(userId),
     db.prepare('DELETE FROM push_subs WHERE user_id = ?1').bind(userId),
+    // Not covered by the foreign key's ON DELETE CASCADE, because nothing here
+    // deletes the `users` row for it to cascade from. See the note above.
+    db.prepare('DELETE FROM admin_credentials WHERE user_id = ?1').bind(userId),
   ]);
 }

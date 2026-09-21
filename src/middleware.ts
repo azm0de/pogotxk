@@ -8,7 +8,7 @@
 
 import { defineMiddleware } from 'astro:middleware';
 import { env } from 'cloudflare:workers';
-import { isAdminPath, isImportPath } from '~/lib/auth/admin-path';
+import { isAdminLoginPath, isAdminPath, isImportPath } from '~/lib/auth/admin-path';
 import { getSessionUser, SESSION_COOKIE, touchSession } from '~/lib/auth/session';
 import { hasRole } from '~/lib/auth/types';
 
@@ -35,8 +35,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Admin surface. The API routes answer 403 so fetch() callers get a usable
   // status; page routes bounce through sign-in and come back. Which paths
   // count, and why the boundary matters, is in ~/lib/auth/admin-path.
+  //
+  // Two paths skip the role check and nothing else does: the import endpoints,
+  // which bring their own bearer token, and the owner's password form, which
+  // would otherwise be gated by the very door it exists to get around. Both
+  // predicates are deliberately narrow — exactly one path in the second case —
+  // and both are argued where they are defined.
   if (isAdminPath(path)) {
-    if (!isImportPath(path) && !hasRole(context.locals.user, 'ambassador')) {
+    if (
+      !isImportPath(path) &&
+      !isAdminLoginPath(path) &&
+      !hasRole(context.locals.user, 'ambassador')
+    ) {
       if (path.startsWith('/api/')) {
         return new Response(JSON.stringify({ error: 'Forbidden' }), {
           status: context.locals.user ? 403 : 401,

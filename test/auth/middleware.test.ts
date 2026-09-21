@@ -123,6 +123,10 @@ describe('the admin pages', () => {
     expect(res.status).toBe(200);
   });
 
+  // `/admin/login` is deliberately not in this list. It is the owner's password
+  // form and the one path under `/admin` the gate exempts, by exact match — see
+  // `isAdminLoginPath`, and `admin-login.test.ts` for what that exemption does
+  // and does not cover. Adding it here would be asserting the opposite.
   it.each(['/admin', '/admin/map', '/admin/posts', '/admin/media', '/admin/meetups'])(
     'still guards %s',
     async (path) => {

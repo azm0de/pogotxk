@@ -190,6 +190,10 @@ export default function PostEditor() {
   const [busy, setBusy] = useState(false);
   /** True while a post's body is being fetched for the editor. */
   const [bodyLoading, setBodyLoading] = useState(false);
+  /** True while a new hero image is uploading. */
+  const [uploadingHero, setUploadingHero] = useState(false);
+  /** Alt text queued for the *next* hero upload. An existing image's alt is edited in Media. */
+  const [heroAlt, setHeroAlt] = useState('');
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -222,6 +226,7 @@ export default function PostEditor() {
     setForm(EMPTY);
     setSlugTouched(false);
     setTagDraft('');
+    setHeroAlt('');
     setEditingId('new');
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -239,6 +244,7 @@ export default function PostEditor() {
     setEditingId(post.id);
     setSlugTouched(true); // An existing post has a URL; never rewrite it from the title.
     setTagDraft('');
+    setHeroAlt('');
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     setForm({
@@ -362,6 +368,63 @@ export default function PostEditor() {
     }
   };
 
+  /**
+   * Uploads a new hero image and attaches it to the post being edited.
+   *
+   * Raw `fetch` with `FormData`, not the `api()` helper above — this is a
+   * multipart body, not JSON. Mirrors `MapEditor.tsx`'s `uploadPhoto`, minus
+   * `poiId`: the server already treats that as optional (`media.ts`), so a
+   * standalone upload with no POI is a supported call.
+   *
+   * Deliberately does not call `reload()`. `reload()` only ever touches
+   * `posts` and `media` state — it never reaches into `form` — so it would
+   * not actually discard anything the author is mid-typing. It is skipped
+   * anyway because it re-fetches the entire posts list for a change that
+   * never touched a post, which is wasted work and, worse, means a hiccup in
+   * that unrelated fetch would surface as "Could not load posts" right after
+   * an upload that in fact succeeded. Appending the one new row locally is
+   * the smaller, more precise update, and it is also faster: the option
+   * appears the instant the upload response comes back rather than after a
+   * second round trip.
+   *
+   * The 201 response is `{ id, key, url, ... }` — it does not echo back the
+   * alt text just sent, so the new `media` entry is built from what this
+   * component already knows rather than from the response alone.
+   */
+  const uploadHero = useCallback(
+    async (file: File) => {
+      setUploadingHero(true);
+      try {
+        const alt = heroAlt.trim();
+        const body = new FormData();
+        body.set('file', file);
+        // Slugified server-side; falls back to the filename when this is blank.
+        body.set('name', form.title);
+        if (alt) body.set('alt', alt);
+
+        const res = await fetch('/api/admin/media', { method: 'POST', body });
+        if (!res.ok) {
+          const e = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(e.error ?? res.statusText);
+        }
+        const created = (await res.json()) as { id: number; key: string };
+
+        setMedia((prev) => [
+          { id: created.id, r2_key: created.key, alt: alt || null, kind: 'photo' },
+          ...prev,
+        ]);
+        setForm((f) => ({ ...f, heroMediaId: created.id }));
+        setHeroAlt('');
+        notify('ok', alt ? 'Hero image uploaded' : 'Hero image uploaded — no alt text set');
+      } catch (err) {
+        notify('err', err instanceof Error ? err.message : 'Upload failed');
+      } finally {
+        setUploadingHero(false);
+      }
+    },
+    [heroAlt, form.title, notify],
+  );
+
   // Rendering 20 KB of Markdown on every keystroke would make typing stutter;
   // `useDeferredValue` lets React keep the textarea responsive and catch the
   // preview up when it has a moment.
@@ -439,20 +502,69 @@ export default function PostEditor() {
                 maxLength={200}
               />
             </label>
-            <label>
-              <span>Hero image</span>
-              <select
-                value={form.heroMediaId ?? ''}
-                onChange={(e) => set('heroMediaId', e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">— none —</option>
-                {media.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.alt || m.r2_key}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="hero-field">
+              <label>
+                <span>Hero image</span>
+                <select
+                  value={form.heroMediaId ?? ''}
+                  onChange={(e) =>
+                    set('heroMediaId', e.target.value ? Number(e.target.value) : null)
+                  }
+                >
+                  <option value="">— none —</option>
+                  {media.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.alt || m.r2_key}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {/*
+                The only other file input in admin attaches to a POI
+                (MapEditor.tsx) — illustrating a post meant detouring through
+                the map. `poiId` is optional server-side, so this is a
+                standalone upload the API already supported with no UI
+                reaching it.
+              */}
+              <div className="hero-upload">
+                <label>
+                  <span>
+                    Alt text for a new upload <em>— what the photo shows, for screen readers</em>
+                  </span>
+                  <textarea
+                    rows={2}
+                    value={heroAlt}
+                    onChange={(e) => setHeroAlt(e.target.value)}
+                    placeholder="e.g. Trainers gathered at the pavilion for Community Day"
+                    maxLength={300}
+                  />
+                </label>
+                {/* Visible rather than a silent gap: the upload still goes
+                    through either way — Media can fill this in later too —
+                    but shipping an unlabelled image should never be quiet. */}
+                {!heroAlt.trim() && (
+                  <p className="form-note">
+                    Left blank, the upload will have no screen-reader description. You can still
+                    upload — add it here, or later in Media.
+                  </p>
+                )}
+                <label className="hero-upload-btn">
+                  {uploadingHero ? 'Uploading…' : 'Upload new image'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+                    disabled={uploadingHero}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void uploadHero(f);
+                      // So choosing the same file again still fires `change`.
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
           </div>
 
           <label>
@@ -640,8 +752,13 @@ export default function PostEditor() {
 
           <div className="form-actions">
             {/* Saving mid-fetch would write the empty placeholder body over
-                the real one. */}
-            <button type="submit" className="btn btn--primary" disabled={busy || bodyLoading}>
+                the real one; saving mid-upload could file the save before the
+                just-attached hero image's id ever reaches the form. */}
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={busy || bodyLoading || uploadingHero}
+            >
               {busy ? 'Saving…' : editingId === 'new' ? 'Create post' : 'Save changes'}
             </button>
             <button

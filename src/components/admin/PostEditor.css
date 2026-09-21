@@ -79,6 +79,59 @@
   font-size: var(--display-sm);
 }
 
+/* ------------------------------------------------------------ hero image -- */
+
+/* Holds the existing-image picker and the upload block beneath it. Plain
+   layout only, like every other field in this form — nothing here is boxed
+   except the upload control itself and the `.form-note` warning. */
+.hero-field {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.hero-upload {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/*
+ * A file input's own button cannot be styled, so the label is the control
+ * and the input is hidden but focusable inside it — the same technique
+ * MapEditor.css uses for its `.upload-btn`. Not reused directly: this file's
+ * banner above notes island stylesheets can land in the same bundle, and a
+ * second, differently-sized `.upload-btn` here would collide with that one
+ * rather than merely duplicate it.
+ */
+.hero-upload-btn {
+  display: flex !important; /* `.admin-form label` defaults to `display: grid`
+    (span stacked over control) — this label *is* the control. */
+  align-items: center;
+  justify-content: center;
+  min-height: 44px; /* matches every other control in this form */
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.hero-upload-btn:hover {
+  border-color: var(--text);
+}
+.hero-upload-btn:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.hero-upload-btn input {
+  /* Not `display: none`: a hidden-but-focusable input is what gives the
+     label its focus ring through `:focus-within`. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* ------------------------------------------------------------------ tags -- */
 
 .tag-field {

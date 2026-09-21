@@ -11,6 +11,10 @@
  * worth reading for is the bottom of the file: the `next` the middleware builds
  * is handed straight to `safeNext` on the way back, and those two have never
  * been tested against each other.
+ *
+ * There is exactly one page under `/admin` that this matrix does not cover, and
+ * it is named and argued at `LOGIN_PAGE` below. The list is now checked against
+ * the directory, so that exception has to be written down to exist.
  */
 
 import { env, SELF } from 'cloudflare:test';
@@ -18,8 +22,47 @@ import { describe, expect, it } from 'vitest';
 import { safeNext } from '~/lib/auth/next';
 import { CALLERS, ORIGIN, requestAs, seedFixtures, type Caller } from './surface';
 
-/** Every page under the console. */
+/** Every page under the console that the gate applies to. */
 const PAGES = ['/admin', '/admin/map', '/admin/meetups', '/admin/posts', '/admin/media'] as const;
+
+/**
+ * The one page under the console that the gate does **not** apply to, and the
+ * only one that may ever be.
+ *
+ * It is the owner's password form. It lives under `/admin` because that is
+ * where a login for the admin console belongs, and it is exempted from the role
+ * check by `isAdminLoginPath` — matched exactly — because a gate in front of it
+ * would bounce the signed-out owner to `/auth/login`, which is the Discord door
+ * they are there because they cannot use.
+ *
+ * Written down as an exception rather than folded into the matrix on purpose.
+ * The alternative — loosening `ADMITTED` so that "some pages admit anonymous"
+ * — would make every row in the grid below weaker to buy one page its special
+ * case, and the grid is the thing that proves the other five are shut. So this
+ * page is subtracted by name, right here, where the subtraction is visible, and
+ * its own behaviour is asserted separately at the bottom of the file.
+ */
+const LOGIN_PAGE = '/admin/login';
+
+const PAGE_PREFIX = '../../src/pages/admin/';
+
+/**
+ * The pages actually on disk, resolved by Vite at transform time.
+ *
+ * The matrix is only worth something if it is exhaustive, and the usual way it
+ * stops being exhaustive is that somebody adds a page and nobody adds a row —
+ * which is exactly the argument `test/admin/surface.ts` makes for the API half
+ * and which this half had been taking on trust. Lazy rather than eager: only
+ * the filenames are wanted, and importing an `.astro` module here would drag
+ * the whole component pipeline into the Worker test pool for nothing.
+ */
+function pagesOnDisk(): string[] {
+  return Object.keys(import.meta.glob('../../src/pages/admin/**/*.astro'))
+    .map((key) =>
+      `/admin/${key.slice(PAGE_PREFIX.length)}`.replace(/\.astro$/, '').replace(/\/index$/, ''),
+    )
+    .sort();
+}
 
 /** Who gets in. The floor is `ambassador`, and a banned account is nobody. */
 const ADMITTED: Record<Caller, boolean> = {
@@ -56,6 +99,85 @@ describe('the admin pages, by page and caller', () => {
 
   it('is the size it claims to be', () => {
     expect(GRID).toHaveLength(5 * 6);
+  });
+
+  it('covers every page on disk except the one named exception', () => {
+    /*
+     * The census. A page added under `src/pages/admin/` fails here until it is
+     * either in `PAGES`, and so has stated its answer for all six callers, or
+     * written into the exception by name — which is a thing somebody has to do
+     * deliberately, in a file about who may reach the console.
+     *
+     * Both directions, like the API census: a missing entry is an untested
+     * page, and an extra one is a row describing a page that no longer exists.
+     */
+    expect(pagesOnDisk()).toEqual([...PAGES, LOGIN_PAGE].sort());
+  });
+
+  it('found the pages at all', () => {
+    // Without this, a glob that matched nothing would make the check above
+    // pass against an empty directory.
+    expect(pagesOnDisk().length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe(`${LOGIN_PAGE}, the one page here that must NOT redirect a stranger`, () => {
+  /*
+   * The exception, asserted rather than merely described.
+   *
+   * Everything above says a signed-out visitor gets bounced. This page is the
+   * one that must not be, and the failure mode if it ever is would be silent:
+   * the owner would get a 302 to `/auth/login`, which looks like a working gate
+   * from every angle except the one that matters — it is the door they came
+   * here because they could not open.
+   */
+  it.each(['anonymous', 'guest', 'member', 'banned admin'] as const)(
+    'renders for %s',
+    async (caller) => {
+      await seedFixtures();
+
+      const res = await SELF.fetch(
+        await requestAs(caller, `${ORIGIN}${LOGIN_PAGE}`, { method: 'GET' }),
+        { redirect: 'manual' },
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('location')).toBeNull();
+      // Not just a 200 — the form is the entire point of the exemption, and a
+      // 200 rendering something else would be just as much a dead door.
+      expect(await res.text()).toContain('action="/api/auth/admin-login"');
+    },
+  );
+
+  it.each(['ambassador', 'admin'] as const)('sends %s on, being already through', async (caller) => {
+    /*
+     * The one caller shape that does not get a 200, and it is the page's own
+     * early return rather than the gate: a sign-in form shown to somebody
+     * already signed in is a confusing dead end, so it redirects to `next`,
+     * which defaults to `/`. Same shape as `/auth/device`.
+     *
+     * Worth pinning because it is the assertion that would catch the opposite
+     * mistake to the one above — an exemption so wide that the page stopped
+     * caring who was asking.
+     */
+    await seedFixtures();
+
+    const res = await SELF.fetch(
+      await requestAs(caller, `${ORIGIN}${LOGIN_PAGE}`, { method: 'GET' }),
+      { redirect: 'manual' },
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/');
+  });
+
+  it('is the only thing under /admin that a stranger gets a 200 from', async () => {
+    // The control for the whole block. Stated against the matrix's own list so
+    // it cannot drift from it.
+    for (const page of PAGES) {
+      const res = await SELF.fetch(`${ORIGIN}${page}`, { redirect: 'manual' });
+      expect(res.status, `${page} answered ${res.status} to a stranger`).toBe(302);
+    }
   });
 });
 

@@ -1,11 +1,12 @@
 ---
 tags: [architecture, database]
-updated: 2026-08-05
+updated: 2026-09-19
 ---
 
 # Data Model
 
-17 tables in D1. Schema lives in `migrations/0001_initial.sql`.
+18 tables in D1. Schema lives in `migrations/0001_initial.sql`, with later changes in the
+numbered migrations beside it.
 
 Conventions: timestamps are ISO-8601 UTC `TEXT` (they sort lexicographically and stay readable
 in `d1 execute`); enum-ish columns use `CHECK` constraints rather than lookup tables.
@@ -20,6 +21,7 @@ zones ──┬── pois ──┬── poi_media ── media
         └── media               (community photos pinned to the map)
 
 users ──┬── sessions
+        ├── admin_credentials  (0 or 1 — the owner's password)
         ├── flares ── flare_rsvps
         ├── push_subs
         └── audit_log
@@ -54,6 +56,35 @@ dropped in migration `0002` before any UI or API ever wrote to the table. See [[
 
 **Sessions store a hash, never the token.** `sessions.id` is the SHA-256 of the cookie value, so
 a leaked database dump cannot be replayed as a login. See [[Auth and Roles]].
+
+**`admin_credentials` hangs off `users` rather than standing alone.** It holds at most one row —
+the owner's break-glass password — keyed `user_id INTEGER PRIMARY KEY`. It could have been its
+own identity table and deliberately is not: `users.discord_id` is `NOT NULL UNIQUE` and every
+session in this app resolves through a `users` row, so a standalone table would need its own
+session shape, its own role source and its own ban check. Keying on `user_id` means the password
+proves *which existing user you are* and nothing else runs twice.
+
+The columns worth knowing:
+
+| Column | Why |
+|---|---|
+| `algorithm` | One-value `CHECK`. A row naming a scheme the code cannot compute is rejected by the database, not discovered at login |
+| `iterations` | The cost is **stored per row**, so it can be raised without invalidating the hash — and so the test suite can seed a cheap one. `CHECK (iterations >= 10000)` |
+| `salt` / `hash` | Unpadded base64url, 16 and 32 bytes. Plain `TEXT`, so a corrupt value here *is* reachable and `verifyPassword` is written to answer `false` rather than throw |
+| `failed_attempts`, `last_failed_at` | The lockout counter, and what lets it decay on the next attempt rather than on a sweep — there is no cron ([[Why there is no cron]]) |
+| `username` | `CHECK (username = lower(username))`, so the `UNIQUE` index and the login lookup ask the same question and the index stays usable |
+
+**No indexes on it, deliberately.** One row; every lookup is the primary key or the unique index
+SQLite already builds for `username`.
+
+**`users.role_locked` pins a role against Discord.** Added in `0004`. `upsertUser` checks it
+*before* it checks whether Discord is authoritative, because SQLite takes the first true branch
+and `authoritative` is permanently 1 on this deployment. It deliberately does **not** protect
+`is_banned`. See [[Auth and Roles]].
+
+**Account deletion has to name `admin_credentials` explicitly.** The foreign key carries
+`ON DELETE CASCADE`, which reads like it covers deletion and does not: `deleteAccount`
+anonymises by `UPDATE` and never `DELETE`s the `users` row, so the cascade never fires.
 
 **`audit_log` stores field-level diffs**, not whole rows, and no-op updates are detected and
 skipped rather than logged.

@@ -1,6 +1,6 @@
 ---
 tags: [runbook]
-updated: 2026-09-19
+updated: 2026-09-20
 ---
 
 # Local Development
@@ -21,12 +21,13 @@ account is needed.
 |---|---|
 | `npm run dev` | Dev server (daemonises — `npx astro dev stop` to kill) |
 | `npm run build` | Production build |
-| `npm test` | The 15 tsx suites — 559 assertions, no runtime and no network |
-| `npm run test:worker` | `astro build && vitest run` — 858 tests inside workerd |
+| `npm test` | The 16 tsx suites — 638 assertions, no runtime and no network |
+| `npm run test:worker` | `astro build && vitest run` — 900 tests inside workerd |
 | `npm run test:all` | Both layers, tsx first |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:query "SQL"` | Query local D1 |
 | `npm run dev:session` | Mint a local admin session, no Discord needed |
+| `npm run set:password` | Set the owner's break-glass password — needs a real console, see below |
 | `npm run gen:vapid` | Generate a VAPID keypair |
 | `npm run gen:icons` | Rasterise PWA icons from `public/favicon.svg` |
 | `npm run import:dry-run` | Parse the legacy site, assert counts, write nothing |
@@ -43,6 +44,20 @@ npm run dev:session
 It writes a real `users` + `sessions` row using the same SHA-256-of-token scheme the app uses —
 **no bypass code ships**. It prints a cookie to paste into the browser console.
 
+To exercise the owner password door instead:
+
+```bash
+npm run set:password -- --create localowner    # then sign in at /admin/login
+```
+
+> [!danger] `set:password` refuses to run outside a real console, and that is the point
+> Under Git Bash / mintty, `node` gets a pipe rather than a console: `stdin.isTTY` is
+> `undefined`, readline's private `_writeToOutput` override silently does nothing, and **the
+> password echoes in plain text** while everything downstream looks like it worked. Echo cannot
+> be suppressed on a pipe, so the script stops. Use PowerShell or Windows Terminal, or prefix
+> with `winpty`. It writes to local D1 unless given `--remote`, which then demands a typed
+> confirmation naming the database and the user.
+
 ## Tests
 
 There are two layers, and which one a new test belongs in comes down to a single question:
@@ -55,7 +70,7 @@ There are two layers, and which one a new test belongs in comes down to a single
 
 `npm run test:all` runs both, tsx first, because the tsx layer is seconds and needs no build.
 
-### `npm test` — 15 suites, 559 assertions
+### `npm test` — 16 suites, 638 assertions
 
 In the order the chain runs them. The counts are what each suite prints, so a drop is visible.
 
@@ -64,6 +79,7 @@ In the order the chain runs them. The counts are what each suite prints, so a dr
 | `test-auth.ts` | Role resolution, bootstrap admin, the optional member-role gate, role hierarchy, PKCE against the RFC 7636 vector, the `safeNext` open-redirect guard, authorize prompt, which OAuth errors may be retried, `signOutTarget` | 68 |
 | `test-signin-surface.ts` | The intent URL that carries sign-in out of the installed app — malformed, it fails by doing *nothing* when tapped, and only on a phone | 16 |
 | `test-device-grant.ts` | Device-grant request bodies, response mapping, the cookie payload, and the `login_required` routing split | 44 |
+| `test-owner-password.ts` | PBKDF2 against the RFC known-answer vector, hash/verify round trips, NFC normalisation, every way a corrupt row must answer `false` rather than throw, and the lockout schedule including its decay boundary and its one-hour cap | 79 |
 | `test-deletion.ts` | The anonymised `users` values account deletion writes | 7 |
 | `test-time.ts` | Timezone conversion across both DST transitions | 18 |
 | `test-tags.ts` | Server tag normalisation agrees with the client's slugify | 25 |
@@ -87,7 +103,7 @@ or filled gaps left by checks that passed while the thing they were checking was
 > and that is the right place for it: it exists to check the legacy site, so needing the legacy
 > site is the point. See [[Importing Legacy Data]].
 
-### `npm run test:worker` — 24 files, 858 tests
+### `npm run test:worker` — 25 files, 900 tests
 
 Vitest 4.1 with `@cloudflare/vitest-pool-workers`, running inside workerd.
 
@@ -104,7 +120,7 @@ reason for the second layer, and it is why the split above is about bindings rat
 |---|---|---|
 | Safety | `00-safety.test.ts` | That the outbound credentials really are blanked, and that the delivery paths cannot reach Discord even so. Named `00-` so it fails first |
 | Admin | `admin/` | Every `/api/admin/*` route × method × caller through `SELF.fetch`, the same handlers called directly with the middleware removed, the import-token hole, and the admin pages' redirect-into-sign-in |
-| Auth | `auth/` | The middleware, sessions, `/auth/login`, `/auth/callback`, logout, the device grant, the Android exchange, the state cookie, `admin-path`, account deletion |
+| Auth | `auth/` | The middleware, sessions, `/auth/login`, `/auth/callback`, logout, the device grant, the Android exchange, the state cookie, `admin-path`, account deletion, and the owner password door — byte-identical refusals, the lockout, `role_locked` with its control |
 | Flares | `flares/` | POST, RSVP, edit and close, the three-way fan-out, Web Push copy and reach, the LiveBoard Durable Object over real WebSockets, and the Discord close sweep |
 | Harness | `helpers/` | The factories themselves, because four suites are built on them |
 
@@ -158,9 +174,14 @@ lands on an empty table and says nothing.
 > why `test:worker` builds first. **Never run bare `vitest run` after changing `src/`**: the
 > entry is whatever you last built, so a stale one silently tests old code and passes.
 
-> [!note] Astro blocks cross-site POSTs without a JSON content type
+> [!note] Astro blocks cross-site POSTs, but only for form-like content types
 > Any `fetch` that writes must send `content-type: application/json`, or it gets
 > "Cross-site POST form submissions are forbidden".
+>
+> Worth knowing which way round that is: JSON is not the *protected* shape, it is the shape
+> Astro's origin check **skips entirely**. Convenient for a `fetch` caller, a hole for anything
+> that accepts credentials — which is why `/api/auth/admin-login` takes form encoding only. See
+> [[Platform Limits and Traps]].
 
 > [!note] A test's non-GET request needs an `origin` header
 > Astro's CSRF check also compares `Origin` against the request URL and answers **403** when

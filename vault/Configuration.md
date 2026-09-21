@@ -1,6 +1,6 @@
 ---
 tags: [runbook, security]
-updated: 2026-08-05
+updated: 2026-09-20
 ---
 
 # Configuration
@@ -42,6 +42,21 @@ updated: 2026-08-05
 > It is a Secret rather than a var because the repo is public: it is a personal Discord
 > user id, and it marks one account as permanently admin. Secrets survive deploys just
 > as reliably.
+
+> [!note] There is a second admin door, and it needs no configuration at all
+> `/admin/login` takes a password stored in D1, so it depends on no variable, no secret and
+> no third-party service. That is the point: it is what gets you back into `/admin` when
+> `DISCORD_BOOTSTRAP_ADMIN_ID` is lost or Discord is down. Set it with
+> `npm run set:password` and see [[Auth and Roles]].
+>
+> It changes the order above rather than replacing it. Setting the bootstrap secret before
+> the guild id is still the right sequence for a fresh deployment; the password is the
+> recovery path for when that sequence has already gone wrong.
+>
+> **The path is not part of the configuration and not part of the defence.** It is fixed at
+> `/admin/login`, and the repo is public, so it is public knowledge. What has to be strong is
+> the password — the PBKDF2 cost sits at the free plan's ceiling of 10,000 rounds, so entropy
+> is doing the work. See the warning in [[Auth and Roles#The second door]].
 
 Confirm the whole push config in one request — `enabled` is only true when all three
 pass, including the subject check:

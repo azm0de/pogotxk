@@ -372,12 +372,33 @@ export function resolveRole(
  * Insert or refresh the user record. Profile fields are re-synced on every
  * login. Locally-owned fields (team, trainer name/level) are left alone.
  *
- * The role is only overwritten when Discord is actually authoritative about
- * it — that is, when a guild is configured and we were able to read the
- * member's roles there. Without a guild, `resolveRole` can only ever answer
- * `guest`, and blindly writing that back would silently demote anyone promoted
- * by hand on their next sign-in. Which is precisely how the first admin gets
- * created before the guild is wired up.
+ * The role is overwritten only when *both* of these hold, and the order they
+ * are checked in is the whole of the logic:
+ *
+ * 1. **`users.role_locked` is 0.** A locked row keeps the role it has, whatever
+ *    Discord says. That flag is set by `scripts/set-admin-password.ts` for the
+ *    owner's account, and it exists because this deployment has a guild
+ *    configured but no `DISCORD_ROLE_ADMIN` — so `resolveRole` answers `member`
+ *    for everyone, `authoritative` is permanently 1, and without the lock the
+ *    owner's `admin` would be rewritten to `member` by their own next sign-in.
+ *    The lock clause therefore has to sit ABOVE the authoritative clause:
+ *    SQLite takes the first true branch of a `CASE`, and with the order
+ *    reversed the lock would never once fire on this deployment.
+ * 2. **Discord is authoritative** — a guild is configured and its roles were
+ *    readable, or this is the bootstrap admin. Without a guild, `resolveRole`
+ *    can only ever answer `guest`, and blindly writing that back would silently
+ *    demote anyone promoted by hand on their next sign-in. Which is precisely
+ *    how the first admin gets created before the guild is wired up.
+ *
+ * The `CASE` reads `users.role_locked`, never `excluded.role_locked`. The
+ * INSERT column list does not mention the column, so `excluded.role_locked`
+ * would evaluate to its declared default of 0 and the lock would silently never
+ * fire — a bug that looks like working code and fails only for the one account
+ * it was written to protect.
+ *
+ * `role_locked` pins the role and nothing else. A locked account can still be
+ * banned, and a ban still works: `getSessionUser` returns undefined for
+ * `is_banned = 1` before it ever reads the role.
  */
 export async function upsertUser(
   db: D1Database,
@@ -394,7 +415,11 @@ export async function upsertUser(
          username     = excluded.username,
          global_name  = excluded.global_name,
          avatar_hash  = excluded.avatar_hash,
-         role         = CASE WHEN ?6 = 1 THEN excluded.role ELSE users.role END,
+         role         = CASE
+                          WHEN users.role_locked = 1 THEN users.role
+                          WHEN ?6 = 1                THEN excluded.role
+                          ELSE users.role
+                        END,
          last_seen_at = excluded.last_seen_at,
          updated_at   = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`,
     )
