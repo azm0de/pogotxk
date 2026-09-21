@@ -91,10 +91,17 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
       <h1>Admin sign-in</h1>
     </header>
 
+    {/*
+      Not "the spare key", which is what this said while the credential hung off
+      the owner's own Discord row. Admin accounts are standalone now: no Discord
+      account behind them, and with no DISCORD_ROLE_* ids configured Discord
+      cannot resolve anyone to `admin` at all. So this is not a second way into
+      an account that has another — it is the only one, and saying "spare" would
+      invite someone to treat losing it as recoverable.
+    */}
     <p class="lede">
-      This is the spare key. Everyone else signs in with <a class="target" href="/auth/login"
-        >Discord</a
-      >.
+      Admin accounts sign in here, and this password is the only way into one.
+      Everyone else signs in with <a class="target" href="/auth/login">Discord</a>.
     </p>
 
     {

@@ -70,12 +70,8 @@ function post(fields: Record<string, string>): Promise<Response> {
  * With this in place the two failure paths come out at 56 ms and 60 ms, and the
  * 4 ms between them is the two D1 writes the known-row path makes.
  */
-async function warmUp(username: string, userId: number): Promise<void> {
-  for (let i = 0; i < 3; i++) {
-    await post({ username, password: 'warm up' });
-    await post({ username: 'nobodyhere', password: 'warm up' });
-    await post({ username: '', password: '' });
-  }
+/** Clears the lockout state so a run of deliberate failures cannot trip it. */
+async function resetCounter(userId: number): Promise<void> {
   await env.DB.prepare(
     `UPDATE admin_credentials
         SET failed_attempts = 0, last_failed_at = NULL, locked_until = NULL
@@ -83,6 +79,15 @@ async function warmUp(username: string, userId: number): Promise<void> {
   )
     .bind(userId)
     .run();
+}
+
+async function warmUp(username: string, userId: number): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    await post({ username, password: 'warm up' });
+    await post({ username: 'nobodyhere', password: 'warm up' });
+    await post({ username: '', password: '' });
+  }
+  await resetCounter(userId);
 }
 
 function sessionTokenOf(res: Response): string | undefined {
@@ -298,13 +303,36 @@ describe('what it refuses, and how little it says', () => {
 
     await warmUp(cred.username, owner.id);
 
-    const t0 = Date.now();
-    await post({ username: cred.username, password: 'wrong wrong wrong' });
-    const wrongMs = Date.now() - t0;
+    /*
+     * THE MINIMUM OF SEVERAL SAMPLES, not a single one.
+     *
+     * A single sample of each flaked once on 2026-09-21: one run in five failed
+     * here while nothing about the route had changed. Warm-up is not the
+     * explanation — it already runs three rounds of both paths above. The
+     * asymmetry is that the known-username path also performs a D1 write to
+     * bump `failed_attempts`, which the unknown path has no row to write to, so
+     * any transient spike in that write inflates `wrongMs` and takes the ratio
+     * with it.
+     *
+     * Timing noise is one-sided: it only ever adds. So the minimum of a few
+     * samples is the robust statistic here, and taking it costs a second.
+     */
+    const sample = async (username: string): Promise<number> => {
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 3; i++) {
+        // Reset between samples so the fifth failure can never trip the lock —
+        // a locked request short-circuits before hashing, which would make this
+        // test pass for entirely the wrong reason.
+        await resetCounter(owner.id);
+        const t = Date.now();
+        await post({ username, password: 'wrong wrong wrong' });
+        best = Math.min(best, Date.now() - t);
+      }
+      return best;
+    };
 
-    const t1 = Date.now();
-    await post({ username: 'nobodyhere', password: 'wrong wrong wrong' });
-    const unknownMs = Date.now() - t1;
+    const wrongMs = await sample(cred.username);
+    const unknownMs = await sample('nobodyhere');
 
     expect(unknownMs).toBeGreaterThanOrEqual(0.4 * wrongMs);
   });
@@ -889,10 +917,18 @@ describe('the CPU a derivation costs', () => {
    *
    * What it does catch is the thing worth catching automatically: somebody
    * raising `DEFAULT_ITERATIONS` by an order of magnitude, or adding a second
-   * derivation to the happy path, and not noticing. The ceiling is generous on
-   * purpose — a tight one would flake on a shared runner and get deleted.
+   * derivation to the happy path, and not noticing. At the current 10,000 the
+   * derivation costs single-digit milliseconds, so a 250 ms ceiling still trips
+   * on a 10x bump while leaving enormous headroom for a slow machine.
    *
-   * Whether 100,000 iterations actually fits in 10 ms of production CPU is a
+   * MEASURED AS THE MINIMUM OF SEVERAL SAMPLES. A single sample flaked — one
+   * run in five on 2026-09-21, with nothing about the route changed. The
+   * comment here used to claim a generous ceiling was enough to prevent that;
+   * it was not, because one transient spike in one sample is all it takes.
+   * Timing noise only ever adds, so the minimum is the robust statistic and it
+   * costs about a second to collect.
+   *
+   * Whether 10,000 iterations actually fits in 10 ms of production CPU is a
    * question this file cannot answer. It has to be measured against a deployed
    * Worker.
    */
@@ -904,15 +940,27 @@ describe('the CPU a derivation costs', () => {
     // which would make this measure the JIT rather than PBKDF2.
     await warmUp(cred.username, owner.id);
 
+    const fastest = async (body: { username: string; password: string }): Promise<number> => {
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 3; i++) {
+        // A tripped lock short-circuits before hashing, which would make the
+        // ceiling pass for the wrong reason.
+        await resetCounter(owner.id);
+        const t = Date.now();
+        await post(body);
+        best = Math.min(best, Date.now() - t);
+      }
+      return best;
+    };
+
     // No username, so: no database read and no derivation. The floor.
-    const t0 = Date.now();
-    await post({ username: '', password: '' });
-    const baselineMs = Date.now() - t0;
+    const baselineMs = await fastest({ username: '', password: '' });
 
     // One full derivation at the production constant.
-    const t1 = Date.now();
-    await post({ username: cred.username, password: 'wrong, so exactly one derivation' });
-    const hashingMs = Date.now() - t1;
+    const hashingMs = await fastest({
+      username: cred.username,
+      password: 'wrong, so exactly one derivation',
+    });
 
     expect(hashingMs - baselineMs).toBeLessThan(250);
   });
