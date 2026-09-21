@@ -1,12 +1,18 @@
 /**
- * Sets the owner's break-glass password.
+ * Sets an admin's password — the credential behind `/admin/login`.
  *
  *   npm run set:password -- --discord-id <snowflake>
- *   npm run set:password -- --create <name>            # genuine break-glass
+ *   npm run set:password -- --create <name>            # a standalone admin
  *   npm run set:password -- --discord-id <id> --remote # asks twice first
  *
  * Writes the `admin_credentials` row and pins `users.role_locked = 1`, so the
  * next Discord sign-in cannot demote the account back to `member`.
+ *
+ * `--create` is how the site's admins are made: it mints a standalone identity
+ * under a synthetic `admin:<name>` id, with no Discord account behind it and no
+ * way in except the password set here. `--discord-id` is the other shape — a
+ * password added to somebody's existing Discord-backed row — and it is the one
+ * the `role_locked` pin above actually has work to do for.
  *
  * ---------------------------------------------------------------------------
  * THE PASSWORD NEVER BECOMES ANYTHING PRINTABLE
@@ -77,10 +83,11 @@ if (!discordId && !createName) {
                  which means that person has signed in with Discord at least
                  once. That is deliberate — see below.
 
-  --create       Break-glass only. Mints a users row with a synthetic,
-                 non-numeric discord_id ("owner:<name>") that can never collide
-                 with a real Discord snowflake. Use when nobody can sign in with
-                 Discord at all.
+  --create       Mints a standalone admin identity: a users row with a
+                 synthetic, non-numeric discord_id ("admin:<name>") that can
+                 never collide with a real Discord snowflake, and no Discord
+                 account behind it. This is how the site's admins are made —
+                 the password set here is the only way into the account.
 
   --remote       Write to the PRODUCTION database. Asks for a typed
                  confirmation naming the database and the user. Default is local.
@@ -345,8 +352,8 @@ try {
       die(
         `--discord-id must be a Discord snowflake (digits only). Got: ${JSON.stringify(discordId)}
 
-If you meant to create a break-glass account that has never signed in with
-Discord, use --create <name> instead. Never invent a numeric id: the next real
+If you meant to create a standalone admin, with no Discord account behind it,
+use --create <name> instead. Never invent a numeric id: the next real
 sign-in by that person would insert a SECOND users row for them, because
 upsertUser matches on discord_id.`,
       );
@@ -368,22 +375,34 @@ not match, and they would get a second account while the password row stayed
 attached to the first.
 
 So: have them sign in with Discord once (which is enough — the role does not
-matter, this script sets it), then run this again. If Discord sign-in is not
-possible at all, that is what --create is for.`,
+matter, this script sets it), then run this again. If the admin is not meant to
+have a Discord account behind them at all, that is what --create is for.`,
       );
     }
   } else {
     /*
      * A synthetic, deliberately NON-NUMERIC id.
      *
-     * Discord snowflakes are digits only, so "owner:justin" can never collide
+     * Discord snowflakes are digits only, so "admin:justin" can never collide
      * with a real one and can never be matched by upsertUser's
-     * ON CONFLICT (discord_id). Exactly the property `anonymizedIdentity` uses
-     * for "deleted:<id>" (src/lib/auth/deletion.ts), and the same principle as
-     * dev-session.ts's 'dev-local-admin' row.
+     * ON CONFLICT (discord_id). That is what makes the identity standalone: no
+     * Discord sign-in can ever reach this row, whoever signs in. Exactly the
+     * property `anonymizedIdentity` uses for "deleted:<id>"
+     * (src/lib/auth/deletion.ts), and the same principle as dev-session.ts's
+     * 'dev-local-admin' row.
+     *
+     * **The prefix has to match what production already holds.** The rows are
+     * `admin:nic` and `admin:justin`; minting under any other prefix would not
+     * fail, it would quietly start a second convention and a second account for
+     * a name that already has one.
      */
     const name = assertName('--create', (createName ?? '').toLowerCase());
-    const synthetic = `owner:${name}`;
+    const synthetic = `admin:${name}`;
+
+    // `Nic` from `nic`, matching the `global_name` the existing rows carry.
+    // `name` has already been through `assertName`, so capitalising its first
+    // character cannot introduce anything the SQL below has to worry about.
+    const displayName = name.charAt(0).toUpperCase() + name.slice(1);
 
     const existing = rows<UserRow>(
       d1Read(
@@ -394,11 +413,11 @@ possible at all, that is what --create is for.`,
 
     if (existing) {
       user = existing;
-      console.log(`Reusing the existing break-glass row ${synthetic}.\n`);
+      console.log(`Reusing the existing admin row ${synthetic}.\n`);
     } else {
       d1Write(
         `INSERT INTO users (discord_id, username, global_name, role)
-         VALUES ('${synthetic}', '${name}', 'Owner', 'admin')`,
+         VALUES ('${synthetic}', '${name}', '${displayName}', 'admin')`,
       );
       user = rows<UserRow>(
         d1Read(
@@ -406,8 +425,8 @@ possible at all, that is what --create is for.`,
              FROM users WHERE discord_id = '${synthetic}'`,
         ),
       )[0];
-      if (!user) die('The break-glass users row was not created.');
-      console.log(`Created break-glass row ${synthetic}.\n`);
+      if (!user) die('The admin users row was not created.');
+      console.log(`Created admin row ${synthetic}.\n`);
     }
   }
 
@@ -455,8 +474,8 @@ possible at all, that is what --create is for.`,
    */
   let loginName = '';
   for (;;) {
-    const answer = (await ask(rl, `\nLogin username [${suggested || 'owner'}]: `)).trim();
-    loginName = assertName('login username', (answer || suggested || 'owner').toLowerCase());
+    const answer = (await ask(rl, `\nLogin username [${suggested || 'admin'}]: `)).trim();
+    loginName = assertName('login username', (answer || suggested || 'admin').toLowerCase());
 
     const clash = rows<{ discord_id: string; username: string }>(
       d1Read(
@@ -520,9 +539,10 @@ there is no reset link behind it, so the password is doing all the work.`,
 
   /*
    * Asked twice, and compared, because the failure mode is delayed and cruel:
-   * a typo'd password is accepted silently, and the owner does not find out
-   * until the day Discord is already broken and this was supposed to be the
-   * way back in.
+   * a typo'd password is accepted silently, and it is the only way into the
+   * account. There is no reset link, no recovery email and — for a standalone
+   * `admin:<name>` identity — no Discord sign-in to fall back on, so the next
+   * person to find out is whoever tries to use it.
    */
   const again = await hidden(rl, generated ? 'Type it back: ' : 'Again: ');
   if (again !== password) die('The two entries did not match. Nothing was written.');

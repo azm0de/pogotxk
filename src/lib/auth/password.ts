@@ -1,5 +1,5 @@
 /**
- * Password hashing for the owner's break-glass login.
+ * Password hashing for the admin password login.
  *
  * ---------------------------------------------------------------------------
  * THIS MODULE MUST STAY IMPORTABLE BY PLAIN `tsx`
@@ -282,8 +282,8 @@ const DUMMY_SALT = new Uint8Array([
  * Honest about what it buys: it matches a real row's cost only while that row
  * sits at `DEFAULT_ITERATIONS`. The setter script writes at that count and the
  * login route rehashes up to it on success, so it holds in practice. The
- * residual window is the stretch after the constant is raised and before the
- * owner next signs in, and what leaks through it is one bit — "this username
+ * residual window is the stretch after the constant is raised and before that
+ * admin next signs in, and what leaks through it is one bit — "this username
  * exists" — about a username the attacker must already have guessed, on an
  * account that locks out after five tries. That is the correct size of worry
  * for this, and it is written down here so nobody re-derives it in a panic.

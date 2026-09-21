@@ -15,7 +15,7 @@
  *
  * What this pins: every path the console actually uses stays guarded, no path
  * outside it is annexed by sharing a prefix, and the two holes deliberately cut
- * in the gate — the import endpoints and the owner's password form — are each
+ * in the gate — the import endpoints and the admin password form — are each
  * exactly as wide as they were meant to be and no wider.
  */
 
@@ -30,7 +30,7 @@ describe('isAdminPath', () => {
     '/admin/posts',
     '/admin/media',
     '/admin/meetups',
-    // The owner's password form is under the gate like everything else. The
+    // The admin password form is under the gate like everything else. The
     // middleware skips the *role* check for it; this predicate still covers it.
     '/admin/login',
     '/api/admin',
@@ -85,7 +85,7 @@ describe('isAdminLoginPath', () => {
    * `includes` — three implementations that each hand out a different amount of
    * the admin console to anyone who is not signed in.
    */
-  it('exempts the owner password form, which is the one path it is for', () => {
+  it('exempts the admin password form, which is the one path it is for', () => {
     expect(isAdminLoginPath('/admin/login')).toBe(true);
 
     // And it is still an admin path. The middleware skips the role check for

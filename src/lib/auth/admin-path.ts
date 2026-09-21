@@ -37,15 +37,16 @@ export function isAdminPath(path: string): boolean {
 }
 
 /**
- * The owner's password form, which is the one page under `/admin` a signed-out
+ * The admin password form, which is the one page under `/admin` a signed-out
  * visitor is meant to reach.
  *
  * It has to be exempt or it cannot do its job. `isAdminPath('/admin/login')` is
  * true — it is under `/admin` like everything else — so without this the gate
- * would send the visitor to `/auth/login`, which is the Discord door they are
- * standing here because they cannot use. The page is the recovery path for the
- * day that door is shut; a recovery path behind the thing it recovers from is
- * no recovery path at all.
+ * would send the visitor to `/auth/login`, the Discord door. That is not a
+ * detour for the caller this page is for, it is a dead end: an admin account is
+ * a standalone identity with no Discord account behind it, so the door they
+ * would be sent to cannot admit them at all. A sign-in page behind the gate it
+ * exists to get somebody through is no sign-in page.
  *
  * **Matched exactly, and the exactness is the design.** `isUnder` would carry
  * `/admin/login/anything` out with it; `startsWith` would take `/admin/logins`

@@ -123,7 +123,7 @@ describe('the admin pages', () => {
     expect(res.status).toBe(200);
   });
 
-  // `/admin/login` is deliberately not in this list. It is the owner's password
+  // `/admin/login` is deliberately not in this list. It is the admin password
   // form and the one path under `/admin` the gate exempts, by exact match — see
   // `isAdminLoginPath`, and `admin-login.test.ts` for what that exemption does
   // and does not cover. Adding it here would be asserting the opposite.

@@ -1,10 +1,14 @@
 /**
- * The owner's password sign-in, posted to by `/admin/login`.
+ * The admin password sign-in, posted to by `/admin/login`.
  *
- * The break-glass door. Discord OAuth is the front entrance and this is not a
- * second one — it exists for the day Discord is down, the guild is
- * misconfigured, or the one bootstrap account is gone. See
- * `migrations/0004_owner_password.sql`.
+ * Turns a username and password from `admin_credentials` into a session. The
+ * accounts it serves are standalone identities with no Discord account behind
+ * them, so there is no fallback to offer a caller this route refuses — Discord
+ * OAuth is the door for members, and it is not a second way into an admin
+ * account. It also depends on nothing but D1, which is why it survives Discord
+ * being down, the guild being misconfigured, or `DISCORD_BOOTSTRAP_ADMIN_ID`
+ * being gone. See `migrations/0004_owner_password.sql`, named for the
+ * terminology this feature has since left behind.
  *
  * ---------------------------------------------------------------------------
  * WHY THIS IS NOT UNDER `/api/admin/`
@@ -66,7 +70,7 @@ export const prerender = false;
  * That is already written down in `vault/Platform Limits and Traps.md`, where
  * it reads as a convenience for `fetch` callers. Here it would be a hole:
  * accepting JSON would quietly remove the only CSRF protection this route has,
- * and a cross-site page could then submit a guess on a visiting owner's behalf.
+ * and a cross-site page could then submit a guess on a visiting admin's behalf.
  *
  * So the narrow encoding is deliberate, and `multipart/form-data` is refused
  * too — the form below never sends it, and every accepted shape is a shape
@@ -185,8 +189,8 @@ export async function POST(ctx: APIContext): Promise<Response> {
    *
    * The usual reason to spend a derivation is to hide which branch was taken.
    * That reasoning does not apply here, because the response says `locked` out
-   * loud on purpose: the owner has to be able to tell "wrong password" from
-   * "wait eleven minutes", or the door is useless on the day it is needed.
+   * loud on purpose: the admin has to be able to tell "wrong password" from
+   * "wait eleven minutes", and they have no other door to try instead.
    * Paying a full PBKDF2 to conceal a fact the message already states would be
    * pure waste — and worse than waste on a 10 ms CPU budget, since it hands an
    * attacker a way to spend the Worker's time five times an hour.
@@ -312,7 +316,7 @@ async function recordFailure(row: CredentialRow, now: number): Promise<void> {
 
   /*
    * The failure audit carries no username and no attempted password — nothing
-   * that identifies who was being guessed at. One day the owner will type their
+   * that identifies who was being guessed at. One day an admin will type their
    * password into the username field, and `audit_log` is readable by every
    * ambassador; a log that records the attempt is a log that eventually records
    * a password in clear text.

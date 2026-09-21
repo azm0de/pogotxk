@@ -1,5 +1,5 @@
 /**
- * `/admin/login` and `POST /api/auth/admin-login` — the break-glass door.
+ * `/admin/login` and `POST /api/auth/admin-login` — the admin password door.
  *
  * The page is under `/admin` and the route deliberately is not. The page is
  * exempted from the role gate by `isAdminLoginPath`, matched exactly, so a
@@ -111,7 +111,7 @@ function hex(bytes: Uint8Array): string {
 
 describe('the same bytes on both sides', () => {
   /*
-   * `scripts/test-owner-password.ts` asserts this identical vector under plain
+   * `scripts/test-admin-password.ts` asserts this identical vector under plain
    * `tsx`. The duplication is the point and must not be tidied away: the setter
    * script derives its hash in Node and this Worker verifies it in workerd, and
    * nothing except the same vector passing in both runtimes actually proves
@@ -166,22 +166,22 @@ describe('a correct password', () => {
   });
 
   it('resolves to the seeded user, still an admin', async () => {
-    const owner = await seedUser(env.DB, { role: 'admin', username: 'theowner' });
+    const owner = await seedUser(env.DB, { role: 'admin', username: 'theadmin' });
     const cred = await seedAdminCredential(env.DB, owner);
 
     const res = await post({ username: cred.username, password: cred.password });
     const user = await getSessionUser(env.DB, sessionTokenOf(res)!);
 
     expect(user?.id).toBe(owner.id);
-    expect(user?.username).toBe('theowner');
+    expect(user?.username).toBe('theadmin');
     expect(user?.role).toBe('admin');
   });
 
   it('is case-insensitive about the username, and tolerates spaces', async () => {
     const owner = await seedUser(env.DB, { role: 'admin' });
-    const cred = await seedAdminCredential(env.DB, owner, { username: 'theowner' });
+    const cred = await seedAdminCredential(env.DB, owner, { username: 'theadmin' });
 
-    const res = await post({ username: '  THEOwner  ', password: cred.password });
+    const res = await post({ username: '  THEAdmin  ', password: cred.password });
 
     expect(res.status).toBe(303);
     expect(sessionTokenOf(res)).toBeDefined();
@@ -207,7 +207,7 @@ describe('a correct password', () => {
     expect(row?.actor_id).toBe(owner.id);
     expect(row?.entity).toBe('admin_credentials');
     expect(JSON.parse(row!.diff_json)).toEqual({ method: 'password' });
-    // `audit_log` is readable by every ambassador, and one day the owner will
+    // `audit_log` is readable by every ambassador, and one day an admin will
     // type their password into the username field.
     expect(row?.diff_json).not.toContain(cred.username);
   });
@@ -343,7 +343,7 @@ describe('what it refuses, and how little it says', () => {
      * an unknown algorithm — turn out to be unreachable through D1, because the
      * CHECK constraints in `0004_owner_password.sql` refuse them on INSERT and
      * on UPDATE alike. `verifyPassword` still rejects both (asserted in
-     * `scripts/test-owner-password.ts`); this pins the outer wall, so nobody
+     * `scripts/test-admin-password.ts`); this pins the outer wall, so nobody
      * later removes a constraint believing the code alone covers it.
      */
     const owner = await seedUser(env.DB, { role: 'admin' });
@@ -373,7 +373,7 @@ describe('what it refuses, and how little it says', () => {
 
     for (const fields of [
       { username: '', password: 'something long enough' },
-      { username: 'owner', password: '' },
+      { username: 'admin', password: '' },
       {},
     ]) {
       const res = await post(fields as Record<string, string>);
@@ -501,7 +501,7 @@ describe('the lockout', () => {
 
   it('never writes the attempted username into the audit log', async () => {
     const owner = await seedUser(env.DB, { role: 'admin' });
-    const cred = await seedAdminCredential(env.DB, owner, { username: 'secretowner' });
+    const cred = await seedAdminCredential(env.DB, owner, { username: 'secretadmin' });
 
     await post({ username: cred.username, password: 'a wrong password' });
 
@@ -512,7 +512,7 @@ describe('the lockout', () => {
     expect(row?.actor_id).toBeNull();
     expect(row?.entity_id).toBeNull();
     expect(JSON.parse(row!.diff_json)).toEqual({ outcome: 'bad-credentials' });
-    expect(row?.diff_json).not.toContain('secretowner');
+    expect(row?.diff_json).not.toContain('secretadmin');
     expect(row?.diff_json).not.toContain('a wrong password');
   });
 });
@@ -532,7 +532,7 @@ describe('the lockout', () => {
  *
  * Until then the branch is covered where it can be: `needsRehash` is tested
  * directly over counts above, at and below the target in
- * scripts/test-owner-password.ts, which builds a `StoredHash` in memory and is
+ * scripts/test-admin-password.ts, which builds a `StoredHash` in memory and is
  * not bound by the CHECK constraint.
  *
  * What IS testable here, and worth pinning, is the no-op half — because getting
@@ -583,8 +583,8 @@ describe('rehashing on a successful login', () => {
 describe('role_locked, against Discord', () => {
   const discordUser: DiscordUser = {
     id: '100000000000000042',
-    username: 'theowner',
-    global_name: 'The Owner',
+    username: 'theadmin',
+    global_name: 'The Admin',
     avatar: null,
   };
 
@@ -635,7 +635,7 @@ describe('role_locked, against Discord', () => {
       .bind(discordUser.id)
       .first<{ username: string; role: string }>();
 
-    expect(row?.username).toBe('theowner');
+    expect(row?.username).toBe('theadmin');
     expect(row?.role).toBe('admin');
   });
 
@@ -681,7 +681,7 @@ describe('what shapes of request it accepts', () => {
       new Request(API, {
         method: 'POST',
         headers: { 'content-type': FORM_TYPE },
-        body: new URLSearchParams({ username: 'owner', password: 'whatever' }).toString(),
+        body: new URLSearchParams({ username: 'admin', password: 'whatever' }).toString(),
       }),
       { redirect: 'manual' },
     );
@@ -696,10 +696,10 @@ describe('what shapes of request it accepts', () => {
      * dependent: it polices form-like types and skips `application/json`
      * entirely (`node_modules/astro/dist/core/app/origin-check.js`). Accepting
      * JSON here would therefore let a cross-site page submit a guess on a
-     * visiting owner's behalf, with no CSRF check anywhere in the path.
+     * visiting admin's behalf, with no CSRF check anywhere in the path.
      */
     const res = await SELF.fetch(
-      jsonRequest(API, { json: { username: 'owner', password: 'whatever' } }),
+      jsonRequest(API, { json: { username: 'admin', password: 'whatever' } }),
       { redirect: 'manual' },
     );
 
@@ -710,7 +710,7 @@ describe('what shapes of request it accepts', () => {
   it('refuses multipart and a bodyless POST too', async () => {
     for (const contentType of ['multipart/form-data; boundary=x', 'text/plain']) {
       const res = await SELF.fetch(
-        jsonRequest(API, { body: 'username=owner&password=x', headers: { 'content-type': contentType } }),
+        jsonRequest(API, { body: 'username=admin&password=x', headers: { 'content-type': contentType } }),
         { redirect: 'manual' },
       );
       expect(res.status).toBe(415);

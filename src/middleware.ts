@@ -37,10 +37,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // count, and why the boundary matters, is in ~/lib/auth/admin-path.
   //
   // Two paths skip the role check and nothing else does: the import endpoints,
-  // which bring their own bearer token, and the owner's password form, which
-  // would otherwise be gated by the very door it exists to get around. Both
-  // predicates are deliberately narrow — exactly one path in the second case —
-  // and both are argued where they are defined.
+  // which bring their own bearer token, and the admin password form, which
+  // would otherwise be gated by the very check it exists to get a caller past.
+  // Both predicates are deliberately narrow — exactly one path in the second
+  // case — and both are argued where they are defined.
   if (isAdminPath(path)) {
     if (
       !isImportPath(path) &&

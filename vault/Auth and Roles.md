@@ -1,6 +1,6 @@
 ---
 tags: [architecture, security]
-updated: 2026-09-20
+updated: 2026-09-21
 ---
 
 # Auth and Roles
@@ -8,8 +8,9 @@ updated: 2026-09-20
 Discord is the sign-in method for everyone. The community already lives there, so guild
 membership *is* the membership check — see [[Why Discord is the identity provider]].
 
-There is one other door, and it is not for members: the owner's password at `/admin/login`.
-See [[#The second door]].
+There is one other door, and it is not for members: the admin password at `/admin/login`.
+The accounts behind it are standalone identities with no Discord account of their own — see
+[[#The admin password door]].
 
 ## Flow
 
@@ -30,10 +31,17 @@ Scopes requested: `identify` and `guilds.members.read`. No email, no messages, n
 | `ambassador` | Has the ambassador role | Everything in `/admin` |
 | `admin` | Has the admin role, or is `DISCORD_BOOTSTRAP_ADMIN_ID`, or holds `role_locked = 1` | Also: hard delete, import, settings |
 
-## The second door
+## The admin password door
 
-`/admin/login` is a password login for one account, and it exists for the day Discord sign-in
-cannot produce an admin.
+`/admin/login` is a username-and-password login, and the accounts it serves are **standalone
+identities**: a `users` row under a synthetic `admin:<name>` id, a row in `admin_credentials`,
+and no Discord account anywhere behind it. An admin does not have a Discord sign-in that would
+also work; the password is the whole of their access. Production holds two of them.
+
+It was built for the day Discord sign-in could not produce an admin. That day is now every
+day: no `DISCORD_ROLE_ADMIN` is set, so `resolveRole` can only answer `member`, and
+`DISCORD_BOOTSTRAP_ADMIN_ID` — the one remaining short-circuit — is being retired. Once that
+secret is removed, nothing reachable through Discord resolves to `admin` at all.
 
 > [!important] The path is not a secret, and nothing may be built on the idea that it is
 > The repository (`azm0de/pogotxk`) is **public**, so every path written in it is public
@@ -66,16 +74,30 @@ The page sits under `/admin` and the POST route deliberately does not.
 > **authoritative**, so `upsertUser` writes that answer. A hand-promoted admin is therefore
 > demoted by their own next sign-in.
 >
-> That leaves exactly one path to `admin`: `DISCORD_BOOTSTRAP_ADMIN_ID`, a secret that
+> That left exactly one path to `admin`: `DISCORD_BOOTSTRAP_ADMIN_ID`, a secret that
 > short-circuits `resolveRole` for one Discord account. One account, one secret, one
 > third-party service, and no recovery if any of the three is lost. Setting the
-> `DISCORD_ROLE_*` ids would fix the demotion but not the single point of failure — it would
-> just move it into the Discord server's role configuration.
+> `DISCORD_ROLE_*` ids would have fixed the demotion but not the single point of failure — it
+> would just have moved it into the Discord server's role configuration.
+
+> [!important] The secret is being retired, and the standalone identities are the replacement
+> `DISCORD_BOOTSTRAP_ADMIN_ID` is the single point of failure this door was built to remove,
+> so keeping both is keeping the problem. The owner removes the secret from the Worker
+> himself; the code still honours it if it is set, and `resolveRole`'s bootstrap branch and
+> its tests are unchanged.
+>
+> After it is gone the roles table below still reads correctly — it describes what the code
+> does — but only one of its three routes to `admin` can actually fire on this deployment:
+> `role_locked = 1`, which is what `scripts/set-admin-password.ts` writes. Setting
+> `DISCORD_ROLE_AMBASSADOR` would still let Discord mint an **ambassador**, who can reach
+> `/admin`; it would not mint an admin.
 
 **How it works.** The password proves *which existing `users` row you are*, and everything after
 that is the code every other door already runs: `createSession`, the same `sessions` table, the
-same `pogotxk_session` cookie. It is an additional entrance, not a second identity system —
-the same claim `/auth/device` makes.
+same `pogotxk_session` cookie. The identity is standalone; the **session machinery is not** —
+there is one `users` table, one role source and one ban check, and this door resolves through
+all three like every other. That is the same claim `/auth/device` makes, and it is what
+[[Data Model]] means by keying `admin_credentials` on `user_id`.
 
 - The credential lives in `admin_credentials`, keyed `user_id` — see [[Data Model]].
 - PBKDF2-HMAC-SHA256, 16-byte salt, 32-byte output, unpadded base64url. The iteration count is
@@ -115,7 +137,7 @@ passes against a `CASE` that does nothing.
 
 > [!important] The lock pins the role. It does not survive a ban.
 > Deliberate. `getSessionUser` returns undefined for `is_banned = 1` before it ever reads the
-> role, so banning stays the emergency off-switch even against a locked owner. A flag that also
+> role, so banning stays the emergency off-switch even against a locked admin. A flag that also
 > defeated a ban would be a permanent un-revocable admin — a second copy of the single point of
 > failure this feature exists to remove.
 
@@ -124,10 +146,11 @@ passes against a `CASE` that does nothing.
 Five wrong passwords shut the door. The schedule escalates and is **capped at one hour**:
 1 minute, then 5, then 30, then 60 and no further.
 
-The cap is the design, not a rounding-off. The person locked out is the site owner, and this is
-the door for the day the other one is already broken; an unbounded schedule would be a denial
-of service aimed at the one human who cannot route around it, triggerable by anyone who knows
-the username.
+The cap is the design, not a rounding-off. The person locked out is an admin, whose account has
+no Discord sign-in behind it — there is no other door for them to try and nobody above them to
+ask. An unbounded schedule would be a denial of service aimed at the few people who cannot
+route around it, triggerable by anyone who knows the username. The lock is per credential row,
+so locking one admin out does not touch the other.
 
 - The counter **decays on the next attempt**, not on a sweep — a failure whose predecessor is
   older than 24 hours starts again at 1. There is no cron here ([[Why there is no cron]]), so
@@ -135,7 +158,7 @@ the username.
 - The increment is a single SQL statement with the decay rule inside it, so two simultaneous
   attempts cannot both read 4 and both write 5.
 - **A correct password while locked is still refused**, and `failed_attempts` is left alone.
-- The locked path does **not** hash. The response says "locked" out loud on purpose — the owner
+- The locked path does **not** hash. The response says "locked" out loud on purpose — the admin
   has to be able to tell a wrong password from a wait — so spending a full PBKDF2 to hide a
   fact the message already states would only hand an attacker a way to burn the CPU budget.
 
@@ -146,7 +169,7 @@ check are all the same answer: `303` to `/admin/login?error=bad`, byte for byte.
 username burns a real derivation first so the timing matches — measured at 56 ms against the
 wrong-password path's 60 ms, the 4 ms being two D1 writes.
 
-The audit log records failures with **no username and no password**, because one day the owner
+The audit log records failures with **no username and no password**, because one day an admin
 will type their password into the username field and `audit_log` is readable by every
 ambassador. A failure against an unknown username is not logged at all: it has no counter to
 bound it, so logging it would let anyone append to `audit_log` at will.
@@ -155,8 +178,11 @@ bound it, so logging it would let anyone append to `audit_log` at will.
 
 ```bash
 npm run set:password -- --discord-id <snowflake>   # an existing users row
-npm run set:password -- --create <name>            # genuine break-glass
+npm run set:password -- --create <name>            # a standalone admin identity
 ```
+
+`--create` is the one that made the two accounts in production. It is not an emergency path any
+more; it is how an admin is made.
 
 > [!danger] It must be run from a real console, and it refuses otherwise
 > Under Git Bash / mintty, `node` is handed a pipe rather than a console: `stdin.isTTY` is
@@ -167,14 +193,22 @@ npm run set:password -- --create <name>            # genuine break-glass
 
 The password is never a CLI argument, never piped, never displayed — the same standing rule
 that produced the VAPID procedure in [[Configuration]]. It is prompted twice and compared,
-because a typo'd password is a lockout nobody discovers until Discord is already broken, and
-the minimum is 16 characters.
+because a typo'd password is a permanent lockout — there is no reset link, no recovery email
+and, for a standalone identity, no Discord sign-in to fall back on. The minimum is 16
+characters.
 
 `--discord-id` refuses a snowflake with no `users` row rather than inventing one: a row keyed to
 a made-up id means the next real sign-in inserts a *second* row for the same person, because
 `upsertUser` matches on `discord_id`. `--create` mints a deliberately **non-numeric** synthetic
-id (`owner:<name>`) that can never collide with a real snowflake — the same property
-`anonymizedIdentity` relies on for `deleted:<id>`.
+id (`admin:<name>`) that can never collide with a real snowflake — the same property
+`anonymizedIdentity` relies on for `deleted:<id>`, and what makes the identity standalone: no
+Discord sign-in can ever reach the row, whoever signs in. It also writes `global_name` as the
+capitalised name, so `--create nic` gives `Nic`.
+
+> [!warning] The prefix has to stay `admin:`
+> Production holds `admin:nic` and `admin:justin`. A script minting under any other prefix
+> would not fail — it would quietly start a second convention and a second account for a name
+> that already has one. It was `owner:` before 2026-09-21.
 
 ## Two things that are easy to get wrong
 
@@ -306,7 +340,7 @@ empty jar.
 - `/admin/login` carries `noindex, nofollow`. The page is publicly reachable by design and there
   is no `public/robots.txt`, so that tag is the only thing keeping it out of a search index —
   and keeping it out of a search index is *all* it does. The path itself is not a control; see
-  [[#The second door]].
+  [[#The admin password door]].
 - The admin gate exempts `/admin/login` by **exact match** and nothing else under `/admin`.
   `/admin/login/`, `/admin/login/extra`, `/admin/logins` and `/admin/login-notes` all still
   redirect a signed-out visitor to Discord sign-in, which is what makes the exemption one page
@@ -324,11 +358,11 @@ override, the optional member-role gate, the role hierarchy, PKCE and the `safeN
 68 checks in `scripts/test-auth.ts` — plus the installed-app sign-in handoff in
 `scripts/test-signin-surface.ts`, the device grant's bodies, response mapping, cookie
 payload and `login_required` routing split in `scripts/test-device-grant.ts`, and the password
-primitives and lockout schedule in `scripts/test-owner-password.ts`.
+primitives and lockout schedule in `scripts/test-admin-password.ts`.
 
 `npm run test:worker` covers the parts that only exist as a request crossing a boundary, which
 is most of this note: `test/auth/` drives `/auth/login`, `/auth/callback`, logout, the device
-grant, the Android exchange, the state cookie, the owner password door and `src/middleware.ts`
+grant, the Android exchange, the state cookie, the admin password door and `src/middleware.ts`
 itself through `SELF.fetch`, with Discord mocked and sessions minted by the real
 `createSession`. `admin-login.test.ts` asserts the same known-answer vector the tsx suite does,
 which is the only thing that really proves the setter script and the Worker derive the same
