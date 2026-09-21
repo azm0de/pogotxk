@@ -40,6 +40,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { createInterface, type Interface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_ITERATIONS, hashPassword } from '../src/lib/auth/password';
 
@@ -135,41 +136,88 @@ process.on('SIGINT', () => {
 });
 
 /**
- * Runs SQL through a temp file rather than `--command`.
+ * Wrangler's own entry point, run through this same node binary.
  *
- * On Windows the shell splits a multi-word `--command` into separate arguments
- * and wrangler rejects it — the same reason `scripts/dev-session.ts` does this.
+ * Not `npx` with `shell: true`. That shell is what forced the temp-file dance
+ * below — it re-parses the argument list, so a multi-word `--command` arrived at
+ * wrangler split into pieces and was rejected. Handing the script to `node`
+ * directly means argv is passed verbatim on every platform, `.cmd` shims are out
+ * of the picture, and `--command` becomes usable again. Which matters, because
+ * of the next comment.
  */
-function d1(sql: string): string {
+const WRANGLER = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
+
+function wrangler(args: string[]): string {
+  return execFileSync(process.execPath, [WRANGLER, ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+const TARGET = ['d1', 'execute', 'pogotxk-db', remote ? '--remote' : '--local'];
+
+/**
+ * READS go through `--command`, and they have to.
+ *
+ * `wrangler d1 execute --file` does not return query rows when it is pointed at
+ * `--remote`. It answers with a summary object instead — "Total queries
+ * executed", "Rows read", "Rows written", "Database size (MB)" — while the same
+ * `--file` against `--local` returns the rows. `--command` returns rows on both.
+ *
+ * That asymmetry cost a production run on 2026-09-21: every column came back
+ * `undefined`, so the confirmation prompt printed `id undefined / role
+ * undefined`, the existence check read a summary object as a user row and
+ * announced it was "reusing" a row that did not exist, and the script died on
+ * `user.username.toLowerCase()`. Nothing was written, but only because the crash
+ * happened to land before the write.
+ */
+function d1Read(sql: string): string {
+  return wrangler([...TARGET, '--command', sql, '--json']);
+}
+
+/**
+ * WRITES stay on `--file`. They are multi-statement, they return nothing worth
+ * reading, and the file keeps the salt and hash out of the process argument
+ * list where `ps` and the shell's history can see them.
+ */
+function d1Write(sql: string): string {
   const file = join(scratch, `q-${randomBytes(4).toString('hex')}.sql`);
   pending = file;
   try {
     writeFileSync(file, sql, { encoding: 'utf8', mode: 0o600 });
-    return execFileSync(
-      'npx',
-      [
-        'wrangler',
-        'd1',
-        'execute',
-        'pogotxk-db',
-        remote ? '--remote' : '--local',
-        '--file',
-        file,
-        '--json',
-      ],
-      { encoding: 'utf8', shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'pipe'] },
-    );
+    return wrangler([...TARGET, '--file', file, '--json']);
   } finally {
     rmSync(file, { force: true });
     pending = null;
   }
 }
 
-function rows<T>(raw: string): T[] {
+/** The summary `--file --remote` returns in place of rows. */
+const SUMMARY_KEY = 'Total queries executed';
+
+/**
+ * Parses rows out of wrangler's `--json`, and refuses to guess.
+ *
+ * The `SUMMARY_KEY` check is the guard the 2026-09-21 failure earned. Returning
+ * `[]` there would be worse than throwing, not better: "no such user" and "I
+ * could not read the answer" lead to opposite actions, and this script's next
+ * move after "no such user" is to offer to create one. Silence would have it
+ * mint a duplicate identity in production.
+ */
+export function rows<T>(raw: string): T[] {
   const start = raw.indexOf('[');
   if (start === -1) return [];
   const parsed = JSON.parse(raw.slice(start)) as { results?: T[] }[];
-  return parsed[0]?.results ?? [];
+  const results = parsed[0]?.results ?? [];
+
+  const first = results[0] as Record<string, unknown> | undefined;
+  if (first && SUMMARY_KEY in first) {
+    throw new Error(
+      'wrangler returned a summary instead of rows — the query result cannot be read. ' +
+        'Nothing has been written. See the d1Read comment in this file.',
+    );
+  }
+  return results;
 }
 
 /**
@@ -305,7 +353,7 @@ upsertUser matches on discord_id.`,
       );
     }
     user = rows<UserRow>(
-      d1(
+      d1Read(
         `SELECT id, discord_id, username, global_name, role, is_banned
            FROM users WHERE discord_id = '${discordId}'`,
       ),
@@ -339,7 +387,7 @@ possible at all, that is what --create is for.`,
     const synthetic = `owner:${name}`;
 
     const existing = rows<UserRow>(
-      d1(
+      d1Read(
         `SELECT id, discord_id, username, global_name, role, is_banned
            FROM users WHERE discord_id = '${synthetic}'`,
       ),
@@ -349,12 +397,12 @@ possible at all, that is what --create is for.`,
       user = existing;
       console.log(`Reusing the existing break-glass row ${synthetic}.\n`);
     } else {
-      d1(
+      d1Write(
         `INSERT INTO users (discord_id, username, global_name, role)
          VALUES ('${synthetic}', '${name}', 'Owner', 'admin')`,
       );
       user = rows<UserRow>(
-        d1(
+        d1Read(
           `SELECT id, discord_id, username, global_name, role, is_banned
              FROM users WHERE discord_id = '${synthetic}'`,
         ),
@@ -476,7 +524,7 @@ there is no reset link behind it, so the password is doing all the work.`,
 
   if (revokeSessions) statements.push(`DELETE FROM sessions WHERE user_id = ${user.id};`);
 
-  d1(statements.join('\n'));
+  d1Write(statements.join('\n'));
 
   console.log(`
 Done.
