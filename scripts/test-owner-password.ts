@@ -28,6 +28,7 @@ import {
   MAX_ATTEMPTS,
   nextFailureCount,
 } from '../src/lib/auth/lockout';
+import { D1ShapeError, rows } from './d1-json';
 
 let failures = 0;
 function check(label: string, actual: unknown, expected: unknown): void {
@@ -235,6 +236,64 @@ check(
   nextFailureCount(9, '2026-09-12T12:00:00Z', NOW),
   1,
 );
+
+/* ------------------------------------------------- reading wrangler's --json */
+
+/*
+ * These two payloads are not invented. They are what wrangler 4.119.0 actually
+ * printed for the SAME query on 2026-09-21 — `SELECT id, username FROM users
+ * WHERE id = 1` — differing only in --local versus --remote with --file. The
+ * remote one is the shape that reached a production run, read a summary object
+ * as a user row, and announced it was "reusing" a row that did not exist.
+ */
+const LOCAL_ROWS = JSON.stringify([
+  { results: [{ id: 1, username: 'azm.0' }], success: true, meta: {} },
+]);
+const REMOTE_FILE_SUMMARY = JSON.stringify([
+  {
+    results: [
+      {
+        'Total queries executed': 1,
+        'Rows read': 72,
+        'Rows written': 0,
+        'Database size (MB)': '0.30',
+      },
+    ],
+    success: true,
+    meta: {},
+  },
+]);
+
+function threw(label: string, raw: string, expected: boolean): void {
+  let didThrow = false;
+  try {
+    rows(raw);
+  } catch (err) {
+    didThrow = err instanceof D1ShapeError;
+  }
+  check(label, didThrow, expected);
+}
+
+console.log('\n== reading rows out of wrangler --json ==');
+check('real rows parse', rows<{ id: number }>(LOCAL_ROWS), [{ id: 1, username: 'azm.0' }]);
+threw('real rows do not throw', LOCAL_ROWS, false);
+
+console.log(`
+  The whole point: --file against --remote answers a summary, not rows. Silence
+  here would be worse than an error — the caller's next move after "no such row"
+  is to offer to create one, in production.`);
+threw('the remote --file summary throws', REMOTE_FILE_SUMMARY, true);
+
+console.log('\n  And the shapes that must stay quiet:');
+// A SELECT that matched nothing has no rows at all, so it has no summary key in
+// it either. This is the case that must NOT be confused with the one above.
+threw('a genuinely empty result set does not throw', JSON.stringify([{ results: [] }]), false);
+check('a genuinely empty result set is []', rows(JSON.stringify([{ results: [] }])), []);
+check('a missing results key is []', rows(JSON.stringify([{ success: true }])), []);
+check('output with no JSON array at all is []', rows('wrangler said something else'), []);
+check('banner text before the array is skipped', rows(`├ Uploading\n│\n${LOCAL_ROWS}`), [
+  { id: 1, username: 'azm.0' },
+]);
 
 console.log(failures ? `\nFAILED (${failures})\n` : '\nAll checks passed.\n');
 process.exit(failures ? 1 : 0);

@@ -43,6 +43,7 @@ import { createInterface, type Interface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_ITERATIONS, hashPassword } from '../src/lib/auth/password';
+import { rows } from './d1-json';
 
 /* --------------------------------------------------------------- arguments */
 
@@ -214,33 +215,9 @@ function d1Write(sql: string): string {
   }
 }
 
-/** The summary `--file --remote` returns in place of rows. */
-const SUMMARY_KEY = 'Total queries executed';
-
-/**
- * Parses rows out of wrangler's `--json`, and refuses to guess.
- *
- * The `SUMMARY_KEY` check is the guard the 2026-09-21 failure earned. Returning
- * `[]` there would be worse than throwing, not better: "no such user" and "I
- * could not read the answer" lead to opposite actions, and this script's next
- * move after "no such user" is to offer to create one. Silence would have it
- * mint a duplicate identity in production.
- */
-export function rows<T>(raw: string): T[] {
-  const start = raw.indexOf('[');
-  if (start === -1) return [];
-  const parsed = JSON.parse(raw.slice(start)) as { results?: T[] }[];
-  const results = parsed[0]?.results ?? [];
-
-  const first = results[0] as Record<string, unknown> | undefined;
-  if (first && SUMMARY_KEY in first) {
-    throw new Error(
-      'wrangler returned a summary instead of rows — the query result cannot be read. ' +
-        'Nothing has been written. See the d1Read comment in this file.',
-    );
-  }
-  return results;
-}
+// `rows` lives in ./d1-json.ts so a test can reach it without running this
+// script's argv parsing and usage exit. The shape it guards against, and why it
+// throws rather than returning [], are documented there.
 
 /**
  * `--file` has no parameter binding, so every value below is interpolated into
