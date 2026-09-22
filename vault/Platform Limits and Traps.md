@@ -27,7 +27,7 @@ work is deferred past the response but billed to the same request. Measured here
 2026-09-19, PBKDF2-HMAC-SHA256 inside workerd runs at **0.53 ms per 1,000 iterations**, so
 100,000 rounds is ~53 ms and does not fit — which is why `DEFAULT_ITERATIONS` is 10,000 (~5 ms),
 the schema's floor. Workers Paid raises the default to 30 s. See
-[[Auth and Roles#The second door]].
+[[Auth and Roles#The admin password door]].
 
 **10 D1 databases** on the free plan. Hit at project start.
 

@@ -1,5 +1,5 @@
 /**
- * The lockout schedule for the owner's password login.
+ * The lockout schedule for the admin password login.
  *
  * Pure: no imports, no bindings, no clock of its own beyond the `now` it is
  * handed. The route does the reading and writing; this module only decides how
@@ -29,11 +29,12 @@ export const ATTEMPT_WINDOW_MS = 24 * 60 * 60 * 1000;
  * Escalating, and **capped at an hour**.
  *
  * The cap is the whole design, not a rounding-off. Everyone else who gets
- * locked out of something can mail support; the person locked out here is the
- * site owner, and this door exists precisely for the day the other one is
- * broken. An unbounded schedule — doubling, or a day after enough tries — is a
- * denial of service aimed at the one human who cannot route around it, and it
- * would be triggerable by anyone who knows the username.
+ * locked out of something can mail support; the person locked out here is an
+ * admin, whose account is a standalone identity with no Discord sign-in behind
+ * it — there is no second door for them to try and nobody above them to ask.
+ * An unbounded schedule — doubling, or a day after enough tries — is a denial
+ * of service aimed at the few people who cannot route around it, and it would
+ * be triggerable by anyone who knows the username.
  *
  * An hour is still enough to make online guessing hopeless. Five tries an hour
  * against a 16-character passphrase is not an attack, it is a hobby.
@@ -91,7 +92,7 @@ export function lockoutUntil(failedAttempts: number, now: number = Date.now()): 
  *
  * Tolerates null (never locked, or the lock was cleared) and garbage. Garbage
  * reads as **not locked**, deliberately: an unparseable value can only arrive
- * by a hand-written `UPDATE`, and treating it as a lock would strand the owner
+ * by a hand-written `UPDATE`, and treating it as a lock would strand an admin
  * behind a door with no expiry and no reset path — which is the failure this
  * whole feature exists to avoid. The counter is unaffected, so the next wrong
  * password locks the account again on a value the code did write.

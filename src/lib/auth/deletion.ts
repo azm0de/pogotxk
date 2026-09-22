@@ -51,7 +51,7 @@ export function anonymizedIdentity(userId: number): { discordId: string; usernam
  * covers this and does not: this function anonymises by `UPDATE` and never
  * `DELETE`s the row, so the cascade never fires. A password credential would
  * survive, still valid, still `role_locked`, now attached to a row reading
- * "Deleted user" at `role = 'guest'` — and the owner login would hand whoever
+ * "Deleted user" at `role = 'guest'` — and `/admin/login` would hand whoever
  * knows that password a session as it, then the lock would hold the role
  * against every correction Discord tried to make. Deleting the credential and
  * clearing the lock is the only thing that makes "this account can no longer

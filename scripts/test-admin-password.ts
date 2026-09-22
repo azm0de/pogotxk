@@ -1,8 +1,8 @@
 /**
- * Checks the pure half of the owner password login: the hashing primitives and
+ * Checks the pure half of the admin password login: the hashing primitives and
  * the lockout schedule.
  *
- *   npx tsx scripts/test-owner-password.ts
+ *   npx tsx scripts/test-admin-password.ts
  *
  * Both modules are deliberately free of `cloudflare:workers` imports and of the
  * `~/` alias, which is what lets this run under plain `tsx` — and what lets
@@ -163,9 +163,9 @@ const NOW = Date.parse('2026-09-19T12:00:00Z');
 /*
  * A table rather than four assertions, because the interesting cases are the
  * edges: the attempt that first locks (5, not 4 and not 6) and the point the
- * schedule stops growing. The cap is the design — the person locked out is the
- * site owner, and an unbounded schedule is a denial of service aimed at the one
- * human who cannot route around it.
+ * schedule stops growing. The cap is the design — the person locked out is an
+ * admin, whose account has no Discord sign-in behind it, so an unbounded
+ * schedule is a denial of service aimed at the few people with no second door.
  */
 const SCHEDULE: [number, string | null][] = [
   [0, null],
@@ -203,13 +203,13 @@ check('an empty string is not locked', isLocked('', NOW), false);
 check('a future timestamp is locked', isLocked('2026-09-19T12:30:00Z', NOW), true);
 check('a past timestamp is not', isLocked('2026-09-19T11:30:00Z', NOW), false);
 // Exactly now is not locked: the boundary opens the door rather than holding it
-// shut, which is the right way round for the owner's own recovery.
+// shut, which is the right way round for an admin's own recovery.
 check('the exact instant is not locked', isLocked('2026-09-19T12:00:00Z', NOW), false);
 check('one second later is', isLocked('2026-09-19T12:00:01Z', NOW), true);
 /*
  * Garbage reads as NOT locked, deliberately. An unparseable value can only
- * arrive by a hand-written UPDATE, and treating it as a lock would strand the
- * owner behind a door with no expiry and no reset path — exactly the failure
+ * arrive by a hand-written UPDATE, and treating it as a lock would strand an
+ * admin behind a door with no expiry and no reset path — exactly the failure
  * this feature exists to avoid. The counter is untouched, so the next wrong
  * password locks the account again on a value the code did write.
  */

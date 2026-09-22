@@ -228,7 +228,7 @@ export interface SeedAdminCredentialOptions {
    * hundred-thousand-round ones. This works *only* because the cost lives in
    * the row: `verifyPassword` reads the count it finds rather than assuming
    * one, which is the same property that lets the constant be raised in
-   * production without invalidating the owner's existing hash.
+   * production without invalidating an admin's existing hash.
    *
    * It is 10,000 and not lower because two independent floors say so — the
    * `CHECK (iterations >= 10000)` in `0004_owner_password.sql`, which refuses
@@ -275,7 +275,7 @@ export async function seedAdminCredential(
 ): Promise<SeededCredential> {
   const n = next();
   const userId = refId(user);
-  const username = opts.username ?? `owner${n}`;
+  const username = opts.username ?? `admin${n}`;
   const password = opts.password ?? `seeded passphrase ${n} long enough`;
   const iterations = opts.iterations ?? 10_000;
 

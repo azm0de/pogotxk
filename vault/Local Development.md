@@ -1,6 +1,6 @@
 ---
 tags: [runbook]
-updated: 2026-09-20
+updated: 2026-09-21
 ---
 
 # Local Development
@@ -27,7 +27,7 @@ account is needed.
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:query "SQL"` | Query local D1 |
 | `npm run dev:session` | Mint a local admin session, no Discord needed |
-| `npm run set:password` | Set the owner's break-glass password — needs a real console, see below |
+| `npm run set:password` | Set an admin's password — needs a real console, see below |
 | `npm run gen:vapid` | Generate a VAPID keypair |
 | `npm run gen:icons` | Rasterise PWA icons from `public/favicon.svg` |
 | `npm run import:dry-run` | Parse the legacy site, assert counts, write nothing |
@@ -44,11 +44,14 @@ npm run dev:session
 It writes a real `users` + `sessions` row using the same SHA-256-of-token scheme the app uses —
 **no bypass code ships**. It prints a cookie to paste into the browser console.
 
-To exercise the owner password door instead:
+To exercise the admin password door instead:
 
 ```bash
-npm run set:password -- --create localowner    # then sign in at /admin/login
+npm run set:password -- --create localadmin    # then sign in at /admin/login
 ```
+
+That mints `admin:localadmin` — a standalone admin identity with no Discord account behind it,
+which is the same shape the two production admins have.
 
 > [!danger] `set:password` refuses to run outside a real console, and that is the point
 > Under Git Bash / mintty, `node` gets a pipe rather than a console: `stdin.isTTY` is
@@ -79,7 +82,7 @@ In the order the chain runs them. The counts are what each suite prints, so a dr
 | `test-auth.ts` | Role resolution, bootstrap admin, the optional member-role gate, role hierarchy, PKCE against the RFC 7636 vector, the `safeNext` open-redirect guard, authorize prompt, which OAuth errors may be retried, `signOutTarget` | 68 |
 | `test-signin-surface.ts` | The intent URL that carries sign-in out of the installed app — malformed, it fails by doing *nothing* when tapped, and only on a phone | 16 |
 | `test-device-grant.ts` | Device-grant request bodies, response mapping, the cookie payload, and the `login_required` routing split | 44 |
-| `test-owner-password.ts` | PBKDF2 against the RFC known-answer vector, hash/verify round trips, NFC normalisation, every way a corrupt row must answer `false` rather than throw, and the lockout schedule including its decay boundary and its one-hour cap | 79 |
+| `test-admin-password.ts` | PBKDF2 against the RFC known-answer vector, hash/verify round trips, NFC normalisation, every way a corrupt row must answer `false` rather than throw, and the lockout schedule including its decay boundary and its one-hour cap | 79 |
 | `test-deletion.ts` | The anonymised `users` values account deletion writes | 7 |
 | `test-time.ts` | Timezone conversion across both DST transitions | 18 |
 | `test-tags.ts` | Server tag normalisation agrees with the client's slugify | 25 |
@@ -120,7 +123,7 @@ reason for the second layer, and it is why the split above is about bindings rat
 |---|---|---|
 | Safety | `00-safety.test.ts` | That the outbound credentials really are blanked, and that the delivery paths cannot reach Discord even so. Named `00-` so it fails first |
 | Admin | `admin/` | Every `/api/admin/*` route × method × caller through `SELF.fetch`, the same handlers called directly with the middleware removed, the import-token hole, and the admin pages' redirect-into-sign-in |
-| Auth | `auth/` | The middleware, sessions, `/auth/login`, `/auth/callback`, logout, the device grant, the Android exchange, the state cookie, `admin-path`, account deletion, and the owner password door — byte-identical refusals, the lockout, `role_locked` with its control |
+| Auth | `auth/` | The middleware, sessions, `/auth/login`, `/auth/callback`, logout, the device grant, the Android exchange, the state cookie, `admin-path`, account deletion, and the admin password door — byte-identical refusals, the lockout, `role_locked` with its control |
 | Flares | `flares/` | POST, RSVP, edit and close, the three-way fan-out, Web Push copy and reach, the LiveBoard Durable Object over real WebSockets, and the Discord close sweep |
 | Harness | `helpers/` | The factories themselves, because four suites are built on them |
 

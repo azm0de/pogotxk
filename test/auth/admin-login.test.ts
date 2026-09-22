@@ -1,5 +1,5 @@
 /**
- * `/admin/login` and `POST /api/auth/admin-login` — the break-glass door.
+ * `/admin/login` and `POST /api/auth/admin-login` — the admin password door.
  *
  * The page is under `/admin` and the route deliberately is not. The page is
  * exempted from the role gate by `isAdminLoginPath`, matched exactly, so a
@@ -70,12 +70,8 @@ function post(fields: Record<string, string>): Promise<Response> {
  * With this in place the two failure paths come out at 56 ms and 60 ms, and the
  * 4 ms between them is the two D1 writes the known-row path makes.
  */
-async function warmUp(username: string, userId: number): Promise<void> {
-  for (let i = 0; i < 3; i++) {
-    await post({ username, password: 'warm up' });
-    await post({ username: 'nobodyhere', password: 'warm up' });
-    await post({ username: '', password: '' });
-  }
+/** Clears the lockout state so a run of deliberate failures cannot trip it. */
+async function resetCounter(userId: number): Promise<void> {
   await env.DB.prepare(
     `UPDATE admin_credentials
         SET failed_attempts = 0, last_failed_at = NULL, locked_until = NULL
@@ -83,6 +79,15 @@ async function warmUp(username: string, userId: number): Promise<void> {
   )
     .bind(userId)
     .run();
+}
+
+async function warmUp(username: string, userId: number): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    await post({ username, password: 'warm up' });
+    await post({ username: 'nobodyhere', password: 'warm up' });
+    await post({ username: '', password: '' });
+  }
+  await resetCounter(userId);
 }
 
 function sessionTokenOf(res: Response): string | undefined {
@@ -111,7 +116,7 @@ function hex(bytes: Uint8Array): string {
 
 describe('the same bytes on both sides', () => {
   /*
-   * `scripts/test-owner-password.ts` asserts this identical vector under plain
+   * `scripts/test-admin-password.ts` asserts this identical vector under plain
    * `tsx`. The duplication is the point and must not be tidied away: the setter
    * script derives its hash in Node and this Worker verifies it in workerd, and
    * nothing except the same vector passing in both runtimes actually proves
@@ -166,22 +171,22 @@ describe('a correct password', () => {
   });
 
   it('resolves to the seeded user, still an admin', async () => {
-    const owner = await seedUser(env.DB, { role: 'admin', username: 'theowner' });
+    const owner = await seedUser(env.DB, { role: 'admin', username: 'theadmin' });
     const cred = await seedAdminCredential(env.DB, owner);
 
     const res = await post({ username: cred.username, password: cred.password });
     const user = await getSessionUser(env.DB, sessionTokenOf(res)!);
 
     expect(user?.id).toBe(owner.id);
-    expect(user?.username).toBe('theowner');
+    expect(user?.username).toBe('theadmin');
     expect(user?.role).toBe('admin');
   });
 
   it('is case-insensitive about the username, and tolerates spaces', async () => {
     const owner = await seedUser(env.DB, { role: 'admin' });
-    const cred = await seedAdminCredential(env.DB, owner, { username: 'theowner' });
+    const cred = await seedAdminCredential(env.DB, owner, { username: 'theadmin' });
 
-    const res = await post({ username: '  THEOwner  ', password: cred.password });
+    const res = await post({ username: '  THEAdmin  ', password: cred.password });
 
     expect(res.status).toBe(303);
     expect(sessionTokenOf(res)).toBeDefined();
@@ -207,7 +212,7 @@ describe('a correct password', () => {
     expect(row?.actor_id).toBe(owner.id);
     expect(row?.entity).toBe('admin_credentials');
     expect(JSON.parse(row!.diff_json)).toEqual({ method: 'password' });
-    // `audit_log` is readable by every ambassador, and one day the owner will
+    // `audit_log` is readable by every ambassador, and one day an admin will
     // type their password into the username field.
     expect(row?.diff_json).not.toContain(cred.username);
   });
@@ -298,13 +303,36 @@ describe('what it refuses, and how little it says', () => {
 
     await warmUp(cred.username, owner.id);
 
-    const t0 = Date.now();
-    await post({ username: cred.username, password: 'wrong wrong wrong' });
-    const wrongMs = Date.now() - t0;
+    /*
+     * THE MINIMUM OF SEVERAL SAMPLES, not a single one.
+     *
+     * A single sample of each flaked once on 2026-09-21: one run in five failed
+     * here while nothing about the route had changed. Warm-up is not the
+     * explanation — it already runs three rounds of both paths above. The
+     * asymmetry is that the known-username path also performs a D1 write to
+     * bump `failed_attempts`, which the unknown path has no row to write to, so
+     * any transient spike in that write inflates `wrongMs` and takes the ratio
+     * with it.
+     *
+     * Timing noise is one-sided: it only ever adds. So the minimum of a few
+     * samples is the robust statistic here, and taking it costs a second.
+     */
+    const sample = async (username: string): Promise<number> => {
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 3; i++) {
+        // Reset between samples so the fifth failure can never trip the lock —
+        // a locked request short-circuits before hashing, which would make this
+        // test pass for entirely the wrong reason.
+        await resetCounter(owner.id);
+        const t = Date.now();
+        await post({ username, password: 'wrong wrong wrong' });
+        best = Math.min(best, Date.now() - t);
+      }
+      return best;
+    };
 
-    const t1 = Date.now();
-    await post({ username: 'nobodyhere', password: 'wrong wrong wrong' });
-    const unknownMs = Date.now() - t1;
+    const wrongMs = await sample(cred.username);
+    const unknownMs = await sample('nobodyhere');
 
     expect(unknownMs).toBeGreaterThanOrEqual(0.4 * wrongMs);
   });
@@ -343,7 +371,7 @@ describe('what it refuses, and how little it says', () => {
      * an unknown algorithm — turn out to be unreachable through D1, because the
      * CHECK constraints in `0004_owner_password.sql` refuse them on INSERT and
      * on UPDATE alike. `verifyPassword` still rejects both (asserted in
-     * `scripts/test-owner-password.ts`); this pins the outer wall, so nobody
+     * `scripts/test-admin-password.ts`); this pins the outer wall, so nobody
      * later removes a constraint believing the code alone covers it.
      */
     const owner = await seedUser(env.DB, { role: 'admin' });
@@ -373,7 +401,7 @@ describe('what it refuses, and how little it says', () => {
 
     for (const fields of [
       { username: '', password: 'something long enough' },
-      { username: 'owner', password: '' },
+      { username: 'admin', password: '' },
       {},
     ]) {
       const res = await post(fields as Record<string, string>);
@@ -501,7 +529,7 @@ describe('the lockout', () => {
 
   it('never writes the attempted username into the audit log', async () => {
     const owner = await seedUser(env.DB, { role: 'admin' });
-    const cred = await seedAdminCredential(env.DB, owner, { username: 'secretowner' });
+    const cred = await seedAdminCredential(env.DB, owner, { username: 'secretadmin' });
 
     await post({ username: cred.username, password: 'a wrong password' });
 
@@ -512,7 +540,7 @@ describe('the lockout', () => {
     expect(row?.actor_id).toBeNull();
     expect(row?.entity_id).toBeNull();
     expect(JSON.parse(row!.diff_json)).toEqual({ outcome: 'bad-credentials' });
-    expect(row?.diff_json).not.toContain('secretowner');
+    expect(row?.diff_json).not.toContain('secretadmin');
     expect(row?.diff_json).not.toContain('a wrong password');
   });
 });
@@ -532,7 +560,7 @@ describe('the lockout', () => {
  *
  * Until then the branch is covered where it can be: `needsRehash` is tested
  * directly over counts above, at and below the target in
- * scripts/test-owner-password.ts, which builds a `StoredHash` in memory and is
+ * scripts/test-admin-password.ts, which builds a `StoredHash` in memory and is
  * not bound by the CHECK constraint.
  *
  * What IS testable here, and worth pinning, is the no-op half — because getting
@@ -583,8 +611,8 @@ describe('rehashing on a successful login', () => {
 describe('role_locked, against Discord', () => {
   const discordUser: DiscordUser = {
     id: '100000000000000042',
-    username: 'theowner',
-    global_name: 'The Owner',
+    username: 'theadmin',
+    global_name: 'The Admin',
     avatar: null,
   };
 
@@ -635,7 +663,7 @@ describe('role_locked, against Discord', () => {
       .bind(discordUser.id)
       .first<{ username: string; role: string }>();
 
-    expect(row?.username).toBe('theowner');
+    expect(row?.username).toBe('theadmin');
     expect(row?.role).toBe('admin');
   });
 
@@ -681,7 +709,7 @@ describe('what shapes of request it accepts', () => {
       new Request(API, {
         method: 'POST',
         headers: { 'content-type': FORM_TYPE },
-        body: new URLSearchParams({ username: 'owner', password: 'whatever' }).toString(),
+        body: new URLSearchParams({ username: 'admin', password: 'whatever' }).toString(),
       }),
       { redirect: 'manual' },
     );
@@ -696,10 +724,10 @@ describe('what shapes of request it accepts', () => {
      * dependent: it polices form-like types and skips `application/json`
      * entirely (`node_modules/astro/dist/core/app/origin-check.js`). Accepting
      * JSON here would therefore let a cross-site page submit a guess on a
-     * visiting owner's behalf, with no CSRF check anywhere in the path.
+     * visiting admin's behalf, with no CSRF check anywhere in the path.
      */
     const res = await SELF.fetch(
-      jsonRequest(API, { json: { username: 'owner', password: 'whatever' } }),
+      jsonRequest(API, { json: { username: 'admin', password: 'whatever' } }),
       { redirect: 'manual' },
     );
 
@@ -710,7 +738,7 @@ describe('what shapes of request it accepts', () => {
   it('refuses multipart and a bodyless POST too', async () => {
     for (const contentType of ['multipart/form-data; boundary=x', 'text/plain']) {
       const res = await SELF.fetch(
-        jsonRequest(API, { body: 'username=owner&password=x', headers: { 'content-type': contentType } }),
+        jsonRequest(API, { body: 'username=admin&password=x', headers: { 'content-type': contentType } }),
         { redirect: 'manual' },
       );
       expect(res.status).toBe(415);
@@ -889,10 +917,18 @@ describe('the CPU a derivation costs', () => {
    *
    * What it does catch is the thing worth catching automatically: somebody
    * raising `DEFAULT_ITERATIONS` by an order of magnitude, or adding a second
-   * derivation to the happy path, and not noticing. The ceiling is generous on
-   * purpose — a tight one would flake on a shared runner and get deleted.
+   * derivation to the happy path, and not noticing. At the current 10,000 the
+   * derivation costs single-digit milliseconds, so a 250 ms ceiling still trips
+   * on a 10x bump while leaving enormous headroom for a slow machine.
    *
-   * Whether 100,000 iterations actually fits in 10 ms of production CPU is a
+   * MEASURED AS THE MINIMUM OF SEVERAL SAMPLES. A single sample flaked — one
+   * run in five on 2026-09-21, with nothing about the route changed. The
+   * comment here used to claim a generous ceiling was enough to prevent that;
+   * it was not, because one transient spike in one sample is all it takes.
+   * Timing noise only ever adds, so the minimum is the robust statistic and it
+   * costs about a second to collect.
+   *
+   * Whether 10,000 iterations actually fits in 10 ms of production CPU is a
    * question this file cannot answer. It has to be measured against a deployed
    * Worker.
    */
@@ -904,15 +940,27 @@ describe('the CPU a derivation costs', () => {
     // which would make this measure the JIT rather than PBKDF2.
     await warmUp(cred.username, owner.id);
 
+    const fastest = async (body: { username: string; password: string }): Promise<number> => {
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 3; i++) {
+        // A tripped lock short-circuits before hashing, which would make the
+        // ceiling pass for the wrong reason.
+        await resetCounter(owner.id);
+        const t = Date.now();
+        await post(body);
+        best = Math.min(best, Date.now() - t);
+      }
+      return best;
+    };
+
     // No username, so: no database read and no derivation. The floor.
-    const t0 = Date.now();
-    await post({ username: '', password: '' });
-    const baselineMs = Date.now() - t0;
+    const baselineMs = await fastest({ username: '', password: '' });
 
     // One full derivation at the production constant.
-    const t1 = Date.now();
-    await post({ username: cred.username, password: 'wrong, so exactly one derivation' });
-    const hashingMs = Date.now() - t1;
+    const hashingMs = await fastest({
+      username: cred.username,
+      password: 'wrong, so exactly one derivation',
+    });
 
     expect(hashingMs - baselineMs).toBeLessThan(250);
   });

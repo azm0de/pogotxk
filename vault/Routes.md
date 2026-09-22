@@ -1,6 +1,6 @@
 ---
 tags: [reference]
-updated: 2026-09-20
+updated: 2026-09-21
 ---
 
 # Routes
@@ -30,7 +30,7 @@ updated: 2026-09-20
 | `/auth/device` | RFC 8628 approval, for a browser whose jar holds no Discord session |
 | `/auth/logout` | Ends the session |
 | `/auth/error` | Human-readable failure |
-| `/admin/login` | The owner's password form. Public despite the path — see below and [[Auth and Roles#The second door]] |
+| `/admin/login` | The admin password form. Public despite the path — see below and [[Auth and Roles#The admin password door]] |
 
 ## Admin — `ambassador` or better
 
@@ -43,7 +43,9 @@ updated: 2026-09-20
 | `/admin/media` | Media library — browse R2, fix alt text and photo credits |
 
 > [!important] `/admin/login` is under this prefix and is **not** gated
-> It is the owner's password form, listed under Auth above because that is what it is. The gate
+> It is the admin password form, listed under Auth above because that is what it is — the
+> accounts behind it are standalone identities with no Discord sign-in, so a gate in front of
+> it would send the only people it is for to a door that cannot admit them. The gate
 > exempts it by exact string match — `/admin/login/`, `/admin/logins` and everything nested
 > below still redirect a signed-out visitor — and the path is not a secret, because the repo is
 > public. The password and the lockout are the controls. It is unlinked and `noindex`, and it is
@@ -57,7 +59,7 @@ updated: 2026-09-20
 | `GET /api/me.json` | public | Current session or null |
 | `GET /api/game/[feed].json` | public | `raids` \| `eggs` \| `research` \| `events` |
 | `GET /api/flares` | public | Active flares |
-| `POST /api/auth/admin-login` | public | The owner password login. Form encoding only, 415 otherwise; every answer is a 303 |
+| `POST /api/auth/admin-login` | public | The admin password login. Form encoding only, 415 otherwise; every answer is a 303 |
 | `POST /api/flares` | member | Fire one |
 | `PATCH /api/flares/[id]` | member | RSVP or close |
 | `GET /api/flares/socket` | public | WebSocket upgrade → Durable Object |

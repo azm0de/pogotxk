@@ -29,11 +29,12 @@ const PAGES = ['/admin', '/admin/map', '/admin/meetups', '/admin/posts', '/admin
  * The one page under the console that the gate does **not** apply to, and the
  * only one that may ever be.
  *
- * It is the owner's password form. It lives under `/admin` because that is
- * where a login for the admin console belongs, and it is exempted from the role
- * check by `isAdminLoginPath` — matched exactly — because a gate in front of it
- * would bounce the signed-out owner to `/auth/login`, which is the Discord door
- * they are there because they cannot use.
+ * It is the admin password form. It lives under `/admin` because that is where
+ * a login for the admin console belongs, and it is exempted from the role check
+ * by `isAdminLoginPath` — matched exactly — because a gate in front of it would
+ * bounce the signed-out admin to `/auth/login`, the Discord door. An admin
+ * account is a standalone identity with no Discord account behind it, so that
+ * is not a detour, it is a door that cannot admit them.
  *
  * Written down as an exception rather than folded into the matrix on purpose.
  * The alternative — loosening `ADMITTED` so that "some pages admit anonymous"
@@ -127,9 +128,9 @@ describe(`${LOGIN_PAGE}, the one page here that must NOT redirect a stranger`, (
    *
    * Everything above says a signed-out visitor gets bounced. This page is the
    * one that must not be, and the failure mode if it ever is would be silent:
-   * the owner would get a 302 to `/auth/login`, which looks like a working gate
-   * from every angle except the one that matters — it is the door they came
-   * here because they could not open.
+   * an admin would get a 302 to `/auth/login`, which looks like a working gate
+   * from every angle except the one that matters — it is the door their account
+   * does not exist behind.
    */
   it.each(['anonymous', 'guest', 'member', 'banned admin'] as const)(
     'renders for %s',

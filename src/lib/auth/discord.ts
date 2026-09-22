@@ -376,11 +376,17 @@ export function resolveRole(
  * are checked in is the whole of the logic:
  *
  * 1. **`users.role_locked` is 0.** A locked row keeps the role it has, whatever
- *    Discord says. That flag is set by `scripts/set-admin-password.ts` for the
- *    owner's account, and it exists because this deployment has a guild
- *    configured but no `DISCORD_ROLE_ADMIN` — so `resolveRole` answers `member`
- *    for everyone, `authoritative` is permanently 1, and without the lock the
- *    owner's `admin` would be rewritten to `member` by their own next sign-in.
+ *    Discord says. That flag is set by `scripts/set-admin-password.ts` on every
+ *    account it gives a password to, and it exists because this deployment has
+ *    a guild configured but no `DISCORD_ROLE_ADMIN` — so `resolveRole` answers
+ *    `member` for everyone, `authoritative` is permanently 1, and without the
+ *    lock an `admin` would be rewritten to `member` by their own next sign-in.
+ *    It bites on an account the setter was pointed at with `--discord-id`,
+ *    which is a real Discord account that really does come back through here.
+ *    A standalone `admin:<name>` identity is never reached at all — it has no
+ *    Discord account behind it, and a synthetic non-numeric `discord_id` can
+ *    never be matched by the `ON CONFLICT` below — so there the lock costs
+ *    nothing and guards nothing.
  *    The lock clause therefore has to sit ABOVE the authoritative clause:
  *    SQLite takes the first true branch of a `CASE`, and with the order
  *    reversed the lock would never once fire on this deployment.

@@ -6,12 +6,19 @@ import { hasRole } from '~/lib/auth/types';
 export const prerender = false;
 
 /**
- * The owner's password sign-in form.
+ * The admin password sign-in form.
  *
- * The break-glass door. Members sign in with Discord; this page exists for the
- * day that is not possible — Discord down, the guild misconfigured, the one
- * bootstrap account gone. See `migrations/0004_owner_password.sql` for why a
- * second door exists at all.
+ * An admin account is a standalone identity: a username and a password in
+ * `admin_credentials`, with no Discord account behind it. Members sign in with
+ * Discord and never see this page; admins have no Discord account to fall back
+ * on, so nothing on this page may offer them one.
+ *
+ * It depends on nothing but this Worker and its database, which is why it was
+ * built — it keeps working when Discord is down, when the guild is
+ * misconfigured, and when `DISCORD_BOOTSTRAP_ADMIN_ID` is gone, which it is on
+ * its way to being. See `migrations/0004_owner_password.sql` for the original
+ * argument; the file is named for the terminology this feature has since left
+ * behind.
  *
  * ---------------------------------------------------------------------------
  * THE PATH IS NOT A SECRET, AND IS NOT PROTECTING ANYTHING
@@ -67,7 +74,7 @@ const raw = Astro.url.searchParams.get('error');
 const error = raw === 'bad' || raw === 'locked' ? raw : null;
 ---
 
-<Base title="Owner sign-in">
+<Base title="Admin sign-in">
   <Fragment slot="head">
     {/*
       The page is publicly reachable — it has to be, or it is no use on the day
@@ -79,15 +86,22 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
     <meta name="robots" content="noindex, nofollow" />
   </Fragment>
 
-  <section class="owner container">
-    <header class="owner-head">
-      <h1>Owner sign-in</h1>
+  <section class="admin-login container">
+    <header class="admin-login-head">
+      <h1>Admin sign-in</h1>
     </header>
 
+    {/*
+      Not "the spare key", which is what this said while the credential hung off
+      the owner's own Discord row. Admin accounts are standalone now: no Discord
+      account behind them, and with no DISCORD_ROLE_* ids configured Discord
+      cannot resolve anyone to `admin` at all. So this is not a second way into
+      an account that has another — it is the only one, and saying "spare" would
+      invite someone to treat losing it as recoverable.
+    */}
     <p class="lede">
-      This is the spare key. Everyone else signs in with <a class="target" href="/auth/login"
-        >Discord</a
-      >.
+      Admin accounts sign in here, and this password is the only way into one.
+      Everyone else signs in with <a class="target" href="/auth/login">Discord</a>.
     </p>
 
     {
@@ -101,8 +115,8 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
               <p>
                 Five wrong passwords lock the account for a minute, and each further wrong attempt
                 after that locks it for longer — up to an hour, never more. Nothing else has
-                changed: the password still works, and waiting is the whole of the fix. Signing in
-                with Discord is unaffected.
+                changed: the password still works, and waiting is the whole of the fix. The lock is
+                on this one account, so another admin can still sign in.
               </p>
             </>
           ) : (
@@ -118,13 +132,13 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
       to be long and unmemorable, which only works if a password manager can
       store and fill it.
     */}
-    <form class="panel owner-form" method="post" action="/api/auth/admin-login">
+    <form class="panel admin-login-form" method="post" action="/api/auth/admin-login">
       <input type="hidden" name="next" value={next} />
 
       <div class="field">
-        <label for="owner-username">Username</label>
+        <label for="admin-username">Username</label>
         <input
-          id="owner-username"
+          id="admin-username"
           name="username"
           type="text"
           autocomplete="username"
@@ -136,9 +150,9 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
       </div>
 
       <div class="field">
-        <label for="owner-password">Password</label>
+        <label for="admin-password">Password</label>
         <input
-          id="owner-password"
+          id="admin-password"
           name="password"
           type="password"
           autocomplete="current-password"
@@ -166,21 +180,21 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
 <style>
   /* Follows /auth/device's conventions: a narrow reading measure, the reading
      face rather than the signage face, and the narrow container. */
-  .owner {
+  .admin-login {
     --read-measure: min(var(--measure), 60ch);
     max-width: var(--container-narrow);
     padding-block: var(--space-section) var(--space-16);
     font-family: var(--font-read);
   }
-  .owner > * + * {
+  .admin-login > * + * {
     margin-block-start: var(--space-5);
   }
 
-  .owner-head {
+  .admin-login-head {
     padding-bottom: var(--space-3);
     border-bottom: 2px solid var(--text);
   }
-  .owner h1 {
+  .admin-login h1 {
     margin: 0;
     font-family: var(--font-sign);
     font-size: var(--display-lg);
@@ -215,7 +229,7 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
     margin-block-start: var(--space-3);
   }
 
-  .owner-form {
+  .admin-login-form {
     display: grid;
     gap: var(--space-5);
     max-width: var(--read-measure);

@@ -1,6 +1,6 @@
 ---
 tags: [architecture, database]
-updated: 2026-09-19
+updated: 2026-09-21
 ---
 
 # Data Model
@@ -21,7 +21,7 @@ zones ──┬── pois ──┬── poi_media ── media
         └── media               (community photos pinned to the map)
 
 users ──┬── sessions
-        ├── admin_credentials  (0 or 1 — the owner's password)
+        ├── admin_credentials  (0 or 1 — an admin's password)
         ├── flares ── flare_rsvps
         ├── push_subs
         └── audit_log
@@ -57,12 +57,18 @@ dropped in migration `0002` before any UI or API ever wrote to the table. See [[
 **Sessions store a hash, never the token.** `sessions.id` is the SHA-256 of the cookie value, so
 a leaked database dump cannot be replayed as a login. See [[Auth and Roles]].
 
-**`admin_credentials` hangs off `users` rather than standing alone.** It holds at most one row —
-the owner's break-glass password — keyed `user_id INTEGER PRIMARY KEY`. It could have been its
-own identity table and deliberately is not: `users.discord_id` is `NOT NULL UNIQUE` and every
-session in this app resolves through a `users` row, so a standalone table would need its own
-session shape, its own role source and its own ban check. Keying on `user_id` means the password
-proves *which existing user you are* and nothing else runs twice.
+**`admin_credentials` hangs off `users` rather than standing alone.** One row per admin, keyed
+`user_id INTEGER PRIMARY KEY` — so the key is what makes it at most one credential *per user*,
+not one row in the table. Production holds two.
+
+It could have been its own identity table and deliberately is not, and that stays true even
+though an admin is now a standalone identity with no Discord account behind it. The identity is
+standalone; the plumbing is shared. `users.discord_id` is `NOT NULL UNIQUE` and every session in
+this app resolves through a `users` row, so a separate table would need its own session shape,
+its own role source and its own ban check — three more things to keep in step with the Discord
+path. Keying on `user_id` means the password proves *which existing user you are* and nothing
+else runs twice. What makes the identity standalone instead is the **value** in `discord_id`: a
+synthetic `admin:<name>` that no Discord sign-in can ever match. See [[Auth and Roles]].
 
 The columns worth knowing:
 

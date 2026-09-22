@@ -1,6 +1,6 @@
 ---
 tags: [planning]
-updated: 2026-09-19
+updated: 2026-09-21
 ---
 
 # Backlog
@@ -80,6 +80,12 @@ recording rather than just ticking.
       `/api/push/subscribe` reports `enabled: true`. See [[Configuration]]
 - [ ] **Test the bubble on a real phone**, ideally over Pokémon GO. See [[Android App]]
 - [ ] **Rotate the Discord client secret** — it passed through a chat transcript during setup
+- [ ] **Retire `DISCORD_BOOTSTRAP_ADMIN_ID`** — `npx wrangler secret delete
+      DISCORD_BOOTSTRAP_ADMIN_ID`. It is the last route to `admin` that runs through a third
+      party, and the password door exists to remove exactly that. Both admins already sign in
+      at `/admin/login` with `role_locked = 1`, so deleting it takes nobody's access away. The
+      code still honours the secret if it is set; nothing in the repo has to change.
+      See [[Auth and Roles#The admin password door]]
 
 ## Discord server admin — landed, work it through with Nick
 
@@ -110,8 +116,8 @@ the speed. Nothing a member can see happens until the repoint step.
 - [ ] **`DISCORD_ROLE_ADMIN` / `_AMBASSADOR`** — Server Settings → Roles → right-click →
       Copy ID, with Developer Mode on. They go in `wrangler.jsonc` under `vars`, not the
       dashboard, for the reason in [[Configuration]]. Until they are set nobody is promoted
-      automatically and roles stay hand-assigned. Safe to get wrong:
-      `DISCORD_BOOTSTRAP_ADMIN_ID` short-circuits `resolveRole` before any role is consulted.
+      automatically and roles stay hand-assigned. Safe to get wrong: admin no longer comes
+      through Discord at all, so a bad role id cannot lock the admins out of their own console.
       See [[Auth and Roles]]
 
 > [!danger] Leave `DISCORD_ROLE_MEMBER` unset unless the Discord really gates on a role
@@ -119,8 +125,10 @@ the speed. Nothing a member can see happens until the repoint step.
 > from being enough — only holders of that exact role are `member` and everyone else drops to
 > `guest`, and `POST /api/flares` requires `member`. A wrong or over-narrow id means nobody
 > can fire a flare, and it presents as a permissions bug rather than a config one.
-- [ ] **A second admin.** Right now the site has exactly one, promoted by hand. If Nick is
-      going to be an ambassador on the site as well, do it in the same sitting
+- [x] ~~**A second admin.**~~ — done 2026-09-21. There are two, `admin:nic` and `admin:justin`,
+      both standalone identities with a password and `role_locked = 1` and no Discord account
+      behind either. Nick does not need an ambassador role on the site to have one; he has an
+      admin account of his own. See [[Auth and Roles#The admin password door]]
 - [ ] **Tell Nick his GO Fest photo is on the home page**, and ask whether he has a frame
       without the refuse bin in it. It was the landing banner from 2026-08-07; on the redesign
       branch it leads "The community" section under the hero (`7af5ec5`). His photo, his
@@ -164,10 +172,13 @@ different permissions.
       the PogoTXK app and the PoGo TXK Events app. The consent screen is no longer a blank square
 
 > [!note] None of this blocks signing in
-> `DISCORD_BOOTSTRAP_ADMIN_ID` short-circuits `resolveRole` to `admin` regardless of guild
-> membership — asserted in `scripts/test-auth.ts` as "bootstrap id → admin even outside guild".
-> Provided that secret holds Justin's own Discord user id, admin access does not wait on any of
-> this. If sign-in lands as a guest instead, that id is the thing to check.
+> Admin access comes from `/admin/login` now: two standalone identities with passwords and
+> `role_locked = 1`, which nothing in Discord can demote and nothing here can delay.
+> `DISCORD_BOOTSTRAP_ADMIN_ID` still short-circuits `resolveRole` to `admin` regardless of
+> guild membership — asserted in `scripts/test-auth.ts` as "bootstrap id → admin even outside
+> guild" — but it is on its way out, because a secret that mints an admin is the single point
+> of failure the password door was built to remove.
+> See [[Auth and Roles#The admin password door]].
 
 - [x] ~~`DISCORD_GUILD_ID` + `DISCORD_BOOTSTRAP_ADMIN_ID`~~ — set 2026-08-06. Neither needed
       admin: Developer Mode plus right-click → Copy ID. The membership check is now **on**,
@@ -179,9 +190,11 @@ different permissions.
 > but it may save waiting on the meeting.
 
 > [!warning] Everyone in the guild is a plain `member` until the role ids land
-> That is the intended interim state, not a bug. `DISCORD_BOOTSTRAP_ADMIN_ID` is the only
-> thing keeping Justin an admin — see the ordering warning in [[Configuration]] before
-> changing any of this.
+> That is the intended interim state, not a bug. It no longer costs anybody their admin: that
+> lives in `admin_credentials` and `role_locked`, not in a Discord role or in
+> `DISCORD_BOOTSTRAP_ADMIN_ID`. Setting `DISCORD_ROLE_AMBASSADOR` would let Discord mint an
+> **ambassador**, who can reach `/admin`; read the ordering warning in [[Configuration]]
+> before changing any of this.
 
 ## The calendar subscribe feature is gone
 

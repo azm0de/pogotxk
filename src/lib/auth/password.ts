@@ -1,5 +1,5 @@
 /**
- * Password hashing for the owner's break-glass login.
+ * Password hashing for the admin password login.
  *
  * ---------------------------------------------------------------------------
  * THIS MODULE MUST STAY IMPORTABLE BY PLAIN `tsx`
@@ -24,7 +24,7 @@ export const ALGORITHM = 'pbkdf2-sha256';
  * PBKDF2 iterations for a newly written hash.
  *
  * ---------------------------------------------------------------------------
- * PROVISIONAL. THIS NUMBER DOES NOT FIT THE FREE PLAN. MEASURED, NOT GUESSED.
+ * MEASURED, NOT GUESSED — AND CAPPED BY THE PLAN, NOT BY PREFERENCE
  * ---------------------------------------------------------------------------
  *
  * Timed inside workerd on 2026-09-19 (Miniflare, Windows dev box, three runs at
@@ -48,15 +48,11 @@ export const ALGORITHM = 'pbkdf2-sha256';
  * The free plan's default is **10 ms of CPU per invocation**, and PBKDF2 is
  * pure CPU, so all of it counts.
  *
- * So at 100,000 a sign-in wants about five times the CPU the request is
- * allowed, and would be killed mid-derivation. That is not a slow login, it is
- * a login that can never succeed. The only count that fits at all is the
- * schema's floor of 10,000 — about 5 ms, leaving roughly 5 ms for the rest of
- * the request and no margin whatever.
- *
- * So 10,000 — the schema's floor — is not a preference. It is the only count
- * that fits the budget this account actually has, and it leaves roughly 5 ms
- * for the rest of the request.
+ * So at 100,000 a sign-in would want about five times the CPU the request is
+ * allowed and be killed mid-derivation — not a slow login, one that can never
+ * succeed. 10,000 is therefore not a preference. It is the only count that fits
+ * at all, it is also the floor the schema enforces, and it leaves roughly 5 ms
+ * for everything else the request has to do.
  *
  * BE HONEST ABOUT WHAT THAT COSTS. At 10,000 the iteration count is not what
  * makes this credential hard to crack, and pretending otherwise is how a
@@ -282,8 +278,8 @@ const DUMMY_SALT = new Uint8Array([
  * Honest about what it buys: it matches a real row's cost only while that row
  * sits at `DEFAULT_ITERATIONS`. The setter script writes at that count and the
  * login route rehashes up to it on success, so it holds in practice. The
- * residual window is the stretch after the constant is raised and before the
- * owner next signs in, and what leaks through it is one bit — "this username
+ * residual window is the stretch after the constant is raised and before that
+ * admin next signs in, and what leaks through it is one bit — "this username
  * exists" — about a username the attacker must already have guessed, on an
  * account that locks out after five tries. That is the correct size of worry
  * for this, and it is written down here so nobody re-derives it in a panic.
