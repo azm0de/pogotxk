@@ -1,11 +1,11 @@
 /**
- * Checks the pure half of the admin password login: the hashing primitives and
- * the lockout schedule.
+ * Checks the pure half of the admin password login: the hashing primitives, the
+ * lockout schedule, and the address a reset link is mailed to.
  *
  *   npx tsx scripts/test-admin-password.ts
  *
- * Both modules are deliberately free of `cloudflare:workers` imports and of the
- * `~/` alias, which is what lets this run under plain `tsx` — and what lets
+ * All three modules are deliberately free of `cloudflare:workers` imports and of
+ * the `~/` alias, which is what lets this run under plain `tsx` — and what lets
  * `scripts/set-admin-password.ts` write a hash the Worker can actually verify.
  * The route's own behaviour (status codes, cookies, the counter's SQL) needs a
  * runtime and lives in `test/auth/admin-login.test.ts`.
@@ -28,6 +28,7 @@ import {
   MAX_ATTEMPTS,
   nextFailureCount,
 } from '../src/lib/auth/lockout';
+import { normalizeEmail } from '../src/lib/notify/email';
 import { D1ShapeError, rows } from './d1-json';
 
 let failures = 0;
@@ -294,6 +295,72 @@ check('output with no JSON array at all is []', rows('wrangler said something el
 check('banner text before the array is skipped', rows(`├ Uploading\n│\n${LOCAL_ROWS}`), [
   { id: 1, username: 'azm.0' },
 ]);
+
+/* ------------------------------------------------------ the reset address */
+
+/*
+ * Asserted here, under `tsx`, for the same reason the PBKDF2 vector is:
+ * `scripts/set-admin-password.ts` writes the address in Node and the reset
+ * route looks it up inside workerd, and only the same function passing in both
+ * places makes "what was written is what will be found" a fact.
+ *
+ * There is a second reason this one belongs under `tsx` specifically. The
+ * setter interpolates the result straight into SQL text — `--file` has no
+ * parameter binding — so the character set is not a formatting preference, it
+ * is the thing standing between a surprising address and a statement that
+ * means something else. The injection shapes below are the point of the block.
+ */
+console.log('\n== the reset address ==');
+
+check('an ordinary address survives', normalizeEmail('justin@example.com'), 'justin@example.com');
+check('case is folded', normalizeEmail('Justin@Example.COM'), 'justin@example.com');
+check('surrounding space is trimmed', normalizeEmail('  a@b.co  '), 'a@b.co');
+check('plus addressing is fine', normalizeEmail('a+admin@example.com'), 'a+admin@example.com');
+check('a subdomain is fine', normalizeEmail('a@mail.example.co.uk'), 'a@mail.example.co.uk');
+
+console.log('\n  Nothing that is not an address:');
+for (const [label, value] of [
+  ['empty', ''],
+  ['null', null],
+  ['no at sign', 'nobody'],
+  ['nothing before the at', '@example.com'],
+  ['nothing after the at', 'nobody@'],
+  ['no dot in the domain', 'a@example'],
+  ['a space inside', 'two words@example.com'],
+  ['angle brackets', '<a@example.com>'],
+  ['a display name', 'Justin <a@example.com>'],
+  ['two addresses', 'a@example.com,b@example.com'],
+  ['a trailing dot', 'a@example.com.'],
+  ['a leading dot in the local part', '.a@example.com'],
+] as const) {
+  check(`  ${label}`, normalizeEmail(value), null);
+}
+
+console.log(`
+  And the shapes that would matter if one reached the setter's SQL, which
+  interpolates rather than binds. The refusal is what makes that safe rather
+  than lucky — and the first two are the ones that actually caught something:
+  an apostrophe and a backtick are LEGAL in a local part, so the character
+  class permitted them until this block was written:`);
+for (const [label, value] of [
+  ['a single quote, SQLite’s string delimiter', "a'@example.com"],
+  ['a backtick, SQLite’s identifier quote', 'a`@example.com'],
+  ['a real name that pays the price for it', "o'brien@example.com"],
+  ['a quoted local part, which RFC 5322 allows and this does not', '"a b"@example.com'],
+  ['a statement terminator', 'a@example.com; DROP TABLE users;--'],
+  ['a comment', 'a@example.com--'],
+  ['a backslash', 'a\\@example.com'],
+  ['a newline', 'a@example.com\nb@example.com'],
+  ['a carriage return, for header injection', 'a@example.com\r\nBcc: c@example.com'],
+  ['a null byte', 'a@example.com '],
+] as const) {
+  check(`  ${label}`, normalizeEmail(value), null);
+}
+
+// 254 is SMTP's path limit, and the boundary is where an off-by-one would live.
+const longLocal = 'a'.repeat(254 - '@example.com'.length);
+check('an address at the 254 limit survives', normalizeEmail(`${longLocal}@example.com`)?.length, 254);
+check('one character over is refused', normalizeEmail(`${longLocal}a@example.com`), null);
 
 console.log(failures ? `\nFAILED (${failures})\n` : '\nAll checks passed.\n');
 process.exit(failures ? 1 : 0);
