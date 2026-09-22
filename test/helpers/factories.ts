@@ -391,6 +391,13 @@ function writeInit(url: string, init: JsonInit): RequestInit {
  * and `res.json()` throws on it rather than reporting a status. A browser
  * always sends the header; `SELF.fetch` never does.
  *
+ * What this sets is the site's own origin. That is right for a test about a
+ * route, and an assumption about the page for a test about a form: a browser
+ * sends `Origin: null` from a page whose referrer policy is `no-referrer`, and
+ * both admin reset forms shipped broken behind exactly that assumption. For
+ * "can a person submit this page's form", use `submitForm` in
+ * `./browser-form`, which derives the header from the page.
+ *
  * `url` is absolute, as `SELF.fetch` requires anyway.
  */
 export function jsonRequest(url: string, init: JsonInit = {}): Request {

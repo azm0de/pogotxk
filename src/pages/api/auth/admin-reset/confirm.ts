@@ -61,6 +61,11 @@ function seeOther(location: string): Response {
       // The referring URL contains the token. Nothing this redirect leads to
       // needs it, and a browser that passes it onward has handed a live reset
       // link to whatever the next page loads.
+      //
+      // Safe on a redirect, unlike on the pages: it governs only the Referer
+      // on the GET that follows, and the page that GET renders takes its
+      // policy from its own response — so no form inherits this one. The
+      // header of `/admin/reset/[token].astro` has the rest.
       'referrer-policy': 'no-referrer',
     },
   });

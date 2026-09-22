@@ -1,6 +1,6 @@
 ---
 tags: [runbook]
-updated: 2026-09-21
+updated: 2026-09-22
 ---
 
 # Local Development
@@ -193,6 +193,12 @@ lands on an empty table and says nothing.
 > plain text, `res.json()` throws on it rather than reporting a status, and the whole thing
 > reads like an auth failure. `jsonRequest` and `jsonAsUser` in `test/helpers/factories.ts` set
 > it for you; use them rather than building a `Request` by hand.
+>
+> What they set is the site's own origin, which is not always what a browser sends: a form on a
+> page whose referrer policy is `no-referrer` posts `Origin: null` and gets that 403 in
+> production while the test passes ([[Platform Limits and Traps]]). A test about a page's form,
+> rather than a route's logic, should submit it with `submitForm` in
+> `test/helpers/browser-form.ts`, which reads the page and derives the header.
 
 > [!warning] An unconsumed Durable Object response body wedges the rest of the file
 > A body left unread on a stub `fetch` pins the object, and `evictAllDurableObjects` in

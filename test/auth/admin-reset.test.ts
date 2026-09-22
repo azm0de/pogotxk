@@ -38,6 +38,7 @@ import { env, SELF } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RESET_COOLDOWN_MS, RESET_TTL_MS } from '~/lib/auth/password-reset';
 import { SESSION_COOKIE, sha256 } from '~/lib/auth/session';
+import { submitForm } from '../helpers/browser-form';
 import { authCookie, iso, jsonRequest, readCredential, seedAdminCredential, seedSession, seedUser } from '../helpers/factories';
 
 const ORIGIN = 'https://pogotxk.test';
@@ -51,7 +52,16 @@ const NEW_PASSWORD = 'quartz-ripple-saddle-timber';
 
 /* ------------------------------------------------------------- the harness */
 
-/** A form-encoded POST carrying the `Origin` a browser would send. */
+/**
+ * A form-encoded POST carrying this site's own `Origin`, built directly.
+ *
+ * Right for a test about what a route does with a submission, and an
+ * assumption about the page for anything else: a browser sends that header
+ * only when the page's referrer policy lets it, and under `no-referrer` it
+ * sends `Origin: null`. That assumption is how both forms here shipped broken
+ * with this file green. A test about a page's form uses `submitForm`, which
+ * reads the page and derives the header the way a browser would.
+ */
 function formPost(url: string, fields: Record<string, string>): Request {
   return jsonRequest(url, {
     body: new URLSearchParams(fields).toString(),
@@ -244,21 +254,24 @@ describe('a reset, from asking to signing in with the new password', () => {
 
       const token = mail.token();
 
-      // The link is reachable signed out, and it is the form.
-      const page = await SELF.fetch(`${ORIGIN}/admin/reset/${token}`, { redirect: 'manual' });
-      expect(page.status).toBe(200);
-      const html = await page.text();
-      expect(html).toContain('action="/api/auth/admin-reset/confirm"');
-      expect(html).toContain(`value="${token}"`);
+      // The link is reachable signed out, it is the form, and a browser can
+      // submit that form — the token riding in its hidden field, and `Origin`
+      // whatever this page's referrer policy makes it.
+      const done = await submitForm(`${ORIGIN}/admin/reset/${token}`, {
+        password: NEW_PASSWORD,
+        confirm: NEW_PASSWORD,
+      });
+      expect(done.page.status).toBe(200);
+      expect(done.html).toContain('action="/api/auth/admin-reset/confirm"');
+      expect(done.html).toContain(`value="${token}"`);
       // Named, so somebody with two admin accounts sets the right one.
-      expect(html).toContain(cred.username);
+      expect(done.html).toContain(cred.username);
 
-      const done = await confirm({ token, password: NEW_PASSWORD, confirm: NEW_PASSWORD });
-      expect(done.status).toBe(303);
-      expect(done.headers.get('location')).toBe('/admin/login?reset=1');
+      expect(done.response.status, done.trace).toBe(303);
+      expect(done.response.headers.get('location')).toBe('/admin/login?reset=1');
       // A reset link is never itself a way in: it changes what the door
       // accepts, it does not open it.
-      expect(done.headers.getSetCookie()).toHaveLength(0);
+      expect(done.response.headers.getSetCookie()).toHaveLength(0);
 
       return undefined;
     });
@@ -980,6 +993,60 @@ describe('what shapes of request the routes accept', () => {
   });
 });
 
+/* ---------------------------------------- as a browser actually submits them */
+
+describe('both forms, submitted the way a browser submits them', () => {
+  /*
+   * THE BUG THIS FEATURE SHIPPED WITH, AND WHY NOTHING ABOVE CAUGHT IT.
+   *
+   * Both pages sent `Referrer-Policy: no-referrer`. A form inherits its page's
+   * policy, and a browser sends `Origin: null` with a form POST made under
+   * `no-referrer` — so Astro's origin check answered every real submission
+   * with the plain-text 403 asserted in the block above, and no admin could
+   * ask for a link or redeem one. This file passed throughout, because
+   * `formPost` sets `Origin` by hand: the one value the check wanted, and not
+   * the one the browser was sending.
+   *
+   * `submitForm` reads the page and derives the header the way a browser does.
+   * Put either page back on a policy that nulls it and these fail with the
+   * 403, and the message says which policy did it.
+   */
+  it('the request form at /admin/reset reaches its route', async () => {
+    const { cred } = await seedResettableAdmin();
+
+    await withMail(async (mail) => {
+      const sent = await submitForm(`${ORIGIN}/admin/reset`, { email: cred.email! });
+
+      expect(sent.response.status, sent.trace).toBe(303);
+      expect(sent.response.headers.get('location')).toBe('/admin/reset?sent=1');
+      // The route ran to the end, rather than the right Location turning up
+      // for some other reason: this is the one path through it that mails.
+      expect(mail.mails).toHaveLength(1);
+      return undefined;
+    });
+  });
+
+  it('the confirm form at /admin/reset/<token> reaches its route', async () => {
+    const { cred } = await seedResettableAdmin();
+    const token = await withMail(async (mail) => {
+      await askFor({ email: cred.email! });
+      return mail.token();
+    });
+
+    // No token among the typed fields. It rides in the page's hidden input, as
+    // it does for the person, and `submitForm` refuses to let a test type it.
+    const sent = await submitForm(`${ORIGIN}/admin/reset/${token}`, {
+      password: NEW_PASSWORD,
+      confirm: NEW_PASSWORD,
+    });
+
+    expect(sent.response.status, sent.trace).toBe(303);
+    expect(sent.response.headers.get('location')).toBe('/admin/login?reset=1');
+    // Spent, so the route really did redeem it.
+    expect((await resetRows())[0]!.used_at).not.toBeNull();
+  });
+});
+
 /* ---------------------------------------------------------------- the pages */
 
 describe('GET /admin/reset', () => {
@@ -1011,6 +1078,22 @@ describe('GET /admin/reset', () => {
     expect(html.slice(html.indexOf('<main'))).not.toContain('<script');
   });
 
+  it('sends Referrer-Policy: strict-origin, not no-referrer', async () => {
+    /*
+     * `no-referrer` is what this page shipped with, and it made the browser
+     * post the form with `Origin: null`, which Astro's CSRF check turned into
+     * a 403 on every request for a link. `strict-origin` keeps the path out of
+     * every `Referer` just the same and leaves a same-origin POST's `Origin`
+     * alone. The submission itself is proven in the block above; this pins the
+     * header, so a change to it fails here by name.
+     */
+    const res = await SELF.fetch(`${ORIGIN}/admin/reset`, { redirect: 'manual' });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('referrer-policy')).toBe('strict-origin');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+
   it('says the one thing it is allowed to say, after a request', async () => {
     const html = await (await SELF.fetch(`${ORIGIN}/admin/reset?sent=1`)).text();
     expect(html).toContain('role="status"');
@@ -1038,12 +1121,16 @@ describe('GET /admin/reset', () => {
 });
 
 describe('GET /admin/reset/<token>', () => {
-  it('sends Referrer-Policy: no-referrer, because the token is in the URL', async () => {
+  it('sends Referrer-Policy: strict-origin, because the token is in the URL', async () => {
     /*
-     * The one header on this page that is load-bearing. A `Referer` goes out
-     * with any outbound request the page makes and with any link the person
-     * clicks, so without this a single click would hand a live reset link to
-     * whoever is on the other end.
+     * The one header on this page that is load-bearing, and it is load-bearing
+     * in both directions. A `Referer` goes out with any outbound request the
+     * page makes and with any link the person clicks, so without a policy a
+     * single click would hand a live reset link to whoever is on the other end;
+     * `strict-origin` never sends a path. And it is not `no-referrer`, which
+     * would keep the token just as safe while making the browser post this
+     * page's form with `Origin: null` — how this page first shipped, and what
+     * "both forms, submitted the way a browser submits them" now catches.
      */
     const { cred } = await seedResettableAdmin();
     const token = await withMail(async (mail) => {
@@ -1054,12 +1141,13 @@ describe('GET /admin/reset/<token>', () => {
     const res = await SELF.fetch(`${ORIGIN}/admin/reset/${token}`, { redirect: 'manual' });
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('referrer-policy')).toBe('strict-origin');
     expect(res.headers.get('cache-control')).toBe('no-store');
 
     const html = await res.text();
     expect(html).toContain('noindex');
-    // Nothing to leak to even if the header were ignored.
+    // The page's own content has nothing to leak to even if the header were
+    // ignored.
     expect(html.slice(html.indexOf('<main'))).not.toContain('<script');
   });
 
@@ -1072,10 +1160,16 @@ describe('GET /admin/reset/<token>', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('referrer-policy')).toBe('strict-origin');
   });
 
-  it('and so does every redirect in the flow', async () => {
+  it('while every redirect in the flow keeps no-referrer, which no page inherits', async () => {
+    /*
+     * Not the same mistake as the pages made. A redirect's policy governs only
+     * the `Referer` on the GET that follows it; the page that GET renders takes
+     * its policy from its own response — `strict-origin`, asserted above — so
+     * the form on it never posts under this one.
+     */
     const asked = await askFor({ email: 'someone@example.test' });
     expect(asked.headers.get('referrer-policy')).toBe('no-referrer');
 

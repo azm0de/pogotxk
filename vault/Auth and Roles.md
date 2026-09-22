@@ -286,11 +286,23 @@ match** beside `isAdminLoginPath`, not a widening of it.
   rather than told the link is broken. That is one confusing minute occasionally, against an
   exemption that cannot be talked into covering a page nobody has written yet.
 
-`/admin/reset/<token>` sends **`Referrer-Policy: no-referrer`**, and so does every redirect in
-the flow. The token is in the URL — unavoidable, it is how a mailed link carries a credential
-— so without it a single click on an outbound link hands a live reset link to whoever is on
-the other end. The page carries no external links, no images and no scripts, so there is
-nothing to leak to even if the header were ignored. `Cache-Control: no-store` rides along.
+Both reset pages send **`Referrer-Policy: strict-origin`**. The token is in the URL of
+`/admin/reset/<token>` — unavoidable, it is how a mailed link carries a credential — so without a
+policy a single click on an outbound link hands a live reset link to whoever is on the other
+end. `strict-origin` never sends a path, so the most a `Referer` from either page can carry is
+the bare origin.
+
+It is **not `no-referrer`**, which is what the flow shipped with and what OWASP's Forgot Password
+Cheat Sheet recommends. A form inherits its page's policy, and under `no-referrer` the browser
+posts `Origin: null`, which Astro's CSRF check refuses with a 403 — so neither form could be
+submitted from a real browser ([[Platform Limits and Traps]]). The token is just as safe under
+`strict-origin`; what `no-referrer` withholds beyond it is the bare origin, which is public. The
+303s in the flow do keep `no-referrer`: a redirect's policy governs only the `Referer` on the GET
+that follows it, and the page that GET renders takes its policy from its own response.
+
+The redemption page's own content carries no external links, no images and no scripts. The
+layout around it links out to Discord and the other socials, and each of those links carries
+`rel="noreferrer"`. `Cache-Control: no-store` rides along.
 
 ### It is off unless configured, and that is the default
 
@@ -501,8 +513,10 @@ empty jar.
   makes each exemption one page wide rather than a section.
 - Reset tokens are random 256-bit values; **only their SHA-256 is stored**, the same scheme
   as sessions. They expire in 30 minutes, work once, and a newer one kills the older.
-- `/admin/reset/<token>` and every redirect in that flow send `Referrer-Policy: no-referrer`,
-  because the token is in the URL and a `Referer` would carry it off-site on one click.
+- Both reset pages send `Referrer-Policy: strict-origin`, because the token is in the URL and a
+  `Referer` would carry it off-site on one click. **Not `no-referrer`**: a form inherits its
+  page's policy, `no-referrer` makes it post `Origin: null`, and Astro's CSRF check answers that
+  with a 403. The redirects in the flow keep `no-referrer`, which no page inherits.
 - Account deletion drops the password credential, clears `role_locked`, **and revokes
   outstanding reset links**. All three have to be explicit: `deleteAccount` anonymises by
   `UPDATE` and never `DELETE`s the `users` row, so `ON DELETE CASCADE` never fires for any of
