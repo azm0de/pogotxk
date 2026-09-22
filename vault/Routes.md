@@ -1,6 +1,6 @@
 ---
 tags: [reference]
-updated: 2026-09-21
+updated: 2026-09-22
 ---
 
 # Routes
@@ -31,6 +31,8 @@ updated: 2026-09-21
 | `/auth/logout` | Ends the session |
 | `/auth/error` | Human-readable failure |
 | `/admin/login` | The admin password form. Public despite the path — see below and [[Auth and Roles#The admin password door]] |
+| `/admin/reset` | Asks for a password-reset link. Public despite the path, same as above |
+| `/admin/reset/<token>` | Sets the new password. `Referrer-Policy: no-referrer` — the token is in the URL |
 
 ## Admin — `ambassador` or better
 
@@ -42,13 +44,23 @@ updated: 2026-09-21
 | `/admin/posts` | Blog editor |
 | `/admin/media` | Media library — browse R2, fix alt text and photo credits |
 
-> [!important] `/admin/login` is under this prefix and is **not** gated
-> It is the admin password form, listed under Auth above because that is what it is — the
-> accounts behind it are standalone identities with no Discord sign-in, so a gate in front of
-> it would send the only people it is for to a door that cannot admit them. The gate
-> exempts it by exact string match — `/admin/login/`, `/admin/logins` and everything nested
-> below still redirect a signed-out visitor — and the path is not a secret, because the repo is
-> public. The password and the lockout are the controls. It is unlinked and `noindex`, and it is
+> [!important] Three paths under this prefix are **not** gated
+> `/admin/login`, `/admin/reset` and `/admin/reset/<token>`. All three are listed under Auth
+> above, because that is what they are — the accounts behind them are standalone identities
+> with no Discord sign-in, so a gate in front of any of them would send the only people they
+> are for to a door that cannot admit them, and the reset pair exists precisely for somebody
+> who cannot get through the first one.
+>
+> The gate exempts the first two by **exact string match** and the third by the **shape of a
+> token** — one segment of 64 lowercase hex characters, which is what `randomToken()`
+> produces. `/admin/login/`, `/admin/logins`, `/admin/reset/`, `/admin/resets`,
+> `/admin/reset-notes`, an uppercase token and anything nested below a token all still
+> redirect a signed-out visitor.
+>
+> None of the paths is a secret, because the repo is public. The password and the lockout are
+> the controls on the first; the token's entropy, its half-hour expiry and its single use are
+> the controls on the others. All three are unlinked (apart from `/admin/login` linking to
+> `/admin/reset`, which is the only way anyone would find it), carry `noindex`, and are
 > deliberately absent from `Admin.astro`'s nav, which is for signed-in admins.
 
 ## API
@@ -60,6 +72,8 @@ updated: 2026-09-21
 | `GET /api/game/[feed].json` | public | `raids` \| `eggs` \| `research` \| `events` |
 | `GET /api/flares` | public | Active flares |
 | `POST /api/auth/admin-login` | public | The admin password login. Form encoding only, 415 otherwise; every answer is a 303 |
+| `POST /api/auth/admin-reset` | public | Asks for a reset link. Form encoding only, 415 otherwise. **Identical answer whether or not the address is registered** |
+| `POST /api/auth/admin-reset/confirm` | public | Redeems a link and sets the password. Form encoding only; ends at the sign-in form, never at a session |
 | `POST /api/flares` | member | Fire one |
 | `PATCH /api/flares/[id]` | member | RSVP or close |
 | `GET /api/flares/socket` | public | WebSocket upgrade → Durable Object |
