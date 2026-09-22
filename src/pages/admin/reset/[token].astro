@@ -1,0 +1,324 @@
+---
+import { env } from 'cloudflare:workers';
+import Base from '~/layouts/Base.astro';
+import { isResetToken } from '~/lib/auth/admin-path';
+import { MIN_PASSWORD_LENGTH, lookupReset } from '~/lib/auth/password-reset';
+
+export const prerender = false;
+
+/**
+ * The page a reset link opens: choose a new admin password.
+ *
+ * ---------------------------------------------------------------------------
+ * `Referrer-Policy: no-referrer`, AND IT IS NOT A FORMALITY
+ * ---------------------------------------------------------------------------
+ *
+ * **The token is in this page's URL.** That is unavoidable — it is how a link
+ * in a mail carries a credential — and it means every ordinary browser
+ * behaviour that passes the current URL onward is a way for a live reset link
+ * to leave this page. A `Referer` header goes out with any outbound request
+ * the page makes and with any link the person clicks, so without this header a
+ * single click on an external link would hand the token to whoever is on the
+ * other end. It is set on the response here and on every 303 the flow emits,
+ * so there is no point in the journey where it is missing.
+ *
+ * The page carries **no external links, no images and no scripts** for the
+ * same reason: a `no-referrer` policy is a browser honouring an instruction,
+ * and a page with nothing to leak to does not depend on it being honoured.
+ *
+ * `Cache-Control: no-store` rides along. A shared-computer browser cache
+ * holding a reset form is a smaller problem than the token in history, but it
+ * is a free one to not have.
+ *
+ * ---------------------------------------------------------------------------
+ * REACHABLE, BUT ONLY IN ONE SHAPE
+ * ---------------------------------------------------------------------------
+ *
+ * Under `/admin`, so the role gate covers it by default and would send a
+ * signed-out admin to the Discord door their account does not exist behind.
+ * `isAdminResetPath` exempts it — not as an equality check, because the path
+ * is different every time, but pinned to the shape of a token this code mints:
+ * one segment, 64 lowercase hex characters, nothing else. The argument is at
+ * length in `~/lib/auth/admin-path`.
+ *
+ * Being reachable is all the exemption buys. Whether the token is real,
+ * unexpired and unspent is decided here, against D1, and three of the four
+ * answers are a message rather than a form.
+ *
+ * ---------------------------------------------------------------------------
+ * NO JAVASCRIPT, SO THE PASSWORD NEVER TOUCHES APP CODE
+ * ---------------------------------------------------------------------------
+ *
+ * The third of the reasons `/admin/login` gives, and the strongest one here:
+ * with no script, the value goes from the input straight into the request body.
+ * Nothing can read it, buffer it, put it in a state object or carry it into an
+ * error report. A "show password" toggle or a strength meter would each be a
+ * small feature bought with that guarantee, and they are not worth it.
+ */
+
+const token = Astro.params.token ?? '';
+
+/*
+ * The shape check runs before the database read. `lookupReset` checks it too —
+ * it has to, since it is also called from the API route — but doing it here
+ * keeps a garbage path from becoming a `sha256` and a query, and it means the
+ * hidden field below can only ever hold something that looks like a token.
+ */
+const state = isResetToken(token)
+  ? await lookupReset(env.DB, token)
+  : ({ status: 'unknown' } as const);
+
+/*
+ * The login name, read only once the token has checked out, purely so the form
+ * can say which account it is about. Somebody holding a valid link has already
+ * proved they can read the mailbox on file for that account, so naming it to
+ * them discloses nothing they did not effectively already have — and with two
+ * admin accounts in production, not naming it is a real chance of setting a
+ * password on the wrong one.
+ *
+ * It also answers a case the token table cannot: a credential row that has gone
+ * away since the link was issued. `deleteAccount` is the only thing that
+ * removes one and it now clears outstanding links as it goes, so this should
+ * never fire — but a form that cannot possibly work is worse than a sentence
+ * saying so.
+ */
+let username: string | null = null;
+if (state.status === 'valid') {
+  const row = await env.DB.prepare('SELECT username FROM admin_credentials WHERE user_id = ?1')
+    .bind(state.userId)
+    .first<{ username: string }>()
+    .catch(() => null);
+  username = row?.username ?? null;
+}
+
+const usable = state.status === 'valid' && username !== null;
+
+// Only what the confirm route emits.
+const raw = Astro.url.searchParams.get('error');
+const error = raw === 'short' || raw === 'mismatch' ? raw : null;
+
+Astro.response.headers.set('cache-control', 'no-store');
+Astro.response.headers.set('referrer-policy', 'no-referrer');
+---
+
+<Base title="Choose a new admin password">
+  <Fragment slot="head">
+    <meta name="robots" content="noindex, nofollow" />
+  </Fragment>
+
+  <section class="admin-reset container">
+    <header class="admin-reset-head">
+      <h1>Choose a new password</h1>
+    </header>
+
+    {
+      usable ? (
+        <>
+          <p class="lede">
+            Setting a password for <strong>{username}</strong>. This link works once, and using it
+            signs that account out everywhere it is currently signed in.
+          </p>
+
+          {error && (
+            <div class="notice" role="alert">
+              {error === 'short' ? (
+                <p>
+                  That password is too short. It needs at least {MIN_PASSWORD_LENGTH} characters —
+                  a handful of random words is the intended shape, not a short clever one.
+                </p>
+              ) : (
+                <p>The two entries did not match. Nothing was changed; type it again.</p>
+              )}
+            </div>
+          )}
+
+          <form class="panel admin-reset-form" method="post" action="/api/auth/admin-reset/confirm">
+            {/*
+              The token rides in a hidden field rather than being read back out
+              of the URL by the route. It is in both places regardless — this is
+              simply the one the POST can see.
+            */}
+            <input type="hidden" name="token" value={token} />
+
+            <div class="field">
+              <label for="admin-new-password">New password</label>
+              <input
+                id="admin-new-password"
+                name="password"
+                type="password"
+                /* `new-password`, not `current-password`: it is what tells a
+                   password manager to offer to generate and then save one,
+                   which is exactly the behaviour this credential wants. */
+                autocomplete="new-password"
+                minlength={MIN_PASSWORD_LENGTH}
+                required
+              />
+              <p class="hint">
+                At least {MIN_PASSWORD_LENGTH} characters. Let a password manager generate it —
+                this account's sign-in is protected by the password's own randomness rather than
+                by anything clever behind it.
+              </p>
+            </div>
+
+            <div class="field">
+              <label for="admin-new-password-again">Type it again</label>
+              <input
+                id="admin-new-password-again"
+                name="confirm"
+                type="password"
+                autocomplete="new-password"
+                minlength={MIN_PASSWORD_LENGTH}
+                required
+              />
+            </div>
+
+            <button class="btn btn--primary" type="submit">Set the password</button>
+          </form>
+        </>
+      ) : (
+        <>
+          {/*
+            Three refusals, told apart on purpose. None of them is a security
+            difference — the link is dead in every case — and the person reading
+            this is almost always the admin who took too long or clicked twice,
+            for whom "not valid" would look like the site being broken.
+          */}
+          <div class="notice" role="alert">
+            {state.status === 'expired' && (
+              <>
+                <p>
+                  <strong>That link has expired.</strong>
+                </p>
+                <p>
+                  Reset links last 30 minutes. Nothing is wrong with the account and the password
+                  has not changed — ask for a fresh link and use it sooner.
+                </p>
+              </>
+            )}
+            {state.status === 'used' && (
+              <>
+                <p>
+                  <strong>That link has already been used.</strong>
+                </p>
+                <p>
+                  Each link works once. If you set a password a moment ago, it is already in
+                  effect — sign in with it. If you did not, ask for a new link.
+                </p>
+              </>
+            )}
+            {state.status === 'unknown' && (
+              <>
+                <p>
+                  <strong>That link is not valid.</strong>
+                </p>
+                <p>
+                  It may have been superseded by a newer one, or truncated on its way through a
+                  mail client. Asking for another is the fix either way.
+                </p>
+              </>
+            )}
+            {state.status === 'valid' && (
+              <>
+                <p>
+                  <strong>That account no longer exists.</strong>
+                </p>
+                <p>The link was good, but there is no admin credential left to set a password on.</p>
+              </>
+            )}
+          </div>
+
+          <p class="lede">
+            <a class="target" href="/admin/reset">Ask for a new link</a> ·
+            <a class="target" href="/admin/login">Back to sign-in</a>
+          </p>
+        </>
+      )
+    }
+  </section>
+</Base>
+
+<style>
+  /* Identical to `/admin/reset` and `/admin/login`. Astro scopes styles per
+     component, so the three pages in this flow each carry their own copy;
+     divergence would be visible immediately, which is the cheap safeguard. */
+  .admin-reset {
+    --read-measure: min(var(--measure), 60ch);
+    max-width: var(--container-narrow);
+    padding-block: var(--space-section) var(--space-16);
+    font-family: var(--font-read);
+  }
+  .admin-reset > * + * {
+    margin-block-start: var(--space-5);
+  }
+
+  .admin-reset-head {
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--text);
+  }
+  .admin-reset h1 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--display-lg);
+    font-weight: 800;
+    line-height: var(--lh-display);
+    letter-spacing: var(--tracking-display);
+  }
+
+  .lede {
+    margin: 0;
+    max-width: var(--read-measure);
+    font-size: var(--text-lg);
+    line-height: var(--lh-body);
+  }
+
+  .notice {
+    max-width: var(--read-measure);
+    padding: var(--space-4);
+    border-left: 4px solid var(--live-text);
+    background: var(--bg-sunken);
+    border-radius: var(--radius-sm);
+  }
+  .notice p {
+    margin: 0;
+    font-size: var(--text-md);
+    line-height: var(--lh-body);
+  }
+  .notice p + p {
+    margin-block-start: var(--space-3);
+  }
+
+  .admin-reset-form {
+    display: grid;
+    gap: var(--space-5);
+    max-width: var(--read-measure);
+    justify-items: start;
+  }
+
+  .field {
+    display: grid;
+    gap: var(--space-2);
+    width: 100%;
+  }
+  .field label {
+    font-size: var(--text-sm);
+    font-weight: 700;
+  }
+  .field input {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: var(--space-2) var(--space-4);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--bg-panel);
+    color: var(--text);
+    font-family: var(--font-read);
+    font-size: var(--text-base);
+  }
+  .hint {
+    margin: 0;
+    font-size: var(--text-sm);
+    line-height: var(--lh-body);
+    color: var(--text-muted);
+  }
+</style>

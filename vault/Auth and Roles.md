@@ -1,6 +1,6 @@
 ---
 tags: [architecture, security]
-updated: 2026-09-21
+updated: 2026-09-22
 ---
 
 # Auth and Roles
@@ -10,7 +10,9 @@ membership *is* the membership check — see [[Why Discord is the identity provi
 
 There is one other door, and it is not for members: the admin password at `/admin/login`.
 The accounts behind it are standalone identities with no Discord account of their own — see
-[[#The admin password door]].
+[[#The admin password door]]. Since 2026-09-22 that door has a recovery path, `/admin/reset`,
+which mails a link — and which makes admin access depend on a mailbox as well as on a
+password. Read [[#Password reset by email]] before assuming the old threat model.
 
 ## Flow
 
@@ -174,11 +176,144 @@ will type their password into the username field and `audit_log` is readable by 
 ambassador. A failure against an unknown username is not logged at all: it has no counter to
 bound it, so logging it would let anyone append to `audit_log` at will.
 
+## Password reset by email
+
+Added 2026-09-22. `/admin/reset` takes an address, mails a link, and the link sets a new
+password. Migration `0005_admin_password_reset.sql`.
+
+> [!danger] This changed the admin door's threat model, and the change is not small
+> Until now the door depended on exactly two things: D1, and the password. It now also
+> depends on **an email provider and on the admin's mailbox being secure**, because anyone
+> who can read that mailbox can take the account. The door is as strong as the *weaker* of
+> the password and the mailbox, not as strong as the password.
+>
+> That is the deliberate trade. An account with no recovery path is one forgotten passphrase
+> away from being gone — the setter script used to say so in three places and the lockout is
+> capped at an hour for the same reason — and a mailbox is a thing an admin already protects.
+>
+> **It is opt-in per admin.** `admin_credentials.email` is nullable and both production rows
+> have no address, so nothing is reset-able until somebody sets one. An admin who would
+> rather keep the narrower model simply never does, or clears it again with
+> `--clear-email`. Choose a mailbox with its own strong password and two-factor, and not one
+> shared with anybody.
+
+**The flow.** `/admin/reset` (form) → `POST /api/auth/admin-reset` (issue + mail) →
+`/admin/reset/<token>` (form) → `POST /api/auth/admin-reset/confirm` (apply) →
+`/admin/login?reset=1`. It ends at the sign-in form and **not at a session**: the link proves
+control of a mailbox, and this door is the one that is supposed to require a password, so a
+reset link only ever changes what the door accepts rather than opening it.
+
+- **The token is the session scheme, not a second one.** 32 random bytes from `randomToken()`
+  in the link, their SHA-256 in `admin_password_resets.id` — exactly as a session cookie
+  relates to `sessions.id`. A leaked dump yields no usable links.
+- **Thirty minutes, once.** `used_at` is stamped by a single atomic `UPDATE ... WHERE used_at
+  IS NULL ... RETURNING`, so two simultaneous confirms cannot both win. Expired and
+  already-used are told apart in the message, which costs nothing — the token is spent either
+  way — and saves the admin who clicked twice from thinking the site is broken.
+- **Issuing supersedes.** A new link deletes that account's older ones, so there is never
+  more than one live link per admin. Two would have no legitimate use and one obvious abuse.
+- **A completed reset destroys every session for that user** and every other outstanding
+  link, in one batch. A reset is what somebody does after a compromise; an attacker's session
+  outliving the password change would defeat the whole exercise. It signs the admin's own
+  other devices out too, which is correct — "something is wrong" and "keep my phone signed
+  in" cannot both be honoured.
+- **It clears the lockout**, so an admin who was locked out can use the new password
+  immediately. Proving control of the mailbox is stronger evidence than the counter it
+  clears, and the lock exists to stop guessing, which is not what happened.
+- **The new password goes through the same `hashPassword` and the same 16-character floor**
+  the setter enforces. Everything decidable from the submitted bytes — the token's shape, the
+  length, the two entries matching — is checked **before** the link is spent, so a typo does
+  not cost a round trip through a mailbox. The token is spent **before** the hash is derived,
+  so garbage cannot make the Worker burn PBKDF2 on a 10 ms budget.
+
+### What the request endpoint refuses to say
+
+Registered, not registered, no address on file, banned, cooling down, mail refused, migration
+not yet applied: **303 to `/admin/reset?sent=1`**, byte for byte. The page says *"if that
+address is on file, a link is on its way"* and never anything else — not "check your inbox",
+which implies one was sent, and never "no such account".
+
+The one thing that answers differently is a string that is not an address at all
+(`?error=bad`). That is decided from the submitted characters with no database involved, so
+anyone can compute it themselves, and the alternative is a recovery flow that fails silently
+for somebody who fat-fingered their own address.
+
+Timing is narrowed rather than closed: the outbound mail is handed to `waitUntil`, so the one
+genuinely slow thing never appears in the response. (Deferring is right here and wrong for the
+login route's rehash — waiting on Resend is I/O, and the budget being protected is CPU.) What
+remains is that issuing performs three D1 writes the other paths do not, which is the same
+order of difference the login route measures and accepts.
+
+Audit rows carry **no address and no token**: `reset-request` (actor null — nobody had proved
+anything yet) and `reset-complete` (actor is the account, plus the session and token counts
+somebody will want during an incident). Nothing is logged for an address we do not know — a
+row nobody's counter bounds is a row anyone can append at will, exactly as for an unknown
+username at the login route.
+
+### Rate limit: a per-account cooldown
+
+**Five minutes.** A live, unused, unexpired link suppresses the next one for that account.
+
+Per-account is the right axis. The harm here is not guessing — the token is 256 bits — it is
+**mailing a real person over and over**, which anyone who knows an admin's address could
+otherwise do for free and which no amount of token entropy touches. Binding it to the account
+holds however the requests arrive: one browser, a script, or a thousand IPs all hit the same
+ceiling, where an IP limit would have held against none of them.
+
+Five rather than the full thirty-minute TTL, because the admin whose first mail went to spam
+is the person this feature is for and telling them to wait half an hour is telling them the
+break-glass door has a queue. It caps a mailbox at twelve messages an hour, and only for an
+address genuinely on file. A spent or expired link does not suppress anything.
+
+> [!note] What was considered and not added
+> An IP or global limit. It would not bound the mailbox — the thing actually at risk — and
+> without a rate-limiting binding or KV counter it would cost a write per request to
+> approximate badly. What is left unbounded is Worker invocations from a distributed
+> attacker, which costs money rather than safety and is Cloudflare's layer to answer, and it
+> writes nothing: an unknown address performs one `SELECT` and no writes at all.
+
+### The pages, and the second hole in the gate
+
+Both reset pages sit under `/admin` and are exempted by `isAdminResetPath` — a **second exact
+match** beside `isAdminLoginPath`, not a widening of it.
+
+- `/admin/reset` is matched exactly.
+- `/admin/reset/<token>` cannot be an equality check, because the path differs every time, so
+  it is pinned to the **shape of the thing it must admit**: one segment, 64 lowercase hex
+  characters. `/admin/reset/`, `/admin/resets`, `/admin/reset-notes`, anything nested below a
+  token, an uppercase token and a token of any other length all stay gated.
+- The cost is honest: somebody who clicks a *truncated* link is bounced to Discord sign-in
+  rather than told the link is broken. That is one confusing minute occasionally, against an
+  exemption that cannot be talked into covering a page nobody has written yet.
+
+`/admin/reset/<token>` sends **`Referrer-Policy: no-referrer`**, and so does every redirect in
+the flow. The token is in the URL — unavoidable, it is how a mailed link carries a credential
+— so without it a single click on an outbound link hands a live reset link to whoever is on
+the other end. The page carries no external links, no images and no scripts, so there is
+nothing to leak to even if the header were ignored. `Cache-Control: no-store` rides along.
+
+### It is off unless configured, and that is the default
+
+`RESEND_API_KEY` and `RESEND_FROM` — both, or the endpoint is inert and writes nothing. See
+[[Configuration]]. `src/lib/notify/email.ts` sends **plain text with no HTML part**, so there
+is no remote image that could tell a third party when an admin opened a password-reset mail
+and from where, and it host-checks its endpoint because the request carries the API key in a
+header: a wrong host would be a disclosure rather than a failed send.
+
+> [!warning] Resend is the second outbound sender, and it gets the webhook's treatment
+> `vitest.config.ts` blanks both bindings, `test/00-safety.test.ts` proves they are blank and
+> that `sendEmail` refuses without them, and `test/setup.ts` makes any unstubbed `fetch`
+> throw. This is the rail that exists because a local test once posted a real embed into the
+> live Discord ([[Bugs Worth Remembering]]), and the blast radius here is worse: a mail is a
+> password-reset link delivered to somebody's actual inbox, and it cannot be unsent.
+
 ### Setting the password
 
 ```bash
 npm run set:password -- --discord-id <snowflake>   # an existing users row
 npm run set:password -- --create <name>            # a standalone admin identity
+npm run set:password -- --create <name> --email you@example.com
+npm run set:password -- --create <name> --clear-email
 ```
 
 `--create` is the one that made the two accounts in production. It is not an emergency path any
@@ -193,9 +328,27 @@ more; it is how an admin is made.
 
 The password is never a CLI argument, never piped, never displayed — the same standing rule
 that produced the VAPID procedure in [[Configuration]]. It is prompted twice and compared,
-because a typo'd password is a permanent lockout — there is no reset link, no recovery email
-and, for a standalone identity, no Discord sign-in to fall back on. The minimum is 16
-characters.
+because a typo'd password is discovered by whoever next tries to use it: for a standalone
+identity there is no Discord sign-in to fall back on, and the only other way out is the reset
+link, which needs an address on file and lands in a mailbox behind a cooldown. The minimum is
+16 characters.
+
+`--email` sets or changes the recovery address and `--clear-email` removes it; leaving both
+flags off leaves whatever is on file alone, so rotating a password never silently wipes an
+address. The address is validated by the app's own `normalizeEmail`, checked against the
+UNIQUE constraint **before** the password prompt (the same lesson the login-name collision
+taught), and **every run revokes that admin's outstanding reset links** — a link issued a
+minute earlier would otherwise still be able to replace the password just chosen. That
+revocation is a separate statement from the main write, so a database where `0005` has not
+been applied reports it rather than failing the password write.
+
+> [!note] An apostrophe in an address is refused, deliberately
+> `o'brien@example.com` is a real address and `normalizeEmail` rejects it, along with the
+> backtick. The setter interpolates this value straight into SQL text — `--file` has no
+> parameter binding, which is why `assertB64Url` and `assertName` exist beside it — and a
+> single quote is SQLite's string delimiter. The repo's standing answer to that is to refuse
+> the value rather than escape it. Caught by `scripts/test-admin-password.ts` asserting the
+> injection shapes under `tsx`, not by anyone reading the character class.
 
 `--discord-id` refuses a snowflake with no `users` row rather than inventing one: a row keyed to
 a made-up id means the next real sign-in inserts a *second* row for the same person, because
@@ -341,13 +494,20 @@ empty jar.
   is no `public/robots.txt`, so that tag is the only thing keeping it out of a search index —
   and keeping it out of a search index is *all* it does. The path itself is not a control; see
   [[#The admin password door]].
-- The admin gate exempts `/admin/login` by **exact match** and nothing else under `/admin`.
-  `/admin/login/`, `/admin/login/extra`, `/admin/logins` and `/admin/login-notes` all still
-  redirect a signed-out visitor to Discord sign-in, which is what makes the exemption one page
-  wide rather than a section.
-- Account deletion drops the password credential and clears `role_locked`. It has to be
-  explicit: `deleteAccount` anonymises by `UPDATE` and never `DELETE`s the `users` row, so
-  `admin_credentials`' `ON DELETE CASCADE` never fires.
+- The admin gate exempts `/admin/login` by **exact match**, `/admin/reset` by a second exact
+  match, and `/admin/reset/<64 hex>` by shape. Nothing else under `/admin`. `/admin/login/`,
+  `/admin/logins`, `/admin/reset/`, `/admin/resets`, `/admin/reset-notes` and anything nested
+  below a token all still redirect a signed-out visitor to Discord sign-in, which is what
+  makes each exemption one page wide rather than a section.
+- Reset tokens are random 256-bit values; **only their SHA-256 is stored**, the same scheme
+  as sessions. They expire in 30 minutes, work once, and a newer one kills the older.
+- `/admin/reset/<token>` and every redirect in that flow send `Referrer-Policy: no-referrer`,
+  because the token is in the URL and a `Referer` would carry it off-site on one click.
+- Account deletion drops the password credential, clears `role_locked`, **and revokes
+  outstanding reset links**. All three have to be explicit: `deleteAccount` anonymises by
+  `UPDATE` and never `DELETE`s the `users` row, so `ON DELETE CASCADE` never fires for any of
+  them. The link revocation sits outside the batch so a database still missing `0005` cannot
+  turn a schema that is merely behind into a deletion that fails.
 
 ## Tests
 
@@ -358,7 +518,11 @@ override, the optional member-role gate, the role hierarchy, PKCE and the `safeN
 68 checks in `scripts/test-auth.ts` — plus the installed-app sign-in handoff in
 `scripts/test-signin-surface.ts`, the device grant's bodies, response mapping, cookie
 payload and `login_required` routing split in `scripts/test-device-grant.ts`, and the password
-primitives and lockout schedule in `scripts/test-admin-password.ts`.
+primitives, the lockout schedule and the reset address validator in
+`scripts/test-admin-password.ts`. That last one is asserted under `tsx` on purpose, for the
+same reason the PBKDF2 vector is: the setter writes the address in Node and the route looks it
+up inside workerd, and only the same function passing in both runtimes makes "what was written
+is what will be found" a fact.
 
 `npm run test:worker` covers the parts that only exist as a request crossing a boundary, which
 is most of this note: `test/auth/` drives `/auth/login`, `/auth/callback`, logout, the device
@@ -366,7 +530,12 @@ grant, the Android exchange, the state cookie, the admin password door and `src/
 itself through `SELF.fetch`, with Discord mocked and sessions minted by the real
 `createSession`. `admin-login.test.ts` asserts the same known-answer vector the tsx suite does,
 which is the only thing that really proves the setter script and the Worker derive the same
-bytes; it also pins the byte-identical refusals and `role_locked` **with its control**. The
+bytes; it also pins the byte-identical refusals and `role_locked` **with its control**.
+`admin-reset.test.ts` drives the reset end to end by reading the link out of a stubbed
+Resend call — the only supported way to get a token, and therefore the only test that proves
+the link the route composes is the link that works. It has to configure the mail sender to do
+that, which it does for one test at a time and restores afterwards; the default, unconfigured
+state is asserted separately, and nothing reaches the network at any point. The
 authorisation gate in front of `/admin` is asserted as a full route × method × caller matrix in
 `test/admin/`, and then a second time with the middleware removed, so a handler that defends
 itself is distinguishable from one that only looks defended.

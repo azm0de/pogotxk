@@ -8,7 +8,12 @@
 
 import { defineMiddleware } from 'astro:middleware';
 import { env } from 'cloudflare:workers';
-import { isAdminLoginPath, isAdminPath, isImportPath } from '~/lib/auth/admin-path';
+import {
+  isAdminLoginPath,
+  isAdminPath,
+  isAdminResetPath,
+  isImportPath,
+} from '~/lib/auth/admin-path';
 import { getSessionUser, SESSION_COOKIE, touchSession } from '~/lib/auth/session';
 import { hasRole } from '~/lib/auth/types';
 
@@ -36,15 +41,19 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // status; page routes bounce through sign-in and come back. Which paths
   // count, and why the boundary matters, is in ~/lib/auth/admin-path.
   //
-  // Two paths skip the role check and nothing else does: the import endpoints,
-  // which bring their own bearer token, and the admin password form, which
-  // would otherwise be gated by the very check it exists to get a caller past.
-  // Both predicates are deliberately narrow — exactly one path in the second
-  // case — and both are argued where they are defined.
+  // Three predicates skip the role check and nothing else does: the import
+  // endpoints, which bring their own bearer token; the admin password form,
+  // which would otherwise be gated by the very check it exists to get a caller
+  // past; and the two password-reset pages, which exist for the admin who
+  // cannot get through that form at all. Every one of them is deliberately
+  // narrow — an exact path, an exact path, and an exact path plus one token
+  // shape — and every one is argued where it is defined, in
+  // ~/lib/auth/admin-path.
   if (isAdminPath(path)) {
     if (
       !isImportPath(path) &&
       !isAdminLoginPath(path) &&
+      !isAdminResetPath(path) &&
       !hasRole(context.locals.user, 'ambassador')
     ) {
       if (path.startsWith('/api/')) {

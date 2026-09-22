@@ -3,6 +3,7 @@
  *
  *   npm run set:password -- --discord-id <snowflake>
  *   npm run set:password -- --create <name>            # a standalone admin
+ *   npm run set:password -- --create <name> --email you@example.com
  *   npm run set:password -- --discord-id <id> --remote # asks twice first
  *
  * Writes the `admin_credentials` row and pins `users.role_locked = 1`, so the
@@ -49,6 +50,12 @@ import { createInterface, type Interface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_ITERATIONS, hashPassword } from '../src/lib/auth/password';
+// Relative, like the import above, and importable for the same reason:
+// `src/lib/notify/email.ts` takes `env` as a parameter rather than importing
+// `cloudflare:workers`, so it loads under plain `tsx`. Sharing the validator is
+// what makes "the address this writes is the address the route will look up"
+// a fact rather than two regexes that agree today.
+import { normalizeEmail } from '../src/lib/notify/email';
 import { rows } from './d1-json';
 
 /* --------------------------------------------------------------- arguments */
@@ -66,6 +73,8 @@ const discordId = flag('discord-id');
 const createName = flag('create');
 const remote = has('remote');
 const revokeSessions = has('revoke-sessions');
+const emailFlag = flag('email');
+const clearEmail = has('clear-email');
 
 function die(message: string): never {
   console.error(`\n${message}\n`);
@@ -89,6 +98,19 @@ if (!discordId && !createName) {
                  account behind it. This is how the site's admins are made —
                  the password set here is the only way into the account.
 
+  --email <addr> The address a password-reset link is mailed to. Sets it or
+                 changes it; leaving the flag off leaves whatever is on file
+                 alone. Unique across admins. Needs migration 0005.
+
+                 SETTING ONE WIDENS THE THREAT MODEL and that is the trade:
+                 the account becomes as strong as the weaker of the password
+                 and that mailbox, in exchange for there being a way back in
+                 at all. Pick a mailbox with its own strong password and
+                 two-factor, not one shared with anybody.
+
+  --clear-email  Remove the address, so no reset is possible for that admin
+                 and the password is the whole of their access again.
+
   --remote       Write to the PRODUCTION database. Asks for a typed
                  confirmation naming the database and the user. Default is local.
 
@@ -99,6 +121,35 @@ if (!discordId && !createName) {
   );
 }
 if (discordId && createName) die('Pass --discord-id or --create, not both.');
+if (emailFlag !== null && clearEmail) die('Pass --email or --clear-email, not both.');
+
+/*
+ * Validated here, at the top, before anything is read or written and long
+ * before a password is prompted for.
+ *
+ * Front-loading it is the same lesson the login-name collision taught on
+ * 2026-09-21: a refusal that surfaces after the operator has confirmed a
+ * production write, chosen a passphrase and typed it back is a refusal that
+ * throws all of that away for something knowable at the start.
+ *
+ * `normalizeEmail` is the app's own validator, shared rather than re-typed —
+ * and its character set is load-bearing here for a second reason: `--file` has
+ * no parameter binding, so this value is interpolated into SQL text below.
+ * Nothing it accepts contains a quote, a backslash or a semicolon.
+ */
+let email: string | null = null;
+if (emailFlag !== null) {
+  email = normalizeEmail(emailFlag);
+  if (!email) {
+    die(
+      `--email must be an ordinary email address. Got: ${JSON.stringify(emailFlag)}
+
+No quoted local parts, no angle brackets, no display name — just
+someone@example.com. It is lowercased before it is stored, because the schema
+and the reset lookup both work in lowercase.`,
+    );
+  }
+}
 
 /* ------------------------------------------------------------------- d1 */
 
@@ -216,6 +267,36 @@ function d1Write(sql: string): string {
   try {
     writeFileSync(file, sql, { encoding: 'utf8', mode: 0o600 });
     return wrangler([...TARGET, '--file', file, '--json']);
+  } finally {
+    rmSync(file, { force: true });
+    pending = null;
+  }
+}
+
+/**
+ * A write whose failure is not worth stopping for.
+ *
+ * Exactly one caller: clearing outstanding reset links, against a database
+ * that may predate `0005_admin_password_reset.sql`. It cannot go through
+ * `d1Write`, because `wrangler()` reports a rejected statement by calling
+ * `die()` — a `process.exit` nothing can catch — which is right for every
+ * other statement here and wrong for this one.
+ *
+ * Deliberately narrow: it returns whether the statement ran, and the caller
+ * reports that rather than pretending it did.
+ */
+function d1WriteOptional(sql: string): boolean {
+  const file = join(scratch, `q-${randomBytes(4).toString('hex')}.sql`);
+  pending = file;
+  try {
+    writeFileSync(file, sql, { encoding: 'utf8', mode: 0o600 });
+    execFileSync(process.execPath, [WRANGLER, ...TARGET, '--file', file, '--json'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return true;
+  } catch {
+    return false;
   } finally {
     rmSync(file, { force: true });
     pending = null;
@@ -493,6 +574,43 @@ have a Discord account behind them at all, that is what --create is for.`,
     );
   }
 
+  /* ---- the recovery address ---- */
+
+  /*
+   * Checked before the password prompt, for the reason spelled out where
+   * `--email` is validated: a UNIQUE violation that surfaces from SQLite at
+   * the INSERT arrives after everything expensive has already been asked for.
+   *
+   * Unlike the login name this does not loop, because there is nothing to
+   * loop on — the address came from the command line, not from a prompt, and
+   * the fix is a different flag rather than a different answer.
+   */
+  if (email) {
+    const taken = rows<{ discord_id: string; username: string }>(
+      d1Read(
+        `SELECT u.discord_id, u.username
+           FROM admin_credentials c JOIN users u ON u.id = c.user_id
+          WHERE c.email = '${email}' AND c.user_id <> ${user.id}`,
+      ),
+    )[0];
+
+    if (taken) {
+      die(
+        `That address is already on file for ${taken.username} (${taken.discord_id}).
+
+Addresses are unique across admins, because a reset request has to be able to
+say which single account it is for. Nothing was written.`,
+      );
+    }
+
+    console.log(`\nReset link address: ${email}`);
+    console.log('  Anyone who can read that mailbox can take this account.\n');
+  }
+  if (clearEmail) {
+    console.log('\nThe reset address will be removed. No reset will be possible for');
+    console.log('this admin, and the password becomes the whole of their access again.\n');
+  }
+
   /* ---- the password ---- */
 
   console.log(`
@@ -500,12 +618,15 @@ Now the password. It is not echoed, and it is never printed or logged.
 
   * RECOMMENDED: press Enter on an empty prompt and let one be generated.
     Six random words, about 77 bits. That is the intended way to use this.
-  * Minimum 16 characters if you type your own. There is no reset link and no
-    recovery email, so the password's own entropy is what carries the security
-    here — the iteration count cannot, because this account's Workers plan caps
-    a request at 10 ms of CPU and the count had to fit inside it. A *memorable*
-    16-character password is not well protected by that; a generated passphrase
-    is, because 2^77 guesses is out of reach whatever the multiplier.
+  * Minimum 16 characters if you type your own. The password's own entropy is
+    what carries the security here — the iteration count cannot, because this
+    account's Workers plan caps a request at 10 ms of CPU and the count had to
+    fit inside it. A *memorable* 16-character password is not well protected by
+    that; a generated passphrase is, because 2^77 guesses is out of reach
+    whatever the multiplier.
+  * There IS a reset link now (/admin/reset), but only for an admin with an
+    address on file, and only as strong as that mailbox. It is a way back in,
+    not a reason to choose a weaker password.
 `);
 
   let password = await hidden(rl, 'Password: ');
@@ -533,16 +654,18 @@ Now the password. It is not echoed, and it is never printed or logged.
       `Password must be at least 16 characters. Got ${password.length}.
 
 Nothing was written. This is the only door that does not depend on Discord, and
-there is no reset link behind it, so the password is doing all the work.`,
+the password's own entropy is doing most of the work behind it — the iteration
+count is pinned at the free plan's CPU ceiling and cannot help much.`,
     );
   }
 
   /*
-   * Asked twice, and compared, because the failure mode is delayed and cruel:
-   * a typo'd password is accepted silently, and it is the only way into the
-   * account. There is no reset link, no recovery email and — for a standalone
-   * `admin:<name>` identity — no Discord sign-in to fall back on, so the next
-   * person to find out is whoever tries to use it.
+   * Asked twice, and compared, because the failure mode is delayed: a typo'd
+   * password is accepted silently, and the next person to find out is whoever
+   * tries to use it. For a standalone `admin:<name>` identity there is no
+   * Discord sign-in to fall back on, so the only other way out is the reset
+   * link — which needs an address on file, which not every admin has, and
+   * which lands in a mailbox behind a cooldown. Cheaper to ask twice.
    */
   const again = await hidden(rl, generated ? 'Type it back: ' : 'Again: ');
   if (again !== password) die('The two entries did not match. Nothing was written.');
@@ -557,15 +680,37 @@ there is no reset link behind it, so the password is doing all the work.`,
   const hash = assertB64Url('hash', stored.hash);
   const iterations = assertCount(stored.iterations);
 
+  /*
+   * The address is written only when the operator asked for one.
+   *
+   * It cannot ride in the ordinary column list. On the INSERT half, omitting
+   * the column leaves it NULL, which is right for a brand-new row; on the
+   * UPDATE half, `email = excluded.email` would then wipe an existing address
+   * every time somebody merely rotated a password. So the column appears in
+   * both halves or in neither, and the three-way split below is what keeps
+   * "no flag means leave it alone" true.
+   *
+   * `email` has been through `normalizeEmail`, so there is no quote, backslash
+   * or semicolon in it to interpolate.
+   */
+  const emailColumn = email ? ', email' : '';
+  const emailValue = email ? `, '${email}'` : '';
+  const emailUpdate = email
+    ? 'email = excluded.email,'
+    : clearEmail
+      ? 'email = NULL,'
+      : '';
+
   const statements = [
-    `INSERT INTO admin_credentials (user_id, username, algorithm, iterations, salt, hash)
-     VALUES (${user.id}, '${loginName}', 'pbkdf2-sha256', ${iterations}, '${salt}', '${hash}')
+    `INSERT INTO admin_credentials (user_id, username, algorithm, iterations, salt, hash${emailColumn})
+     VALUES (${user.id}, '${loginName}', 'pbkdf2-sha256', ${iterations}, '${salt}', '${hash}'${emailValue})
      ON CONFLICT (user_id) DO UPDATE SET
        username        = excluded.username,
        algorithm       = excluded.algorithm,
        iterations      = excluded.iterations,
        salt            = excluded.salt,
        hash            = excluded.hash,
+       ${emailUpdate}
        failed_attempts = 0,
        locked_until    = NULL,
        updated_at      = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');`,
@@ -578,14 +723,43 @@ there is no reset link behind it, so the password is doing all the work.`,
 
   d1Write(statements.join('\n'));
 
+  /*
+   * Outstanding reset links die with the password, always — not only under
+   * `--revoke-sessions`.
+   *
+   * A link issued before this ran would otherwise still set a password on the
+   * account afterwards, quietly replacing the one just chosen and signing
+   * every session out with it. Sessions are a judgement call (rotating a
+   * password should not sign you out of the window you are running this from);
+   * a live reset link is not one.
+   *
+   * SEPARATE FROM THE WRITE ABOVE, AND ALLOWED TO FAIL. This script is pointed
+   * at whichever database the flags say, and `0005_admin_password_reset.sql`
+   * may not have been applied to it — `wrangler d1 execute --file` runs the
+   * whole file as one unit, so a missing table in that list would take the
+   * password write down with it. A database with no reset table has no links
+   * to revoke, so failing here means nothing.
+   */
+  const resetsRevoked = d1WriteOptional(
+    `DELETE FROM admin_password_resets WHERE user_id = ${user.id};`,
+  );
+
+  const emailLine = email
+    ? email
+    : clearEmail
+      ? 'removed — no reset is possible for this admin'
+      : 'unchanged';
+
   console.log(`
 Done.
 
   user id      ${user.id}
   login name   ${loginName}
+  reset email  ${emailLine}
   role         admin, and role_locked = 1 so Discord cannot demote it
   iterations   ${iterations}
   sessions     ${revokeSessions ? 'revoked' : 'left alone'}
+  reset links  ${resetsRevoked ? 'revoked' : 'not revoked — is migration 0005 applied?'}
 
 Sign in at /admin/login.
 

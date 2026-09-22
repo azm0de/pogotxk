@@ -1,6 +1,6 @@
 ---
 tags: [runbook, security]
-updated: 2026-09-21
+updated: 2026-09-22
 ---
 
 # Configuration
@@ -45,11 +45,16 @@ updated: 2026-09-21
 > user id, and it marks one account as permanently admin. Secrets survive deploys just
 > as reliably.
 
-> [!note] The admin door needs no configuration at all, and that is now the point
+> [!note] The admin door needs no configuration at all, and that is still the point
 > `/admin/login` takes a password stored in D1, so it depends on no variable, no secret and
 > no third-party service. The two admin accounts are standalone identities that have no
 > Discord account behind them, so nothing in this table grants or withholds their access.
 > Make one with `npm run set:password -- --create <name>` and see [[Auth and Roles]].
+>
+> **The `/admin/reset` recovery path is the exception, and it is opt-in twice over.** It
+> needs `RESEND_API_KEY` and `RESEND_FROM` below, and it needs an address on the admin's own
+> row. Without all three it is inert. The sign-in door itself is untouched by that — it keeps
+> working with no variables set, which is the property it was built for.
 >
 > That inverts what this note used to say. The password was the recovery path for a
 > bootstrap sequence that had gone wrong; it is the ordinary way in now, and
@@ -90,6 +95,8 @@ while. They are **set** — see the table above; this list is only what is genui
 | Name | Type | Enables |
 |---|---|---|
 | `DISCORD_WEBHOOK_URL` | Secret | Flares into Discord — [[Notifications]] |
+| `RESEND_API_KEY` | Secret | Admin password reset by email — see below |
+| `RESEND_FROM` | Secret | The From address for it. **Both, or nothing is sent** |
 | `DISCORD_ROLE_ADMIN` / `_AMBASSADOR` | var | Automatic role mapping |
 | `DISCORD_ROLE_MEMBER` | var | A role-gated membership check. **Usually leave unset** — see [[Backlog]] |
 | `SITE_URL` | **build** var | Canonical host. Only needed at the domain cutover — see below |
@@ -104,6 +111,48 @@ while. They are **set** — see the table above; this list is only what is genui
 > back when the site still had a subscribable calendar feed. See [[Bugs Worth Remembering]].
 
 Everything above is optional. Unconfigured, the feature degrades quietly rather than erroring.
+
+### Turning on the admin password reset
+
+Two values, both **Secrets**, and `RESEND_FROM` is a Secret despite not being confidential —
+it appears in the header of every mail it sends. The reason is the warning at the top of this
+note: a plain-text var set in the dashboard is deleted by the next deploy, and Workers Builds
+deploys on every push. It is either a Secret or a line in `wrangler.jsonc`, and a Secret is
+fewer moving parts.
+
+```bash
+wrangler secret put RESEND_API_KEY     # https://resend.com > API Keys; sending only
+wrangler secret put RESEND_FROM        # e.g. noreply@<a gnomelabz domain>
+```
+
+> [!danger] The sending domain must be verified in Resend first, and a failure here is silent
+> Resend refuses mail from an unverified domain. The reset endpoint **cannot report that** to
+> the person who asked, because it answers identically whether or not the address is
+> registered — that is the whole design, and it means a delivery failure looks exactly like
+> "no account with that address". Verify the domain in Resend, then set the secret, then test
+> with an address you control.
+
+> [!tip] Set the key at wrangler's prompt, never as a piped literal
+> `wrangler secret put` reads from stdin when it is given one, which puts the value in shell
+> history. The standing rule in this repo is the one the VAPID procedure follows: a value
+> that is never displayed cannot be leaked by a screenshot or a pasted transcript.
+
+Then give an admin an address, which is a separate, per-account step:
+
+```bash
+npm run set:password -- --create <name> --email you@example.com --remote
+```
+
+> [!warning] An address is a second way into that account
+> Anyone who can read that mailbox can take the admin account, so the door becomes as strong
+> as the weaker of the two. Use a mailbox with its own strong password and two-factor, and
+> not one shared with anybody. `--clear-email` puts it back. The full argument is in
+> [[Auth and Roles#Password reset by email]].
+
+Only `api.resend.com` is ever contacted, checked in code rather than trusted from
+configuration — the request carries the key in an `Authorization` header, so a wrong host
+would be a disclosure rather than a failed send. Mail is plain text with no HTML part, so
+there is no remote image that could report when an admin opened a reset mail.
 
 ## Diagnosing "I set it but it says not configured"
 

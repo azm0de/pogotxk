@@ -14,6 +14,13 @@
  * smoke test has already put a real message in that channel once. An embed
  * cannot be unsent.
  *
+ * Since 2026-09-22 there are **two** outbound senders to hold shut. The second
+ * is Resend, added with the admin password reset, and it is the more dangerous
+ * of the pair: the message it sends is a working link to change an admin's
+ * password, it goes to a real person's mailbox rather than a channel, and a
+ * mail cannot be unsent any more than an embed can. It is blanked in
+ * `vitest.config.ts` the same way and proven shut the same way here.
+ *
  * Named `00-` so it is the first thing anyone sees fail.
  */
 
@@ -21,6 +28,7 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { getDiscordEvents } from '~/lib/discord-events';
 import { postFlareToDiscord, webhookUrl, type FlareNotification } from '~/lib/notify/discord';
+import { emailConfigured, emailFrom, resendApiKey, sendEmail } from '~/lib/notify/email';
 import { mockDiscord } from './helpers/discord-mock';
 
 /**
@@ -43,6 +51,12 @@ function hostnameOf(value: string): string | null {
   }
 }
 
+/** The one host `sendEmail` will hand an API key to. */
+function isResendHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return h === 'api.resend.com' || h === 'resend.com' || h.endsWith('.resend.com');
+}
+
 describe('outbound credentials are neutralised under test', () => {
   it.each([
     'DISCORD_WEBHOOK_URL',
@@ -50,6 +64,10 @@ describe('outbound credentials are neutralised under test', () => {
     'VAPID_PUBLIC_KEY',
     'VAPID_PRIVATE_KEY',
     'VAPID_SUBJECT',
+    // The second sender. Both halves, because `sendEmail` needs both and
+    // blanking only one would leave the rail depending on which one.
+    'RESEND_API_KEY',
+    'RESEND_FROM',
   ])('%s is blank', (key) => {
     const value = bag[key];
     expect(
@@ -90,6 +108,21 @@ describe('outbound credentials are neutralised under test', () => {
       .map(([key]) => key);
 
     expect(offenders, 'these bindings resolve to a Discord host').toEqual([]);
+  });
+
+  it('no binding at all carries a Resend URL either', () => {
+    // The same sweep for the second sender. `sendEmail` takes its endpoint from
+    // a constant rather than from configuration, so this is not guarding the
+    // send path — it is guarding against a binding that *looks* like an
+    // endpoint being introduced later and being read by something that trusts
+    // it, which is precisely how the webhook incident happened.
+    const offenders = Object.entries(bag)
+      .filter(([, value]) => typeof value === 'string')
+      .map(([key, value]) => [key, hostnameOf(value as string)] as const)
+      .filter(([, host]) => host !== null && isResendHost(host))
+      .map(([key]) => key);
+
+    expect(offenders, 'these bindings resolve to a Resend host').toEqual([]);
   });
 });
 
@@ -134,12 +167,78 @@ describe('the delivery paths cannot reach Discord', () => {
   });
 });
 
+describe('the mail path cannot reach Resend', () => {
+  /*
+   * The second sender, held shut the same way as the first — and this is the
+   * one where the blast radius is worst. `sendEmail`'s only caller mails a
+   * live link that sets an admin's password, to a real person's inbox. A
+   * stray send in a test run is not a stray message in a channel somebody can
+   * delete; it is a password-reset link in somebody's mail, and a reset link
+   * that has genuinely been delivered to a mailbox is a credential.
+   */
+  it('the configuration reports itself disabled', () => {
+    // The app's own gate, which is what actually decides whether anything is
+    // sent. Asserted as a boolean rather than against the values, for the same
+    // reason the emptiness checks above assert on `length`: Vitest prints what
+    // it compared, and a failure here means a real key is loaded.
+    expect(resendApiKey(env) === null, 'RESEND_API_KEY was accepted').toBe(true);
+    expect(emailFrom(env) === null, 'RESEND_FROM was accepted').toBe(true);
+    expect(emailConfigured(env), 'the mail sender reports itself configured').toBe(false);
+  });
+
+  it('sendEmail sends nothing, and does not even try', async () => {
+    const discord = mockDiscord();
+
+    const outcome = await sendEmail(env, {
+      to: 'nobody@example.test',
+      subject: 'safety test — must never be sent',
+      text: 'safety test — must never be sent',
+    });
+
+    expect(outcome).toBe('disabled');
+    // `sendEmail` swallows transport errors and returns `retry`, so "the stub
+    // threw" would be invisible in the return value. The recorded call list is
+    // the assertion that matters: nothing was attempted at all.
+    discord.assertNotCalled();
+  });
+
+  it('refuses even when handed a recipient that is perfectly valid', async () => {
+    // The refusal must come from the configuration being absent, not from the
+    // message being malformed — otherwise this file would pass against a
+    // sender that happily posts a well-formed message to a live API.
+    const discord = mockDiscord();
+
+    expect(
+      await sendEmail(env, { to: 'admin@pogotxk.test', subject: 'x', text: 'x' }),
+    ).toBe('disabled');
+    discord.assertNotCalled();
+  });
+});
+
 describe('no test reaches the network at all', () => {
   it('an unstubbed fetch is refused', async () => {
     // Blanking the credentials closes the Discord paths. This closes the rest:
     // every third party, under any binding, whether or not anyone thought of it.
     await expect(fetch('https://example.com/')).rejects.toThrow(/real outbound request/);
   });
+
+  it.each(['https://api.resend.com/emails', 'https://discord.com/api/webhooks/1/x'])(
+    'including %s specifically',
+    async (url) => {
+      /*
+       * The two senders named, rather than left to the general rule above.
+       *
+       * The general rule is the one that actually holds — `test/setup.ts`
+       * replaces `globalThis.fetch` before every test in every file, and
+       * nothing keeps a reference to the original afterwards, so there is no
+       * path back to the network for any host. Naming these two is a legibility
+       * assertion: the two endpoints whose messages cannot be recalled are
+       * stated in the file somebody reads when they are worried about exactly
+       * that, instead of being covered by implication.
+       */
+      await expect(fetch(url, { method: 'POST' })).rejects.toThrow(/real outbound request/);
+    },
+  );
 
   it('a stub covers code running inside a route, not only the test', async () => {
     // The property every route test depends on. The game feed is the app's one

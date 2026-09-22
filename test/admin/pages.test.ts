@@ -45,6 +45,22 @@ const PAGES = ['/admin', '/admin/map', '/admin/meetups', '/admin/posts', '/admin
  */
 const LOGIN_PAGE = '/admin/login';
 
+/**
+ * The password-reset pair, which are ungated for the same reason and are
+ * subtracted here by the same rule.
+ *
+ * They are the recovery path for an admin who cannot get through `LOGIN_PAGE`
+ * at all, so putting them behind the gate would be putting them behind the
+ * thing they exist to recover access to. `isAdminResetPath` exempts exactly
+ * these two shapes — `/admin/reset` matched exactly, and one segment of 64 hex
+ * characters below it — and `test/auth/admin-reset.test.ts` proves the
+ * near-misses are still shut.
+ *
+ * The second entry is the *filename*, which is what the glob below produces. It
+ * is never a URL: the real page is only ever reached at a concrete token.
+ */
+const RESET_PAGES = ['/admin/reset', '/admin/reset/[token]'];
+
 const PAGE_PREFIX = '../../src/pages/admin/';
 
 /**
@@ -112,7 +128,7 @@ describe('the admin pages, by page and caller', () => {
      * Both directions, like the API census: a missing entry is an untested
      * page, and an extra one is a row describing a page that no longer exists.
      */
-    expect(pagesOnDisk()).toEqual([...PAGES, LOGIN_PAGE].sort());
+    expect(pagesOnDisk()).toEqual([...PAGES, LOGIN_PAGE, ...RESET_PAGES].sort());
   });
 
   it('found the pages at all', () => {

@@ -1,0 +1,234 @@
+---
+import Base from '~/layouts/Base.astro';
+
+export const prerender = false;
+
+/**
+ * "I have lost the admin password" — the form that asks for a reset link.
+ *
+ * Until this page existed the answer to that sentence was that there was no
+ * answer: an admin is a standalone identity with no Discord account behind it,
+ * `scripts/set-admin-password.ts` says in two places that there is no reset
+ * link, and recovery meant finding somebody with `wrangler` access to
+ * production. See `migrations/0005_admin_password_reset.sql` for what that
+ * costs and what it now costs instead.
+ *
+ * ---------------------------------------------------------------------------
+ * THE SAME THREE RULES AS `/admin/login`, FOR THE SAME THREE REASONS
+ * ---------------------------------------------------------------------------
+ *
+ * 1. **The path is not a secret and is not protecting anything.** The
+ *    repository is public, so `/admin/reset` is public knowledge the moment it
+ *    is committed. `noindex` keeps it out of a search index and out of the
+ *    nav; that is tidiness, not defence. What protects this door is that the
+ *    endpoint behind it says the same thing to everyone, the token is 256 bits,
+ *    it expires in half an hour and it works once.
+ * 2. **It sits under `/admin`, so it needs an exemption to be reachable at
+ *    all.** `isAdminResetPath` in `~/lib/auth/admin-path`, which matches this
+ *    path exactly — a second exact match beside the login form's, not a
+ *    widening of it. `/admin/reset/`, `/admin/resets` and `/admin/reset-notes`
+ *    are all still gated.
+ * 3. **No JavaScript.** It is reached at the moment other things are already
+ *    broken, and a plain `<form>` posts from a browser with scripting off; the
+ *    form encoding is what keeps Astro's CSRF origin check in play, which
+ *    `application/json` would skip entirely.
+ *
+ * ---------------------------------------------------------------------------
+ * THE MESSAGE NEVER CHANGES, AND THAT IS THE WHOLE POINT
+ * ---------------------------------------------------------------------------
+ *
+ * `?sent=1` is set whether or not the address is on file, whether or not the
+ * account is banned, whether or not a link went out recently, and whether or
+ * not the mail provider accepted it. If this page ever grows a second message
+ * for "no such account", it has become a tool for finding out which addresses
+ * belong to admins, and everything else here stops mattering.
+ */
+
+// Only the three the flow emits. Anything else in the query string is somebody
+// poking at it, and gets no message — the same rule `/admin/login` follows.
+const raw = Astro.url.searchParams.get('error');
+const error = raw === 'bad' || raw === 'gone' || raw === 'link' ? raw : null;
+const sent = Astro.url.searchParams.get('sent') === '1';
+
+// Nothing on this page is cacheable and nothing downstream needs to know a
+// visitor came from it.
+Astro.response.headers.set('cache-control', 'no-store');
+Astro.response.headers.set('referrer-policy', 'no-referrer');
+---
+
+<Base title="Reset the admin password">
+  <Fragment slot="head">
+    {/* Publicly reachable by design, and there is no `public/robots.txt`, so
+        this tag is the only thing keeping a recovery form out of a search
+        index. `<slot name="head" />` is at Base.astro:105. */}
+    <meta name="robots" content="noindex, nofollow" />
+  </Fragment>
+
+  <section class="admin-reset container">
+    <header class="admin-reset-head">
+      <h1>Reset the admin password</h1>
+    </header>
+
+    {
+      sent ? (
+        <>
+          {/*
+            The one sentence this endpoint is allowed to say. It is deliberately
+            conditional — "if that address is on file" — because the alternative
+            phrasings all confirm something: "check your inbox" implies one was
+            sent, and "no account with that address" hands over the answer
+            outright.
+          */}
+          <div class="notice" role="status">
+            <p>
+              <strong>If that address is on file, a link is on its way.</strong>
+            </p>
+            <p>
+              The link works once and stops working after 30 minutes. If nothing arrives, check
+              the spam folder first — and note that asking again straight away will not send a
+              second copy, because a link that has just gone out suppresses the next one for a
+              few minutes.
+            </p>
+          </div>
+
+          <p class="lede">
+            <a class="target" href="/admin/login">Back to sign-in</a>
+          </p>
+        </>
+      ) : (
+        <>
+          <p class="lede">
+            Admin accounts have no Discord sign-in behind them, so this is the way back in if the
+            password is gone. Enter the address on file for the account and we will mail a link
+            for setting a new one.
+          </p>
+
+          {error && (
+            <div class="notice" role="alert">
+              {error === 'bad' && <p>That does not look like an email address.</p>}
+              {error === 'link' && (
+                <p>That reset link was not in a shape this site issues. Ask for a fresh one.</p>
+              )}
+              {error === 'gone' && (
+                <p>
+                  That link was valid, but the account behind it no longer exists, so there was
+                  nothing to set a password on.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/*
+            Plain POST to the API route. No `fetch`, no island, no `client:`
+            directive — see rule 3 above.
+          */}
+          <form class="panel admin-reset-form" method="post" action="/api/auth/admin-reset">
+            <div class="field">
+              <label for="admin-reset-email">Email address</label>
+              <input
+                id="admin-reset-email"
+                name="email"
+                type="email"
+                autocomplete="email"
+                autocapitalize="none"
+                autocorrect="off"
+                spellcheck="false"
+                required
+              />
+            </div>
+
+            <button class="btn btn--primary" type="submit">Send a reset link</button>
+          </form>
+
+          <p class="lede">
+            Remembered it after all? <a class="target" href="/admin/login">Back to sign-in</a>.
+          </p>
+        </>
+      )
+    }
+  </section>
+</Base>
+
+<style>
+  /* Follows `/admin/login`'s conventions exactly: a narrow reading measure, the
+     reading face rather than the signage face, and the narrow container. */
+  .admin-reset {
+    --read-measure: min(var(--measure), 60ch);
+    max-width: var(--container-narrow);
+    padding-block: var(--space-section) var(--space-16);
+    font-family: var(--font-read);
+  }
+  .admin-reset > * + * {
+    margin-block-start: var(--space-5);
+  }
+
+  .admin-reset-head {
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--text);
+  }
+  .admin-reset h1 {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-size: var(--display-lg);
+    font-weight: 800;
+    line-height: var(--lh-display);
+    letter-spacing: var(--tracking-display);
+  }
+
+  .lede {
+    margin: 0;
+    max-width: var(--read-measure);
+    font-size: var(--text-lg);
+    line-height: var(--lh-body);
+  }
+
+  .notice {
+    max-width: var(--read-measure);
+    padding: var(--space-4);
+    border-left: 4px solid var(--live-text);
+    background: var(--bg-sunken);
+    border-radius: var(--radius-sm);
+  }
+  .notice p {
+    margin: 0;
+    font-size: var(--text-md);
+    line-height: var(--lh-body);
+  }
+  .notice p + p {
+    margin-block-start: var(--space-3);
+  }
+
+  .admin-reset-form {
+    display: grid;
+    gap: var(--space-5);
+    max-width: var(--read-measure);
+    justify-items: start;
+  }
+
+  .field {
+    display: grid;
+    gap: var(--space-2);
+    width: 100%;
+  }
+  .field label {
+    font-size: var(--text-sm);
+    font-weight: 700;
+  }
+  .field input {
+    /* `min-width: 0` so a grid item cannot be widened past its track by its own
+       intrinsic size — the trap that produces horizontal scroll at 375px.
+       48px clears the 24px target floor with room to spare. */
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: var(--space-2) var(--space-4);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--bg-panel);
+    color: var(--text);
+    font-family: var(--font-read);
+    /* 16px, not 14px. Below 16px iOS Safari zooms the viewport on focus, and a
+       zoomed viewport is horizontal scroll on a 375px screen. */
+    font-size: var(--text-base);
+  }
+</style>

@@ -61,8 +61,30 @@ VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:you@example.com
 
+# --- Admin password reset by email (optional) ---
+#
+# Turns on /admin/reset. Without BOTH of these the endpoint is inert: it writes
+# no token, sends nothing, and answers exactly as it does for an address it
+# does not know — so a half-finished configuration cannot mint a link for a
+# message that will never arrive.
+#
+# Get the key from https://resend.com > API Keys. A sending-only key is enough;
+# this app never reads mail. Only api.resend.com is ever contacted, checked in
+# code, because the request carries this key in an Authorization header and a
+# wrong host would hand it to somebody else along with a live reset link.
+RESEND_API_KEY=
+#
+# The From address. It must be on a domain VERIFIED IN RESEND — an unverified
+# one is refused, and the reset flow cannot report that to the person who asked
+# without also telling a stranger which addresses are registered, so it would
+# fail silently. A bare address only: no "Name <addr>" display form.
+RESEND_FROM=
+
 # Sessions need no secret: tokens are random and stored as SHA-256 hashes
 # rather than signed, so there is nothing to sign with.
+#
+# Reset tokens need none either, and for the same reason — 32 random bytes in
+# the link, their SHA-256 in the row.
 
 # --- Maintenance endpoints ---
 # Bearer token guarding /api/admin/import-legacy and /api/admin/import-media.
