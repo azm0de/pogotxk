@@ -72,6 +72,19 @@ if (hasRole(Astro.locals.user, 'ambassador')) return Astro.redirect(next, 302);
 // somebody poking at it, and gets no message.
 const raw = Astro.url.searchParams.get('error');
 const error = raw === 'bad' || raw === 'locked' ? raw : null;
+
+/**
+ * Set by `POST /api/auth/admin-reset/confirm` after a password has actually
+ * been changed.
+ *
+ * The reset flow deliberately ends here rather than minting a session — the
+ * link proves control of a mailbox, and this door is the one that is supposed
+ * to require a password — so the person arrives at a form having just chosen a
+ * credential, and without a word from us it looks like the reset did nothing.
+ * Nobody may set this except by completing a reset: it is a redirect target,
+ * not a claim, and the only thing it does is render a sentence.
+ */
+const reset = Astro.url.searchParams.get('reset') === '1';
 ---
 
 <Base title="Admin sign-in">
@@ -103,6 +116,20 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
         href="/auth/login">Discord</a
       >.
     </p>
+
+    {
+      reset && !error && (
+        <div class="notice" role="status">
+          <p>
+            <strong>Your password has been reset.</strong>
+          </p>
+          <p>
+            Sign in with the new one. Every other session on that account was ended, so anything
+            else that was signed in — including anything that should not have been — is signed out.
+          </p>
+        </div>
+      )
+    }
 
     {
       error && (
@@ -163,6 +190,23 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
       <button class="btn btn--primary" type="submit">Sign in</button>
     </form>
 
+    {/*
+      The recovery path, and the only thing that makes it discoverable — the
+      page is unlinked from everywhere else, so an admin who has lost the
+      password and does not already know this URL exists has nowhere to find
+      it. A plain link, below the form rather than beside it: it is the rarer
+      action by a wide margin and it should not compete with the button.
+
+      It is shown unconditionally, and deliberately does not check whether any
+      address is on file or whether mail is configured. Both of those are a
+      database read and an environment read on a page that currently performs
+      neither, and this page is the break-glass door — its value is that it
+      works when other things do not. The page it links to says "if that
+      address is on file", which is already the honest answer when none is.
+    */}
+    <p class="forgot">
+      <a class="target" href="/admin/reset">Lost the password?</a>
+    </p>
   </section>
 </Base>
 
@@ -254,4 +298,9 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
     font-size: var(--text-base);
   }
 
+  .forgot {
+    margin: 0;
+    font-size: var(--text-md);
+    line-height: var(--lh-body);
+  }
 </style>

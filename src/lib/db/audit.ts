@@ -7,11 +7,22 @@
  */
 
 /**
- * `login` and `lockout` are the admin password door's two events. No migration
- * was needed to add them: `audit_log.action` is an unconstrained `TEXT` column
- * (`0001_initial.sql`), so the union here is the only thing narrowing it — and
- * widening the union rather than casting at the call site is what keeps that
- * list the actual vocabulary instead of a suggestion.
+ * `login` and `lockout` are the admin password door's two events, and
+ * `reset-request` / `reset-complete` are the recovery path's. No migration was
+ * needed to add any of them: `audit_log.action` is an unconstrained `TEXT`
+ * column (`0001_initial.sql`), so the union here is the only thing narrowing it
+ * — and widening the union rather than casting at the call site is what keeps
+ * that list the actual vocabulary instead of a suggestion.
+ *
+ * The reset pair is two actions rather than one with a stage in the diff,
+ * because the two are read for opposite reasons. `reset-request` answered
+ * without a matching `reset-complete` is somebody asking for links they never
+ * use, which is what an attack on this endpoint looks like from the inside;
+ * a `reset-complete` nobody remembers doing is the thing that has to be
+ * findable in a hurry. Filtering on `action` is how the audit view already
+ * works, so they are separable there rather than only by reading diffs.
+ *
+ * Neither ever carries the address or the token — see the routes.
  */
 export type AuditAction =
   | 'create'
@@ -21,7 +32,9 @@ export type AuditAction =
   | 'restore'
   | 'import'
   | 'login'
-  | 'lockout';
+  | 'lockout'
+  | 'reset-request'
+  | 'reset-complete';
 
 export interface AuditEntry {
   actorId: number | null;

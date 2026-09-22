@@ -56,6 +56,12 @@ export function anonymizedIdentity(userId: number): { discordId: string; usernam
  * against every correction Discord tried to make. Deleting the credential and
  * clearing the lock is the only thing that makes "this account can no longer
  * act" true through both doors rather than only the Discord one.
+ *
+ * **And, since 2026-09-22, `admin_password_resets`.** Same trap a third time:
+ * an outstanding reset link is a credential that mints a password, and it
+ * would have outlived the account it belongs to for up to half an hour. It is
+ * removed outside the batch — see the comment at the statement for why that
+ * is not an oversight.
  */
 export async function deleteAccount(db: D1Database, userId: number): Promise<void> {
   const { discordId, username } = anonymizedIdentity(userId);
@@ -84,4 +90,28 @@ export async function deleteAccount(db: D1Database, userId: number): Promise<voi
     // deletes the `users` row for it to cascade from. See the note above.
     db.prepare('DELETE FROM admin_credentials WHERE user_id = ?1').bind(userId),
   ]);
+
+  /*
+   * Outstanding password-reset links, which are the same bug as the credential
+   * one step along: `admin_password_resets.user_id` carries `ON DELETE
+   * CASCADE` from `users`, and nothing here deletes a `users` row, so the
+   * cascade never fires. A live link surviving deletion is a link that says
+   * "set a password on this account" for an account that has just been
+   * destroyed — and the reset it drives would also delete sessions for the id
+   * behind it. Dangling either way, and there is no reason to leave it.
+   *
+   * OUTSIDE THE BATCH ABOVE, DELIBERATELY. Every push to this repository
+   * deploys, so there is a window in which this code is live and
+   * `0005_admin_password_reset.sql` has not been applied. `db.batch` is one
+   * transaction, so a missing table in that list would fail the *whole*
+   * deletion — turning a schema that is merely behind into an account deletion
+   * that cannot be honoured. Swallowed for the same reason: a table that does
+   * not exist has no rows to clean up, so there is nothing this failure could
+   * mean that matters.
+   */
+  try {
+    await db.prepare('DELETE FROM admin_password_resets WHERE user_id = ?1').bind(userId).run();
+  } catch {
+    /* the reset table is not there yet; there is nothing in it to remove */
+  }
 }

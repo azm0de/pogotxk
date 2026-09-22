@@ -223,6 +223,16 @@ export interface SeedAdminCredentialOptions {
   username?: string;
   password?: string;
   /**
+   * The address a reset link would be mailed to. **Left unset by default**,
+   * which is the state production is in and the state every existing suite
+   * expects: an admin with no address on file cannot be reset, and a factory
+   * that quietly gave everyone one would make "no address" the case nobody
+   * tested. Unique across admins — see `0005_admin_password_reset.sql` — so a
+   * test seeding two must give them different ones, and the sequence number is
+   * in the default shape below for exactly that reason.
+   */
+  email?: string | null;
+  /**
    * Defaults to the schema's floor rather than to `DEFAULT_ITERATIONS`, so a
    * suite of twenty logins is twenty cheap derivations instead of twenty
    * hundred-thousand-round ones. This works *only* because the cost lives in
@@ -257,6 +267,8 @@ export interface SeededCredential {
   password: string;
   userId: number;
   iterations: number;
+  /** Null unless the caller asked for one. */
+  email: string | null;
 }
 
 /**
@@ -278,19 +290,21 @@ export async function seedAdminCredential(
   const username = opts.username ?? `admin${n}`;
   const password = opts.password ?? `seeded passphrase ${n} long enough`;
   const iterations = opts.iterations ?? 10_000;
+  const email = opts.email ?? null;
 
   const stored = await hashPassword(password, iterations);
 
   await db
     .prepare(
       `INSERT INTO admin_credentials
-         (user_id, username, algorithm, iterations, salt, hash,
+         (user_id, username, email, algorithm, iterations, salt, hash,
           failed_attempts, locked_until, last_failed_at, last_success_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
     )
     .bind(
       userId,
       username,
+      email,
       stored.algorithm,
       stored.iterations,
       opts.salt ?? stored.salt,
@@ -302,13 +316,14 @@ export async function seedAdminCredential(
     )
     .run();
 
-  return { username, password, userId, iterations };
+  return { username, password, userId, iterations, email };
 }
 
 /** The `admin_credentials` row as D1 returns it — for asserting on the state. */
 export interface SeededCredentialRow {
   user_id: number;
   username: string;
+  email: string | null;
   algorithm: string;
   iterations: number;
   salt: string;

@@ -20,7 +20,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { isAdminLoginPath, isAdminPath, isImportPath } from '~/lib/auth/admin-path';
+import {
+  isAdminLoginPath,
+  isAdminPath,
+  isAdminResetPath,
+  isImportPath,
+  isResetToken,
+} from '~/lib/auth/admin-path';
+
+/** 64 lowercase hex characters — what `randomToken()` produces. */
+const TOKEN = 'a'.repeat(64);
+const OTHER_TOKEN = '0123456789abcdef'.repeat(4);
 
 describe('isAdminPath', () => {
   it.each([
@@ -151,6 +161,128 @@ describe('isAdminLoginPath', () => {
     for (const path of ['/admin', '/admin/', '/admin/map', '/admin/posts', '/admin/media']) {
       expect(isAdminLoginPath(path)).toBe(false);
     }
+  });
+});
+
+describe('isResetToken', () => {
+  /*
+   * The shape the gate below leans on, so it is pinned on its own first. Every
+   * rejection here is a path that would otherwise be carried out of the admin
+   * gate by `isAdminResetPath`.
+   */
+  it('accepts exactly what randomToken() produces', () => {
+    expect(isResetToken(TOKEN)).toBe(true);
+    expect(isResetToken(OTHER_TOKEN)).toBe(true);
+  });
+
+  it.each([
+    ['empty', ''],
+    ['one character short', 'a'.repeat(63)],
+    ['one character long', 'a'.repeat(65)],
+    ['uppercase hex', 'A'.repeat(64)],
+    ['not hex at all', 'z'.repeat(64)],
+    ['base64url of the right length', `${'-'.repeat(32)}${'_'.repeat(32)}`],
+    ['a path segment smuggled in', `${'a'.repeat(62)}/x`],
+    ['whitespace around a good one', ` ${TOKEN} `],
+    ['a newline after a good one', `${TOKEN}\n`],
+  ])('refuses %s', (_label, value) => {
+    expect(isResetToken(value)).toBe(false);
+  });
+
+  it('is anchored at both ends', () => {
+    // An unanchored pattern would accept a token with anything appended, which
+    // in a path is the difference between one page and a whole section.
+    expect(isResetToken(`${TOKEN}${TOKEN}`)).toBe(false);
+    expect(isResetToken(`prefix${TOKEN}`)).toBe(false);
+  });
+});
+
+describe('isAdminResetPath', () => {
+  /*
+   * The second hole in the gate, and the one that could not be an equality
+   * check — the redemption path is different every time. So the tests that
+   * matter are the ones that would pass against a looser rule: anything that
+   * satisfies `startsWith('/admin/reset')` and must still be gated.
+   */
+  it('exempts the request form, matched exactly', () => {
+    expect(isAdminResetPath('/admin/reset')).toBe(true);
+    // Still an admin path. The middleware skips the role check for it, not the
+    // whole branch — the same relationship `isAdminLoginPath` has.
+    expect(isAdminPath('/admin/reset')).toBe(true);
+  });
+
+  it('exempts a redemption link, and only in the one shape it mints', () => {
+    expect(isAdminResetPath(`/admin/reset/${TOKEN}`)).toBe(true);
+    expect(isAdminResetPath(`/admin/reset/${OTHER_TOKEN}`)).toBe(true);
+    expect(isAdminPath(`/admin/reset/${TOKEN}`)).toBe(true);
+  });
+
+  it.each([
+    // The trailing slash, which redeems nothing and which `isUnder` would
+    // exempt. This is the case the token half is most at risk of admitting.
+    '/admin/reset/',
+    // A prefix collision, the same failure `/administrators` is at the top of
+    // the module — pointed the other way, so it would hand a real admin page
+    // to a stranger.
+    '/admin/resets',
+    '/admin/reset-notes',
+    '/admin/reset.json',
+    // Nested below a genuine token. The exemption is one page, not a section
+    // rooted at whatever a token happens to be.
+    `/admin/reset/${TOKEN}/extra`,
+    `/admin/reset/${TOKEN}/`,
+    // Two segments that are each half a token.
+    `/admin/reset/${'a'.repeat(32)}/${'a'.repeat(32)}`,
+    // Wrong shapes in the token position.
+    '/admin/reset/abc',
+    `/admin/reset/${'A'.repeat(64)}`,
+    `/admin/reset/${'a'.repeat(63)}`,
+    // Astro routes case-sensitively, so this reaches no page — and an unrouted
+    // path inside the gate must keep bouncing.
+    '/admin/Reset',
+    // The API half of the console, where a gated reset route would be useless.
+    '/api/admin/reset',
+  ])('does not exempt %s, which stays gated', (path) => {
+    expect(isAdminResetPath(path)).toBe(false);
+    expect(isAdminPath(path)).toBe(true);
+  });
+
+  it('would not survive a switch to a prefix match', () => {
+    // Stated as the mechanism, exactly as the login block does: every one of
+    // these satisfies the `startsWith` an implementer would reach for.
+    for (const path of [
+      '/admin/reset/',
+      '/admin/resets',
+      '/admin/reset-notes',
+      `/admin/reset/${TOKEN}/extra`,
+    ]) {
+      expect(path.startsWith('/admin/reset')).toBe(true);
+      expect(isAdminResetPath(path)).toBe(false);
+    }
+  });
+
+  it('would not survive a switch to isUnder either', () => {
+    // `isUnder(path, '/admin/reset')` exempts the trailing slash and
+    // everything below it, which is most of what is refused above.
+    for (const path of ['/admin/reset/', `/admin/reset/${TOKEN}/extra`, '/admin/reset/abc']) {
+      expect(path.startsWith('/admin/reset/')).toBe(true);
+      expect(isAdminResetPath(path)).toBe(false);
+    }
+  });
+
+  it('does not exempt /adminreset, which is not an admin path at all', () => {
+    expect(isAdminResetPath('/adminreset')).toBe(false);
+    expect(isAdminPath('/adminreset')).toBe(false);
+  });
+
+  it('leaves the rest of the console alone, including the login form', () => {
+    for (const path of ['/admin', '/admin/', '/admin/map', '/admin/posts', '/admin/login']) {
+      expect(isAdminResetPath(path)).toBe(false);
+    }
+    // And the two exemptions do not overlap: each covers its own paths and
+    // neither has quietly grown into the other.
+    expect(isAdminLoginPath('/admin/reset')).toBe(false);
+    expect(isAdminLoginPath(`/admin/reset/${TOKEN}`)).toBe(false);
   });
 });
 
