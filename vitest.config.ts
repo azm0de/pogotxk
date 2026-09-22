@@ -91,6 +91,17 @@ export default defineConfig({
           VAPID_PRIVATE_KEY: '',
           VAPID_SUBJECT: '',
 
+          // The second outbound sender, added with the admin password reset.
+          // Resend delivers to a real mailbox and a sent mail cannot be
+          // unsent, so it gets the identical treatment the webhook got after
+          // the incident in vault/Bugs Worth Remembering.md — and it gets it
+          // for a sharper reason: the reset mail carries a working link to
+          // change an admin's password. `RESEND_FROM` is blanked alongside the
+          // key because `sendEmail` refuses to send without both, so two
+          // independent things have to go wrong before anything leaves.
+          RESEND_API_KEY: '',
+          RESEND_FROM: '',
+
           // Not outbound credentials, but real values all the same: the
           // bootstrap id silently makes one Discord account permanently admin,
           // and the import token is a bearer secret on a live endpoint. Fixed,
