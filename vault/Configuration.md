@@ -1,6 +1,6 @@
 ---
 tags: [runbook, security]
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Configuration
@@ -30,6 +30,8 @@ updated: 2026-09-22
 | `VAPID_SUBJECT` | Secret | `wrangler secret` | `mailto:jeportillo1@gmail.com` |
 | `DISCORD_GUILD_ID` | var | `wrangler.jsonc` | Public — membership check is ON; outsiders are guests |
 | `DISCORD_BOOTSTRAP_ADMIN_ID` | Secret | `wrangler secret` | Kept out of the public repo — see below |
+| `RESEND_API_KEY` | Secret | `wrangler secret` | Admin password reset by email — see [[#Turning on the admin password reset]] |
+| `RESEND_FROM` | Secret | `wrangler secret` | A **bare** address on the verified sending domain, `gnomelabz.com`. Inboxes show "PoGo TXK": the name is added in code |
 
 > [!danger] Set the bootstrap admin BEFORE the guild id, never after
 > Configuring a guild makes Discord **authoritative** over roles. With no
@@ -95,8 +97,6 @@ while. They are **set** — see the table above; this list is only what is genui
 | Name | Type | Enables |
 |---|---|---|
 | `DISCORD_WEBHOOK_URL` | Secret | Flares into Discord — [[Notifications]] |
-| `RESEND_API_KEY` | Secret | Admin password reset by email — see below |
-| `RESEND_FROM` | Secret | The From address for it. **Both, or nothing is sent** |
 | `DISCORD_ROLE_ADMIN` / `_AMBASSADOR` | var | Automatic role mapping |
 | `DISCORD_ROLE_MEMBER` | var | A role-gated membership check. **Usually leave unset** — see [[Backlog]] |
 | `SITE_URL` | **build** var | Canonical host. Only needed at the domain cutover — see below |
@@ -114,6 +114,10 @@ Everything above is optional. Unconfigured, the feature degrades quietly rather 
 
 ### Turning on the admin password reset
 
+Done in production — both secrets are set, and resets have been delivered and completed there
+(2026-09-23). This is the procedure, kept for a fresh deployment or a rotation. **Both, or
+nothing is sent.**
+
 Two values, both **Secrets**, and `RESEND_FROM` is a Secret despite not being confidential —
 it appears in the header of every mail it sends. The reason is the warning at the top of this
 note: a plain-text var set in the dashboard is deleted by the next deploy, and Workers Builds
@@ -122,8 +126,15 @@ fewer moving parts.
 
 ```bash
 wrangler secret put RESEND_API_KEY     # https://resend.com > API Keys; sending only
-wrangler secret put RESEND_FROM        # e.g. noreply@<a gnomelabz domain>
+wrangler secret put RESEND_FROM        # a bare address, e.g. noreply@<a gnomelabz domain>
 ```
+
+> [!warning] `RESEND_FROM` is a bare address — no display name
+> `PoGo TXK <noreply@…>` in the secret is **refused**, and a refused From turns the sender off
+> entirely, silently, the same as an unset one. That is deliberate: a display name typed into
+> configuration is a header-injection shape. Inboxes still show **"PoGo TXK"** as the sender,
+> because `fromHeader` in `src/lib/notify/email.ts` wraps the validated address in a constant
+> name in code. So the secret holds only the address, and the name is not configurable.
 
 > [!danger] The sending domain must be verified in Resend first, and a failure here is silent
 > Resend refuses mail from an unverified domain. The reset endpoint **cannot report that** to
@@ -151,8 +162,29 @@ npm run set:password -- --create <name> --email you@example.com --remote
 
 Only `api.resend.com` is ever contacted, checked in code rather than trusted from
 configuration — the request carries the key in an `Authorization` header, so a wrong host
-would be a disclosure rather than a failed send. Mail is plain text with no HTML part, so
-there is no remote image that could report when an admin opened a reset mail.
+would be a disclosure rather than a failed send.
+
+The mail is **multipart** since 2026-09-23: a plain-text part, always, and a branded HTML part
+beside it, at the owner's request. The HTML carries **no remote resource of any kind** — no
+image, no web font, no stylesheet — so opening it fetches nothing and reports nothing to
+anyone. See [[Auth and Roles#It is off unless configured, and that is the default]].
+
+> [!danger] Resend's open and click tracking must stay **off** for `gnomelabz.com`
+> Resend's tracking works on the HTML part, which the reset mail now has.
+>
+> - **Click tracking** rewrites every link in the HTML to pass through a Resend tracking
+>   subdomain first. That includes the reset link, which is a working credential for thirty
+>   minutes — so every live reset link would be handed to, and recorded by, a third party's
+>   redirect on its way to the admin.
+> - **Open tracking** inserts a tracking pixel: a fetch on open that reports when an admin
+>   opened a password-reset mail and from which IP — the exact thing the mail is built not to
+>   carry.
+>
+> Both are **per-domain** settings in Resend (Domains → the domain → Configuration → "Enable
+> tracking metrics"), both are **off by default**, and neither becomes active until a CNAME for
+> a tracking subdomain is verified. Leave them off for the sending domain. If some future
+> newsletter wants them, send it from a different domain. Nothing in this repository can see
+> the setting — it lives in Resend's dashboard — so this note is the control.
 
 ## Diagnosing "I set it but it says not configured"
 

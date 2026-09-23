@@ -362,10 +362,52 @@ layout around it links out to Discord and the other socials, and each of those l
 ### It is off unless configured, and that is the default
 
 `RESEND_API_KEY` and `RESEND_FROM` — both, or the endpoint is inert and writes nothing. See
-[[Configuration]]. `src/lib/notify/email.ts` sends **plain text with no HTML part**, so there
-is no remote image that could tell a third party when an admin opened a password-reset mail
-and from where, and it host-checks its endpoint because the request carries the API key in a
-header: a wrong host would be a disclosure rather than a failed send.
+[[Configuration]]; both are set in production. `src/lib/notify/email.ts` host-checks its
+endpoint because the request carries the API key in a header: a wrong host would be a
+disclosure rather than a failed send.
+
+### What the mail looks like, and what it may not contain
+
+It was plain text only until 2026-09-23, when the owner asked for it to look like the site.
+It is **multipart** now: the plain-text part on every send — `sendEmail` refuses a message
+without one rather than let Resend invent it — and a branded HTML part beside it, never
+instead of it. The HTML is built in `src/lib/notify/reset-email.ts`, a pure module (so
+`npm run preview:reset-email -- <out.html>` can render the real thing for a person to look at):
+
+- **The site, drawn for mail clients.** A typeset "PoGo TXK" wordmark, white on the
+  `--accent-solid` bar over the black band, as the site header draws it; a white panel;
+  a `--accent-solid` button with white text (5.99:1) built as a table cell around the link;
+  the full link printed under it on a `--bg-sunken` plate, for clients that mangle buttons.
+  Table layout with `role="presentation"`, inline styles, a 600px column, `lang="en"`,
+  nothing under 16px, every text pairing 4.5:1 or better in both themes. The site's tokens
+  are written out as literals, because a mail client cannot resolve custom properties.
+- **Dark mode.** Clients that honour `prefers-color-scheme` (Apple Mail) get the site's own
+  dark tokens from a `<style>` block. Clients that force their own dark mode (the Gmail apps)
+  recolour it themselves, which it survives because every text element sets its own colour
+  against its own background and the red surfaces carry white text.
+- **No image, and no remote resource of any kind** — no web font, no stylesheet, no `url()`.
+  A fetch on open is a read receipt carrying the reader's IP, from any origin, ours
+  included. The only raster logo (`/art/logo-txk-classic.webp`) is built on the Pokémon GO
+  logo, which the design rules keep off anything new, so the wordmark is text. Fonts fall back
+  through the site's faces to each platform's UI face.
+- **Every interpolated value is escaped** (`&`, `<`, `>`, `"`, `'`), the link is refused
+  unless it is an absolute http(s) URL, and a control character in either value is refused in
+  both parts. The route composes the message inside the deferred send, so even a refusal
+  cannot change its answer.
+- **It names the account.** "This is for the admin account **justin**. You can sign in with
+  that username or with this email address." It used not to, on the argument that the link
+  already identifies one account; the incident that argument lost to is in
+  [[Bugs Worth Remembering#A recovery flow that never said which account it recovered]].
+  It discloses nothing new: whoever reads the mailbox can already open the link and read the
+  name off the page. The subject and the preview text stay generic.
+- **The sender shows as "PoGo TXK".** `RESEND_FROM` stays a bare, validated address; the name
+  is a constant wrapped around it in code (`fromHeader`), and a display name typed into the
+  secret is still refused.
+
+> [!danger] Resend's click and open tracking must stay off for the sending domain
+> Click tracking would rewrite the reset link — a live credential — through a Resend redirect,
+> and open tracking would add the pixel this mail is built not to carry. Both are per-domain
+> settings, off by default. See [[Configuration#Turning on the admin password reset]].
 
 > [!warning] Resend is the second outbound sender, and it gets the webhook's treatment
 > `vitest.config.ts` blanks both bindings, `test/00-safety.test.ts` proves they are blank and
@@ -607,7 +649,12 @@ row, and a malformed or unknown address answered exactly as an unknown username.
 Resend call — the only supported way to get a token, and therefore the only test that proves
 the link the route composes is the link that works. It has to configure the mail sender to do
 that, which it does for one test at a time and restores afterwards; the default, unconfigured
-state is asserted separately, and nothing reaches the network at any point. The
+state is asserted separately, and nothing reaches the network at any point.
+`reset-email.test.ts` feeds the mail template hostile values directly and reads what it
+builds with workerd's own HTML parser — nothing escapes its text or attribute, no element
+outside a short allowlist appears, nothing is fetched on open — and drives `sendEmail` with a
+made-up configuration and a stubbed `fetch` to pin the payload: both parts, `PoGo TXK
+<address>`, and no send at all for a message without text. The
 authorisation gate in front of `/admin` is asserted as a full route × method × caller matrix in
 `test/admin/`, and then a second time with the middleware removed, so a handler that defends
 itself is distinguishable from one that only looks defended.

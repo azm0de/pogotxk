@@ -59,13 +59,10 @@
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
-import {
-  RESET_TTL_MS,
-  requestReset,
-  resetLink,
-} from '~/lib/auth/password-reset';
+import { requestReset, resetLink } from '~/lib/auth/password-reset';
 import { recordAudit } from '~/lib/db/audit';
 import { emailConfigured, normalizeEmail, sendEmail } from '~/lib/notify/email';
+import { resetMessage } from '~/lib/notify/reset-email';
 
 export const prerender = false;
 
@@ -104,42 +101,13 @@ function acknowledged(): Response {
   return seeOther('/admin/reset?sent=1');
 }
 
-/** Minutes, for the mail. Derived, so the mail and the TTL cannot disagree. */
-const TTL_MINUTES = Math.round(RESET_TTL_MS / 60_000);
-
-/**
- * The message itself. Plain text, and deliberately short.
- *
- * What it does **not** contain is the interesting part. No login username: the
- * address is unique across admins, so the link already identifies exactly one
- * account, and the page behind the token names it to somebody who has proved
- * they hold the link. No mention of whether this address was found, because the
- * mail only exists when it was. Nothing that would embarrass anyone if the
- * mailbox turned out to be shared.
- *
- * The last paragraph is load-bearing rather than polite. Most people who
- * receive an unexpected reset mail have not been attacked — somebody typed the
- * wrong address — and the useful instruction for them is to do nothing, which
- * has to be stated or they will click the link to "check".
+/*
+ * The message itself — subject, plain text and HTML — is built in
+ * `~/lib/notify/reset-email`, which is where the rules about what it may and
+ * may not contain are written down. Since 2026-09-23 it names the account's
+ * login name, and says the address it arrived at will sign in too; that module
+ * has the incident behind the change and why it discloses nothing new.
  */
-function resetMessage(link: string): { subject: string; text: string } {
-  return {
-    subject: 'Reset your PoGo TXK admin password',
-    text: [
-      'Somebody asked to reset the password on a PoGo TXK admin account.',
-      '',
-      'Open this link to choose a new one:',
-      '',
-      link,
-      '',
-      `The link works once and stops working after ${TTL_MINUTES} minutes.`,
-      'Setting a new password signs that account out everywhere it is signed in.',
-      '',
-      'If you did not ask for this, ignore this message. Nothing has changed,',
-      'and the link expires on its own.',
-    ].join('\n'),
-  };
-}
 
 export async function POST(ctx: APIContext): Promise<Response> {
   const { request, url } = ctx;
@@ -195,8 +163,6 @@ export async function POST(ctx: APIContext): Promise<Response> {
    */
   if (outcome.status !== 'issued') return acknowledged();
 
-  const message = resetMessage(resetLink(url.origin, outcome.token));
-
   /*
    * Off the response path where there is a Worker context to hand it to, and
    * awaited otherwise — the same shape as the flare fan-out and
@@ -206,12 +172,27 @@ export async function POST(ctx: APIContext): Promise<Response> {
    * The outcome is deliberately dropped. There is nothing this route could do
    * with "Resend refused it" that would not also tell the sender of the
    * request whether the address was real.
+   *
+   * The message is composed *inside* that work rather than before it, for the
+   * same reason. The template refuses — throws — on a link that is not http(s)
+   * or a value carrying a control character. Neither can happen with a link
+   * `resetLink` built and a name the setter wrote, but if one ever did, a throw
+   * out here would be a 500 that only a registered address could produce: the
+   * oracle every other line of this file is written to avoid. In here it is
+   * swallowed with everything else, and the answer is the same answer.
    */
-  const work = sendEmail(env, {
-    to: outcome.email,
-    subject: message.subject,
-    text: message.text,
-  }).then(
+  const work = (async () => {
+    const message = resetMessage({
+      link: resetLink(url.origin, outcome.token),
+      username: outcome.username,
+    });
+    await sendEmail(env, {
+      to: outcome.email,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
+  })().then(
     () => undefined,
     () => undefined,
   );

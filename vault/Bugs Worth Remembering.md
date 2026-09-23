@@ -413,13 +413,18 @@ person had just been handed was the one identifier the door refused.
 > A recovery flow has to end with the person knowing what to type at the door it leads back
 > to. Either accept the identifier the recovery used, or say the other one out loud.
 
-Fixed on the door's side: `/admin/login` takes the username or the recovery address in one box,
-the `@` picking the column and never both, with the lockout, the byte-identical refusals and the
-timing all unchanged. The reset form now hands the username to password managers, so the new
-password is saved against the right login. And the gate in front of `/admin` stopped sending
-refusals to Discord sign-in — a door that could no longer admit anyone the gate lets through —
-and sends them to `/admin/login` instead. See
+Fixed from both ends. The door: `/admin/login` takes the username or the recovery address in
+one box, the `@` picking the column and never both, with the lockout, the byte-identical
+refusals and the timing all unchanged. The reset form now hands the username to password
+managers, so the new password is saved against the right login. And the gate in front of
+`/admin` stopped sending refusals to Discord sign-in — a door that could no longer admit anyone
+the gate lets through — and sends them to `/admin/login` instead. See
 [[Auth and Roles#Username or email, in one box]].
+
+The mail: it now says the login name, and that either the name or the address it arrived at
+will sign in. It had left the name out on purpose, reasoning that the link already identifies
+the account — true, and beside the point, because the person holding the link still has to
+type *something* at the door afterwards.
 
 ## See also
 

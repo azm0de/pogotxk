@@ -21,6 +21,7 @@
     "test:all": "npm test && npm run test:worker",
     "dev:session": "tsx scripts/dev-session.ts",
     "set:password": "tsx scripts/set-admin-password.ts",
+    "preview:reset-email": "tsx scripts/preview-reset-email.ts",
     "gen:vapid": "tsx scripts/generate-vapid.ts",
     "gen:icons": "tsx scripts/build-icons.ts"
   },

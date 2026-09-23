@@ -87,8 +87,11 @@ interface SentMail {
   to: string;
   subject: string;
   text: string;
-  /** Present iff an HTML part was sent, which must never happen. */
-  html?: unknown;
+  /**
+   * The branded part, sent beside `text` since 2026-09-23 — never instead of
+   * it. What it may contain is asserted in `reset-email.test.ts`.
+   */
+  html?: string;
   authorization: string;
 }
 
@@ -244,12 +247,13 @@ describe('a reset, from asking to signing in with the new password', () => {
       expect(asked.status).toBe(303);
       expect(asked.headers.get('location')).toBe('/admin/reset?sent=1');
 
-      // One mail, to the address on file, from the configured sender, carrying
-      // the key in the header — and nothing else was contacted.
+      // One mail, to the address on file, from the configured sender under the
+      // site's name, carrying the key in the header — and nothing else was
+      // contacted.
       expect(mail.mails).toHaveLength(1);
       expect(mail.hosts).toEqual(['api.resend.com']);
       expect(mail.mails[0]!.to).toBe(cred.email);
-      expect(mail.mails[0]!.from).toBe('admin@pogotxk.test');
+      expect(mail.mails[0]!.from).toBe('PoGo TXK <admin@pogotxk.test>');
       expect(mail.mails[0]!.authorization).toBe('Bearer test-resend-key-not-a-real-one');
 
       const token = mail.token();
@@ -264,8 +268,10 @@ describe('a reset, from asking to signing in with the new password', () => {
       expect(done.page.status).toBe(200);
       expect(done.html).toContain('action="/api/auth/admin-reset/confirm"');
       expect(done.html).toContain(`value="${token}"`);
-      // Named, so somebody with two admin accounts sets the right one.
+      // Named, so somebody with two admin accounts sets the right one — and so
+      // the same name the mail gave is the one the page confirms.
       expect(done.html).toContain(cred.username);
+      expect(mail.mails[0]!.text).toContain(cred.username);
 
       expect(done.response.status, done.trace).toBe(303);
       expect(done.response.headers.get('location')).toBe('/admin/login?reset=1');
@@ -346,35 +352,109 @@ describe('a reset, from asking to signing in with the new password', () => {
 /* -------------------------------------------------------- what is mailed */
 
 describe('the message itself', () => {
-  it('is plain text with no HTML part, and carries the link and the expiry', async () => {
-    const { cred } = await seedResettableAdmin('plain@example.test');
+  /*
+   * Plain text from the day this shipped; plain text AND a branded HTML part
+   * since 2026-09-23, at the owner's request. The template's own rules — what
+   * the HTML may contain, and how every value is escaped — are asserted
+   * directly in `reset-email.test.ts`, where hostile values can be fed to it.
+   * These are the claims only a real request can prove: what Resend is handed.
+   */
+  it('sends a plain-text part and an HTML part, together', async () => {
+    const { cred } = await seedResettableAdmin('both@example.test');
 
     await withMail(async (mail) => {
       await askFor({ email: cred.email! });
       const sent = mail.mails[0]!;
 
-      // No HTML means no remote images, which means no tracking pixel
-      // reporting when an admin opened a password-reset mail and from where.
-      expect(sent.html).toBeUndefined();
-      expect(sent.subject).toContain('admin password');
+      // The text part is always there, and complete on its own.
+      expect(typeof sent.text).toBe('string');
       expect(sent.text).toContain(`${ORIGIN}/admin/reset/`);
+      expect(sent.text).toContain('works once');
       expect(sent.text).toContain('30 minutes');
+      expect(sent.text).toContain('signs the account out everywhere');
       // The instruction for the far commoner case: somebody typed the wrong
       // address and this arrived at a stranger.
       expect(sent.text).toContain('did not ask for this');
+
+      // And the HTML beside it, never instead of it, saying the same things.
+      expect(typeof sent.html).toBe('string');
+      expect(sent.html).toMatch(/^<!DOCTYPE html>/);
+      expect(sent.html).toContain('works once');
+      expect(sent.html).toContain('30 minutes');
+      expect(sent.html).toContain('did not ask for this');
       return undefined;
     });
   });
 
-  it('does not name the account, because the mailbox may not be the admin’s alone', async () => {
-    const { cred } = await seedResettableAdmin('shared@example.test');
+  it('names the account and carries the link, in both parts', async () => {
+    /*
+     * The mail used not to say the login name, on the argument that the link
+     * already identifies one account. Then an admin completed two resets from
+     * it and was refused at the door, because he typed the address the mail
+     * came to — the only identifier the flow had ever shown him. It discloses
+     * nothing: whoever reads this mailbox can already open the link and read
+     * the name off the page behind it.
+     */
+    const { cred } = await seedResettableAdmin('named@example.test');
 
     await withMail(async (mail) => {
       await askFor({ email: cred.email! });
-      // The address is unique across admins, so the link already identifies
-      // exactly one account. The page behind the token names it — to somebody
-      // who has proved they hold the link.
-      expect(mail.mails[0]!.text).not.toContain(cred.username);
+      const sent = mail.mails[0]!;
+      const link = mail.link();
+
+      expect(sent.text).toContain(`"${cred.username}"`);
+      expect(sent.text).toContain('sign in with that username or with this email address');
+      expect(sent.html).toContain(`<strong>${cred.username}</strong>`);
+      expect(sent.html).toContain('sign in with that username or with this email address');
+
+      // The link: in the text, on the button, and printed under it — and no
+      // other link anywhere.
+      expect(sent.text).toContain(link);
+      expect([...sent.html!.matchAll(/href="([^"]*)"/g)].map((m) => m[1])).toEqual([link, link]);
+      expect(sent.html).toContain(`>${link}</a>`);
+      return undefined;
+    });
+  });
+
+  it('goes out under the site’s name, from the configured address', async () => {
+    // `RESEND_FROM` stays a bare address; the name is a constant in code.
+    const { cred } = await seedResettableAdmin('sender@example.test');
+
+    await withMail(async (mail) => {
+      await askFor({ email: cred.email! });
+      expect(mail.mails[0]!.from).toBe('PoGo TXK <admin@pogotxk.test>');
+      return undefined;
+    });
+  });
+
+  it('keeps its subject, and the subject says nothing about the account', async () => {
+    const { cred } = await seedResettableAdmin('subject@example.test');
+
+    await withMail(async (mail) => {
+      await askFor({ email: cred.email! });
+      expect(mail.mails[0]!.subject).toBe('Reset your PoGo TXK admin password');
+      // The one line every notification shows.
+      expect(mail.mails[0]!.subject).not.toContain(cred.username);
+      return undefined;
+    });
+  });
+
+  it('carries no script, no image and nothing a client would fetch on opening it', async () => {
+    const { cred } = await seedResettableAdmin('clean@example.test');
+
+    await withMail(async (mail) => {
+      await askFor({ email: cred.email! });
+      const html = mail.mails[0]!.html!;
+
+      expect(html).not.toMatch(/<script/i);
+      expect(html).not.toMatch(/<img/i);
+      expect(html).not.toMatch(/\bsrc\s*=/i);
+      expect(html).not.toMatch(/url\s*\(/i);
+      expect(html).not.toMatch(/<link\b/i);
+      expect(html).not.toMatch(/@import/i);
+      // The test origin is https, so there is no `http:` anywhere: no insecure
+      // resource, and no insecure link either.
+      expect(html).not.toMatch(/http:/i);
       return undefined;
     });
   });

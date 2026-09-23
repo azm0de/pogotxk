@@ -53,6 +53,16 @@ npm run set:password -- --create localadmin    # then sign in at /admin/login
 Sign in there with the login name, or with the address if you gave one with `--email`; the box
 takes either.
 
+To look at the password-reset mail without sending one:
+
+```bash
+npm run preview:reset-email -- <somewhere outside the repo>/reset-email.html
+```
+
+It renders the real template with a dummy link and prints the plain-text part. It sends
+nothing, reads no configuration and loads no sender. Switch the computer to dark mode to see
+the palette Apple Mail would use.
+
 That mints `admin:localadmin` — a standalone admin identity with no Discord account behind it,
 which is the same shape the two production admins have.
 
