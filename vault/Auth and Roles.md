@@ -31,7 +31,11 @@ Scopes requested: `identify` and `guilds.members.read`. No email, no messages, n
 | `guest` | Signed in, not in the guild | Read |
 | `member` | In the guild | Fire flares, RSVP |
 | `ambassador` | Has the ambassador role | Everything in `/admin` |
-| `admin` | Has the admin role, or is `DISCORD_BOOTSTRAP_ADMIN_ID`, or holds `role_locked = 1` | Also: hard delete, import, settings |
+| `admin` | Holds `role_locked = 1` — the standalone accounts. The code also accepts the Discord admin role or being `DISCORD_BOOTSTRAP_ADMIN_ID`, but neither is set here | Also: hard delete, import, settings |
+
+On this deployment no `DISCORD_ROLE_*` id is set and neither is `DISCORD_BOOTSTRAP_ADMIN_ID`
+(confirmed absent 2026-09-22), so a Discord sign-in yields `guest` or `member` and nothing else,
+and every `admin` is a `role_locked` standalone account.
 
 ## The admin password door
 
@@ -42,9 +46,11 @@ it. An admin does not have a Discord sign-in that would also work; the password 
 their access. Production holds two of them.
 
 It was built for the day Discord sign-in could not produce an admin. That day is now every
-day: no `DISCORD_ROLE_ADMIN` is set, so `resolveRole` can only answer `member`, and
-`DISCORD_BOOTSTRAP_ADMIN_ID` — the one remaining short-circuit — is being retired. Once that
-secret is removed, nothing reachable through Discord resolves to `admin` at all.
+day: no `DISCORD_ROLE_*` id is set, so `resolveRole` can only answer `member` (or `guest`,
+outside the guild), and `DISCORD_BOOTSTRAP_ADMIN_ID` — the last short-circuit — is no longer
+set on the live Worker (confirmed 2026-09-22). Nothing reachable through Discord resolves to
+`admin` at all. The code still honours the secret, so setting it again would reopen that
+route for one account.
 
 > [!important] The path is not a secret, and nothing may be built on the idea that it is
 > The repository (`azm0de/pogotxk`) is **public**, so every path written in it is public
@@ -86,20 +92,28 @@ The page sits under `/admin` and the POST route deliberately does not.
 > **authoritative**, so `upsertUser` writes that answer. A hand-promoted admin is therefore
 > demoted by their own next sign-in.
 >
-> That left exactly one path to `admin`: `DISCORD_BOOTSTRAP_ADMIN_ID`, a secret that
-> short-circuits `resolveRole` for one Discord account. One account, one secret, one
+> That left exactly one path to `admin` at the time: `DISCORD_BOOTSTRAP_ADMIN_ID`, a secret
+> that short-circuits `resolveRole` for one Discord account. One account, one secret, one
 > third-party service, and no recovery if any of the three is lost. Setting the
 > `DISCORD_ROLE_*` ids would have fixed the demotion but not the single point of failure — it
-> would just have moved it into the Discord server's role configuration.
+> would just have moved it into the Discord server's role configuration. The secret has since
+> been removed; see the next note.
 
-> [!important] The secret is being retired, and the standalone identities are the replacement
-> `DISCORD_BOOTSTRAP_ADMIN_ID` is the single point of failure this door was built to remove,
-> so keeping both is keeping the problem. The owner removes the secret from the Worker
-> himself; the code still honours it if it is set, and `resolveRole`'s bootstrap branch and
-> its tests are unchanged.
+> [!important] The secret is gone, and the standalone identities replaced it
+> `DISCORD_BOOTSTRAP_ADMIN_ID` was the single point of failure this door was built to remove,
+> so keeping both would have kept the problem. It has been removed from the Worker, and it is
+> **no longer set**: on 2026-09-22 the live version's bindings were listed (names
+> and types only) and it was not among them, as a secret or as a plain var, and
+> `wrangler secret list` does not show it either. Nobody lost access — both admins sign in at
+> `/admin/login`.
 >
-> After it is gone the roles table below still reads correctly — it describes what the code
-> does — but only one of its three routes to `admin` can actually fire on this deployment:
+> The code still honours it if it is set: `resolveRole`'s bootstrap branch
+> (`src/lib/auth/discord.ts`) and its tests are unchanged, and inert only because the variable
+> is absent. So **setting the secret again would bring the short-circuit back**, one Discord
+> account resolving to `admin` on every sign-in. Nothing in the repo stops that; not setting
+> it is the control.
+>
+> The roles table above says which of its routes to `admin` actually fire here: only
 > `role_locked = 1`, which is what `scripts/set-admin-password.ts` writes. Setting
 > `DISCORD_ROLE_AMBASSADOR` would still let Discord mint an **ambassador**, who can reach
 > `/admin`; it would not mint an admin.
@@ -506,8 +520,10 @@ capitalised name, so `--create nic` gives `Nic`.
 
 > [!important] `DISCORD_GUILD_ID` is optional on purpose
 > Requiring it meant a deployment with valid credentials still refused every sign-in — blocking
-> the very login needed to configure anything else. Without it, everyone resolves to `guest`
-> but `DISCORD_BOOTSTRAP_ADMIN_ID` still gets in.
+> the very login needed to configure anything else. Without it, everyone resolves to `guest`,
+> except the account named by `DISCORD_BOOTSTRAP_ADMIN_ID` if that secret is set — the code
+> still lets it in as `admin`. On this deployment the guild id is set and the bootstrap
+> secret is not.
 
 ## The password-prompt question, settled
 

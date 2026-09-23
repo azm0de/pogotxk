@@ -29,7 +29,6 @@ updated: 2026-09-23
 | `VAPID_PRIVATE_KEY` | Secret | `wrangler secret` | Set 2026-08-06 |
 | `VAPID_SUBJECT` | Secret | `wrangler secret` | `mailto:jeportillo1@gmail.com` |
 | `DISCORD_GUILD_ID` | var | `wrangler.jsonc` | Public — membership check is ON; outsiders are guests |
-| `DISCORD_BOOTSTRAP_ADMIN_ID` | Secret | `wrangler secret` | Kept out of the public repo — see below |
 | `RESEND_API_KEY` | Secret | `wrangler secret` | Admin password reset by email — see [[#Turning on the admin password reset]] |
 | `RESEND_FROM` | Secret | `wrangler secret` | A **bare** address on the verified sending domain, `gnomelabz.com`. Inboxes show "PoGo TXK": the name is added in code |
 
@@ -40,12 +39,14 @@ updated: 2026-09-23
 > of `/admin`. `DISCORD_BOOTSTRAP_ADMIN_ID` short-circuits `resolveRole` to `admin` and was,
 > until the password door existed, the only thing preventing it. Verified against
 > `resolveRole` before the 2026-08-06 deploy: with it he resolves to `admin` either way;
-> without it, `member`. The ordering is still right for a fresh deployment; on this one the
-> secret is being retired — see the note below.
+> without it, `member`. The ordering is still right for a fresh deployment. On this one the
+> secret has been **removed** — see the note below — and the trap is closed another way: the
+> admins are standalone identities pinned with `role_locked = 1`, which no Discord sign-in
+> can reach or demote.
 >
-> It is a Secret rather than a var because the repo is public: it is a personal Discord
-> user id, and it marks one account as permanently admin. Secrets survive deploys just
-> as reliably.
+> It was a Secret rather than a var because the repo is public: it is a personal Discord
+> user id, and it marks one account as permanently admin. If it is ever set again, set it
+> the same way. Secrets survive deploys just as reliably.
 
 > [!note] The admin door needs no configuration at all, and that is still the point
 > `/admin/login` takes a password stored in D1, so it depends on no variable, no secret and
@@ -60,9 +61,14 @@ updated: 2026-09-23
 >
 > That inverts what this note used to say. The password was the recovery path for a
 > bootstrap sequence that had gone wrong; it is the ordinary way in now, and
-> `DISCORD_BOOTSTRAP_ADMIN_ID` is being retired because a secret that mints an admin is the
-> single point of failure the password door was built to remove. Setting the bootstrap
-> secret before the guild id is still the right sequence for a *fresh* deployment.
+> `DISCORD_BOOTSTRAP_ADMIN_ID` is **no longer set on the live Worker**, because a secret that
+> mints an admin is the single point of failure the password door was built to remove.
+> Confirmed on 2026-09-22 by listing the live version's bindings (`wrangler versions view
+> <live id> --json`, names and types only): it is there neither as a secret nor as a plain
+> var, and `wrangler secret list` does not show it. The code in `resolveRole` still honours
+> it, so **setting it again would bring the short-circuit back** — one Discord account
+> resolving to `admin` on every sign-in. Setting the bootstrap secret before the guild id is
+> still the right sequence for a *fresh* deployment.
 >
 > **The path is not part of the configuration and not part of the defence.** It is fixed at
 > `/admin/login`, and the repo is public, so it is public knowledge. What has to be strong is
@@ -92,11 +98,14 @@ curl -s https://pogotxk.gnomelabz.workers.dev/api/push/subscribe
 ## Not set — features that stay off until they are
 
 `DISCORD_GUILD_ID` and `DISCORD_BOOTSTRAP_ADMIN_ID` were listed here as well as above for a
-while. They are **set** — see the table above; this list is only what is genuinely missing.
+while. Both were set on 2026-08-06. `DISCORD_GUILD_ID` still is — see the table above.
+`DISCORD_BOOTSTRAP_ADMIN_ID` has since been removed (confirmed absent on 2026-09-22) and is
+listed below as unset on purpose, not as something missing.
 
 | Name | Type | Enables |
 |---|---|---|
 | `DISCORD_WEBHOOK_URL` | Secret | Flares into Discord — [[Notifications]] |
+| `DISCORD_BOOTSTRAP_ADMIN_ID` | Secret | One Discord account that always resolves to `admin`. **Unset on purpose**: the code still honours it, so setting it brings that short-circuit back. See the note under [[#Currently set]] |
 | `DISCORD_ROLE_ADMIN` / `_AMBASSADOR` | var | Automatic role mapping |
 | `DISCORD_ROLE_MEMBER` | var | A role-gated membership check. **Usually leave unset** — see [[Backlog]] |
 | `SITE_URL` | **build** var | Canonical host. Only needed at the domain cutover — see below |

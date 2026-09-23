@@ -1,6 +1,6 @@
 ---
 tags: [planning]
-updated: 2026-09-21
+updated: 2026-09-23
 ---
 
 # Backlog
@@ -80,11 +80,11 @@ recording rather than just ticking.
       `/api/push/subscribe` reports `enabled: true`. See [[Configuration]]
 - [ ] **Test the bubble on a real phone**, ideally over Pokémon GO. See [[Android App]]
 - [ ] **Rotate the Discord client secret** — it passed through a chat transcript during setup
-- [ ] **Retire `DISCORD_BOOTSTRAP_ADMIN_ID`** — `npx wrangler secret delete
-      DISCORD_BOOTSTRAP_ADMIN_ID`. It is the last route to `admin` that runs through a third
-      party, and the password door exists to remove exactly that. Both admins already sign in
-      at `/admin/login` with `role_locked = 1`, so deleting it takes nobody's access away. The
-      code still honours the secret if it is set; nothing in the repo has to change.
+- [x] ~~**Retire `DISCORD_BOOTSTRAP_ADMIN_ID`**~~ — gone from the live Worker, confirmed
+      2026-09-22: absent from the live version's bindings (names and types only) and from
+      `wrangler secret list`. It was the last route to `admin` that ran through a third party.
+      Nobody lost access — both admins sign in at `/admin/login` with `role_locked = 1`. The
+      code still honours the secret, so setting it again would bring the short-circuit back.
       See [[Auth and Roles#The admin password door]]
 
 ## Discord server admin — landed, work it through with Nick
@@ -174,15 +174,17 @@ different permissions.
 > [!note] None of this blocks signing in
 > Admin access comes from `/admin/login` now: two standalone identities with passwords and
 > `role_locked = 1`, which nothing in Discord can demote and nothing here can delay.
-> `DISCORD_BOOTSTRAP_ADMIN_ID` still short-circuits `resolveRole` to `admin` regardless of
-> guild membership — asserted in `scripts/test-auth.ts` as "bootstrap id → admin even outside
-> guild" — but it is on its way out, because a secret that mints an admin is the single point
-> of failure the password door was built to remove.
+> `DISCORD_BOOTSTRAP_ADMIN_ID`, which used to short-circuit `resolveRole` to `admin`
+> regardless of guild membership, is no longer set on the live Worker (confirmed 2026-09-22),
+> because a secret that mints an admin is the single point of failure the password door was
+> built to remove. The code path is still there and still tested — "bootstrap id → admin even
+> outside guild" in `scripts/test-auth.ts` — so setting the secret again would bring it back.
 > See [[Auth and Roles#The admin password door]].
 
 - [x] ~~`DISCORD_GUILD_ID` + `DISCORD_BOOTSTRAP_ADMIN_ID`~~ — set 2026-08-06. Neither needed
       admin: Developer Mode plus right-click → Copy ID. The membership check is now **on**,
-      so people outside the Discord sign in as guests
+      so people outside the Discord sign in as guests. The bootstrap id has since been removed
+      again — see the note above
 
 > [!tip] A role id can be read without Server Settings
 > Type `\@RoleName` in any channel — the backslash makes Discord send the raw form
@@ -190,11 +192,12 @@ different permissions.
 > but it may save waiting on the meeting.
 
 > [!warning] Everyone in the guild is a plain `member` until the role ids land
-> That is the intended interim state, not a bug. It no longer costs anybody their admin: that
-> lives in `admin_credentials` and `role_locked`, not in a Discord role or in
-> `DISCORD_BOOTSTRAP_ADMIN_ID`. Setting `DISCORD_ROLE_AMBASSADOR` would let Discord mint an
-> **ambassador**, who can reach `/admin`; read the ordering warning in [[Configuration]]
-> before changing any of this.
+> That is the intended interim state, not a bug, and with `DISCORD_BOOTSTRAP_ADMIN_ID` gone
+> (confirmed 2026-09-22) there is no exception to it: a Discord sign-in yields `member`, or
+> `guest` outside the guild, and nothing else. It no longer costs anybody their admin: that
+> lives in `admin_credentials` and `role_locked`, not in a Discord role or a secret. Setting
+> `DISCORD_ROLE_AMBASSADOR` would let Discord mint an **ambassador**, who can reach `/admin`;
+> read the ordering warning in [[Configuration]] before changing any of this.
 
 ## The calendar subscribe feature is gone
 
