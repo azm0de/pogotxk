@@ -1,6 +1,6 @@
 ---
 tags: [architecture, security]
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Auth and Roles
@@ -35,10 +35,11 @@ Scopes requested: `identify` and `guilds.members.read`. No email, no messages, n
 
 ## The admin password door
 
-`/admin/login` is a username-and-password login, and the accounts it serves are **standalone
-identities**: a `users` row under a synthetic `admin:<name>` id, a row in `admin_credentials`,
-and no Discord account anywhere behind it. An admin does not have a Discord sign-in that would
-also work; the password is the whole of their access. Production holds two of them.
+`/admin/login` takes a username — or the recovery address on file, since 2026-09-23 — and a
+password, and the accounts it serves are **standalone identities**: a `users` row under a
+synthetic `admin:<name>` id, a row in `admin_credentials`, and no Discord account anywhere behind
+it. An admin does not have a Discord sign-in that would also work; the password is the whole of
+their access. Production holds two of them.
 
 It was built for the day Discord sign-in could not produce an admin. That day is now every
 day: no `DISCORD_ROLE_ADMIN` is set, so `resolveRole` can only answer `member`, and
@@ -63,6 +64,15 @@ The page sits under `/admin` and the POST route deliberately does not.
   those would carry `/admin/login/anything` or `/admin/logins` out of the gate with it, turning
   one deliberate hole into an open-ended one nobody would have to notice. `admin-path.test.ts`
   pins the near-misses; `admin-login.test.ts` pins them again through the real stack.
+- **It is where the gate sends everyone it turns away.** Since 2026-09-23 a page request under
+  `/admin` from anyone below `ambassador` gets `302 /admin/login?next=<path>`. It used to go to
+  `/auth/login`, the Discord door, which could no longer admit anybody the gate would let
+  through: no `DISCORD_ROLE_*` ids are set and the bootstrap id is gone, so Discord only ever
+  produces a member, and the two admins have no Discord account at all. The page shows the form
+  to anyone below `ambassador`, forwards anyone at or above it to `next`, and links members to
+  Discord with `next` carried along — so the gate and the page can never bounce a caller between
+  them, and without the exemption the page would redirect to itself. API routes under
+  `/api/admin/` still answer JSON 401 (signed out) or 403 (signed in, not enough).
 - `POST /api/auth/admin-login` is **not** under `/api/admin/`, because everything there is
   gated and a gated login route would answer 401 to precisely the signed-out visitor it is for.
   It sits with `device/` and `mobile.ts` instead — the other routes that turn a credential into
@@ -164,17 +174,52 @@ so locking one admin out does not touch the other.
   has to be able to tell a wrong password from a wait — so spending a full PBKDF2 to hide a
   fact the message already states would only hand an attacker a way to burn the CPU budget.
 
+### Username or email, in one box
+
+Added 2026-09-23, after an admin completed two resets by email and was then refused here: the
+recovery flow is addressed by email and had never shown him his username, so he typed the
+address, and a lookup that only knew `username` answered "did not match" to the right password.
+See [[Bugs Worth Remembering#A recovery flow that never said which account it recovered]].
+
+The route picks the column by **whether the value contains `@`** — `admin_credentials.email` if
+it does, `username` if it does not. Never both, and never `OR`-ed into one query:
+
+- Each lookup is an equality on its **own UNIQUE index** — the `username` constraint, or the
+  partial `idx_admin_credentials_email` (usable, because `email = ?` implies `email IS NOT
+  NULL`). One index, at most one row. An `OR` across two columns can match two different rows,
+  and `.first()` would quietly pick one.
+- **The namespaces cannot overlap.** Every stored address contains `@` (the column's CHECK
+  demands it) and no login name can: the setter's `SAFE_NAME` refuses `@`, and that refusal is
+  now load-bearing — a login name with an `@` would be looked up as an address and could never
+  be used. No migration was needed.
+- The address goes through `normalizeEmail`, the same validator the reset request and the
+  setter use. A string with an `@` that it refuses is an **unknown identifier** — `dummyVerify`,
+  then `bad` — and is never retried as a username.
+- **The lockout is per account**, whichever kind was typed: both lookups land on the same row
+  and the counter is keyed on `user_id`, so three wrong guesses by username and two by address
+  lock the account.
+- The `login` audit rows carry **`via: 'username' | 'email'`** — which kind of identifier was
+  typed, never the identifier.
+- The address lookup reads a `0005` column, so it is **guarded**: while the migration has not
+  run, it reads as an address nobody has (`bad`), where the username path — which touches
+  nothing `0005` added — keeps working. A 500 for addresses beside a 303 for usernames would be
+  an oracle.
+
+The field is still `name="username"` with `autocomplete="username"`, labelled "Username or
+email", and a mismatch now reads "Those sign-in details did not match."
+
 ### What it refuses to say
 
-A wrong password, an unknown username, a username with no credential, and a row too corrupt to
-check are all the same answer: `303` to `/admin/login?error=bad`, byte for byte. An unknown
-username burns a real derivation first so the timing matches — measured at 56 ms against the
-wrong-password path's 60 ms, the 4 ms being two D1 writes.
+A wrong password, an unknown username or address, a string with an `@` that is not an address,
+a username with no credential, and a row too corrupt to check are all the same answer: `303` to
+`/admin/login?error=bad`, byte for byte. An unknown identifier of either kind burns a real
+derivation first so the timing matches — measured at 56 ms against the wrong-password path's
+60 ms, the 4 ms being two D1 writes.
 
-The audit log records failures with **no username and no password**, because one day an admin
-will type their password into the username field and `audit_log` is readable by every
-ambassador. A failure against an unknown username is not logged at all: it has no counter to
-bound it, so logging it would let anyone append to `audit_log` at will.
+The audit log records failures with **no username, no address and no password**, because one
+day an admin will type their password into the username field and `audit_log` is readable by
+every ambassador. A failure against an unknown identifier is not logged at all: it has no
+counter to bound it, so logging it would let anyone append to `audit_log` at will.
 
 ## Password reset by email
 
@@ -191,11 +236,12 @@ password. Migration `0005_admin_password_reset.sql`.
 > away from being gone — the setter script used to say so in three places and the lockout is
 > capped at an hour for the same reason — and a mailbox is a thing an admin already protects.
 >
-> **It is opt-in per admin.** `admin_credentials.email` is nullable and both production rows
-> have no address, so nothing is reset-able until somebody sets one. An admin who would
-> rather keep the narrower model simply never does, or clears it again with
-> `--clear-email`. Choose a mailbox with its own strong password and two-factor, and not one
-> shared with anybody.
+> **It is opt-in per admin.** `admin_credentials.email` is nullable, and an admin with no
+> address cannot be reset (or sign in by address). Production's accounts started with none;
+> addresses have since been set, and the owner's account was recovered through one on
+> 2026-09-23. An admin who would rather keep the narrower model simply never sets one, or
+> clears it again with `--clear-email`. Choose a mailbox with its own strong password and
+> two-factor, and not one shared with anybody.
 
 **The flow.** `/admin/reset` (form) → `POST /api/auth/admin-reset` (issue + mail) →
 `/admin/reset/<token>` (form) → `POST /api/auth/admin-reset/confirm` (apply) →
@@ -282,9 +328,18 @@ match** beside `isAdminLoginPath`, not a widening of it.
   it is pinned to the **shape of the thing it must admit**: one segment, 64 lowercase hex
   characters. `/admin/reset/`, `/admin/resets`, `/admin/reset-notes`, anything nested below a
   token, an uppercase token and a token of any other length all stay gated.
-- The cost is honest: somebody who clicks a *truncated* link is bounced to Discord sign-in
-  rather than told the link is broken. That is one confusing minute occasionally, against an
-  exemption that cannot be talked into covering a page nobody has written yet.
+- The cost is honest: somebody who clicks a *truncated* link is bounced to the admin sign-in
+  form rather than told the link is broken. That form links to `/admin/reset`, so the way on is
+  one click away — one confusing minute occasionally, against an exemption that cannot be talked
+  into covering a page nobody has written yet.
+
+`/admin/reset/<token>` also carries the account's **login name for password managers**: a
+`type="text"` input with `autocomplete="username"`, the username as its value, `hidden`, and
+**no `name`**. Chromium's "Create Amazing Password Forms" asks change-password forms to include
+the username this way (its own example is a text input hidden with `display: none`), so the
+browser saves the new password against the right account instead of asking or saving a second
+entry. With no `name` it is never submitted; the confirm route reads `token`, `password` and
+`confirm` and nothing else, and a `username` added to the POST by hand changes nothing — tested.
 
 Both reset pages send **`Referrer-Policy: strict-origin`**. The token is in the URL of
 `/admin/reset/<token>` — unavoidable, it is how a mailed link carries a credential — so without a
@@ -509,8 +564,8 @@ empty jar.
 - The admin gate exempts `/admin/login` by **exact match**, `/admin/reset` by a second exact
   match, and `/admin/reset/<64 hex>` by shape. Nothing else under `/admin`. `/admin/login/`,
   `/admin/logins`, `/admin/reset/`, `/admin/resets`, `/admin/reset-notes` and anything nested
-  below a token all still redirect a signed-out visitor to Discord sign-in, which is what
-  makes each exemption one page wide rather than a section.
+  below a token all still redirect a signed-out visitor to `/admin/login?next=…`, which is
+  what makes each exemption one page wide rather than a section.
 - Reset tokens are random 256-bit values; **only their SHA-256 is stored**, the same scheme
   as sessions. They expire in 30 minutes, work once, and a newer one kills the older.
 - Both reset pages send `Referrer-Policy: strict-origin`, because the token is in the URL and a
@@ -544,7 +599,10 @@ grant, the Android exchange, the state cookie, the admin password door and `src/
 itself through `SELF.fetch`, with Discord mocked and sessions minted by the real
 `createSession`. `admin-login.test.ts` asserts the same known-answer vector the tsx suite does,
 which is the only thing that really proves the setter script and the Worker derive the same
-bytes; it also pins the byte-identical refusals and `role_locked` **with its control**.
+bytes; it also pins the byte-identical refusals and `role_locked` **with its control**, and
+signing in by address against every promise the username path makes — the same refusal, the
+same cost (a floor, minimum of three samples), the same lockout counter, `via` in the audit
+row, and a malformed or unknown address answered exactly as an unknown username.
 `admin-reset.test.ts` drives the reset end to end by reading the link out of a stubbed
 Resend call — the only supported way to get a token, and therefore the only test that proves
 the link the route composes is the link that works. It has to configure the mail sender to do

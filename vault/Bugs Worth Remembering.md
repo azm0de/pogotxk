@@ -1,6 +1,6 @@
 ---
 tags: [history, quality]
-updated: 2026-09-19
+updated: 2026-09-23
 ---
 
 # Bugs Worth Remembering
@@ -396,6 +396,30 @@ Nearly an hour of "performance problems" were an artefact of the harness.
 > Audit the thing you ship, from where it is served. A local preview is fine for
 > accessibility and SEO, which are transport-independent — those numbers held exactly
 > (93 → 97 and 92 → 100 locally, and the same on production after deploying).
+
+## A recovery flow that never said which account it recovered
+
+**The reset worked. The sign-in after it did not.** On 2026-09-23 the owner reset his admin
+password by email — twice, both successful (`reset-complete` at 13:15 and 13:16 UTC) — and was
+then refused at `/admin/login`. He had typed the address the reset mail went to into the
+Username box. The route looked up `username` only, so the address was an unknown user and got
+the generic "did not match", which by design says nothing more. The other admin was one lost
+password away from the same wall.
+
+Every piece did what it was specified to do. The flow as a whole had a hole in it: recovery was
+addressed entirely by email and never once showed the username, so the one identifier the
+person had just been handed was the one identifier the door refused.
+
+> A recovery flow has to end with the person knowing what to type at the door it leads back
+> to. Either accept the identifier the recovery used, or say the other one out loud.
+
+Fixed on the door's side: `/admin/login` takes the username or the recovery address in one box,
+the `@` picking the column and never both, with the lockout, the byte-identical refusals and the
+timing all unchanged. The reset form now hands the username to password managers, so the new
+password is saved against the right login. And the gate in front of `/admin` stopped sending
+refusals to Discord sign-in — a door that could no longer admit anyone the gate lets through —
+and sends them to `/admin/login` instead. See
+[[Auth and Roles#Username or email, in one box]].
 
 ## See also
 

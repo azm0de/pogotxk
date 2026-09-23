@@ -38,7 +38,7 @@ import { env, SELF } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RESET_COOLDOWN_MS, RESET_TTL_MS } from '~/lib/auth/password-reset';
 import { SESSION_COOKIE, sha256 } from '~/lib/auth/session';
-import { submitForm } from '../helpers/browser-form';
+import { parsePage, submitForm } from '../helpers/browser-form';
 import { authCookie, iso, jsonRequest, readCredential, seedAdminCredential, seedSession, seedUser } from '../helpers/factories';
 
 const ORIGIN = 'https://pogotxk.test';
@@ -1054,9 +1054,9 @@ describe('GET /admin/reset', () => {
     /*
      * THE POINT OF THE EXEMPTION. This page is under `/admin`, so the
      * middleware's role gate covers it by default and would answer a
-     * signed-out visitor with a 302 to `/auth/login` — the Discord door their
-     * account does not exist behind, which is the exact predicament they are
-     * here to get out of.
+     * signed-out visitor with a 302 to `/admin/login` — the password form they
+     * cannot get through, which is the exact predicament they are here to get
+     * out of.
      */
     const res = await SELF.fetch(`${ORIGIN}/admin/reset`, { redirect: 'manual' });
 
@@ -1151,6 +1151,109 @@ describe('GET /admin/reset/<token>', () => {
     expect(html.slice(html.indexOf('<main'))).not.toContain('<script');
   });
 
+  it('names the account to a password manager, in a field no browser submits', async () => {
+    /*
+     * Chromium's guidance for a change-password form: put the username in a
+     * field marked `autocomplete="username"`, hidden if the layout does not
+     * need it, so the browser saves the new password against the right
+     * account rather than asking, guessing, or saving a second entry. Its own
+     * example is a real text input hidden with `display: none`, which is what
+     * `hidden` is here.
+     *
+     * Read with workerd's own HTML parser rather than a regular expression, so
+     * a match inside a comment cannot pass this.
+     */
+    const { cred } = await seedResettableAdmin();
+    const token = await withMail(async (mail) => {
+      await askFor({ email: cred.email! });
+      return mail.token();
+    });
+
+    const html = await (await SELF.fetch(`${ORIGIN}/admin/reset/${token}`)).text();
+
+    // `getAttribute` and `hasAttribute` only, as `browser-form.ts` does: the
+    // Workers types and the DOM types disagree about `Element`, and those two
+    // methods are the part they agree on.
+    const inputs: {
+      autocomplete: string | null;
+      type: string | null;
+      value: string | null;
+      hidden: boolean;
+      named: boolean;
+    }[] = [];
+    await new HTMLRewriter()
+      .on('form input', {
+        element(el) {
+          inputs.push({
+            autocomplete: el.getAttribute('autocomplete'),
+            type: el.getAttribute('type'),
+            value: el.getAttribute('value'),
+            hidden: el.hasAttribute('hidden'),
+            named: el.hasAttribute('name'),
+          });
+        },
+      })
+      .transform(new Response(html))
+      .arrayBuffer();
+
+    const at = inputs.findIndex((a) => a.autocomplete === 'username');
+    expect(at, 'no autocomplete="username" field in the reset form').toBeGreaterThanOrEqual(0);
+    const field = inputs[at]!;
+
+    expect(field.value).toBe(cred.username);
+    // A real text input, not `type="hidden"`, which password managers skip.
+    expect(field.type).toBe('text');
+    expect(field.hidden).toBe(true);
+    // Unnamed, so it is never part of the submission.
+    expect(field.named).toBe(false);
+
+    // Ahead of the new-password fields, the order a password manager reads a
+    // login in.
+    const firstPassword = inputs.findIndex((a) => a.type === 'password');
+    expect(at).toBeLessThan(firstPassword);
+
+    // And what a browser actually submits from this form is unchanged: the
+    // token and the two entries, and not the login name.
+    const { forms } = await parsePage(html);
+    expect(forms[0]!.controls.map((c) => c.name)).toEqual(['token', 'password', 'confirm']);
+  });
+
+  it('ignores a username added to the confirm POST by hand: the account is the token’s', async () => {
+    /*
+     * A browser never sends the page's login-name field, but anybody can add a
+     * field to a POST. The route reads `token`, `password` and `confirm` and
+     * nothing else, so naming a different admin changes nothing — the password
+     * lands on the account the link was issued for, and only there.
+     */
+    const { cred } = await seedResettableAdmin('first@example.test');
+    const other = await seedUser(env.DB, { role: 'admin', roleLocked: true });
+    const otherCred = await seedAdminCredential(env.DB, other, { email: 'second@example.test' });
+
+    const token = await withMail(async (mail) => {
+      await askFor({ email: cred.email! });
+      return mail.token();
+    });
+
+    const res = await confirm({
+      token,
+      username: otherCred.username,
+      password: NEW_PASSWORD,
+      confirm: NEW_PASSWORD,
+    });
+    expect(res.headers.get('location')).toBe('/admin/login?reset=1');
+
+    // The link's account took the new password...
+    const mine = await signIn({ username: cred.username, password: NEW_PASSWORD });
+    expect(mine.headers.get('location')).toBe('/');
+
+    // ...and the named one did not: its own password still works, the new one
+    // does not.
+    const theirsNew = await signIn({ username: otherCred.username, password: NEW_PASSWORD });
+    expect(theirsNew.headers.get('location')).toBe('/admin/login?error=bad');
+    const theirsOld = await signIn({ username: otherCred.username, password: otherCred.password });
+    expect(theirsOld.headers.get('location')).toBe('/');
+  });
+
   it('carries the header on a refusal too, not only on the form', async () => {
     // The refusing paths have the token in the URL just as much as the working
     // one does, and they are the ones a person is most likely to wander off
@@ -1226,11 +1329,12 @@ describe('with the migration not yet applied, which happens on every deploy', ()
   it('THE EXISTING SIGN-IN IS COMPLETELY UNAFFECTED', async () => {
     /*
      * The assertion that matters most in this file, and the cheapest to get
-     * wrong: `admin-login.ts` names its columns explicitly and none of them is
-     * new, so it never touches either object `0005` adds. A `SELECT c.*` there
-     * would have been fine too — but a later change that started reading
-     * `email` on the login path would break the door for the whole window, and
-     * this is what would notice.
+     * wrong: `admin-login.ts` looks a username up by columns it names
+     * explicitly, none of them new, so that path never touches either object
+     * `0005` adds. A later change that started reading `email` on the username
+     * path would break the door for the whole window, and this is what would
+     * notice. The address path does read `email`, and is guarded — the next
+     * test.
      */
     const { cred } = await seedResettableAdmin();
 
@@ -1246,6 +1350,30 @@ describe('with the migration not yet applied, which happens on every deploy', ()
       const wrong = await signIn({ username: cred.username, password: 'not it at all' });
       expect(wrong.headers.get('location')).toBe('/admin/login?error=bad');
     });
+  });
+
+  it('sign-in by address refuses, rather than erroring, while the username still works', async () => {
+    /*
+     * The address lookup, added 2026-09-23, is the one part of the sign-in
+     * that reads a `0005` column. Without the guard it would 500 for an
+     * address and 303 for a username — an oracle, and a stack trace on the
+     * only door — so a missing column has to read as an address nobody has.
+     */
+    const { cred } = await seedResettableAdmin();
+
+    await withoutMigration0005(async () => {
+      const byAddress = await signIn({ username: cred.email!, password: cred.password });
+      expect(byAddress.status).toBe(303);
+      expect(byAddress.headers.get('location')).toBe('/admin/login?error=bad');
+      expect(sessionTokenOf(byAddress)).toBeUndefined();
+
+      const byName = await signIn({ username: cred.username, password: cred.password });
+      expect(byName.headers.get('location')).toBe('/');
+    });
+
+    // And once the column is back, the address works again.
+    const after = await signIn({ username: cred.email!, password: cred.password });
+    expect(after.headers.get('location')).toBe('/');
   });
 
   it('the request endpoint answers exactly as it does for an unknown address', async () => {
@@ -1367,7 +1495,7 @@ describe('the hole these pages sit in is exactly two shapes wide', () => {
     const res = await SELF.fetch(`${ORIGIN}${path}`, { redirect: 'manual' });
 
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(`/auth/login?next=${encodeURIComponent(path)}`);
+    expect(res.headers.get('location')).toBe(`/admin/login?next=${encodeURIComponent(path)}`);
   });
 
   it('and the ordinary console pages are untouched by it', async () => {
@@ -1377,7 +1505,7 @@ describe('the hole these pages sit in is exactly two shapes wide', () => {
     const res = await SELF.fetch(`${ORIGIN}/admin/posts`, { redirect: 'manual' });
 
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/auth/login?next=%2Fadmin%2Fposts');
+    expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin%2Fposts');
   });
 
   it('and the login form is still exempt on its own terms', async () => {

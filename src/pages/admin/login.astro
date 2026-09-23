@@ -10,8 +10,14 @@ export const prerender = false;
  *
  * An admin account is a standalone identity: a username and a password in
  * `admin_credentials`, with no Discord account behind it. Members sign in with
- * Discord and never see this page; admins have no Discord account to fall back
- * on, so nothing on this page may offer them one.
+ * Discord and never need this page; admins have no Discord account to fall
+ * back on, so nothing on this page may offer them one.
+ *
+ * The first box takes the username **or** the recovery address on file, since
+ * 2026-09-23. The reset flow is addressed by email and never used to say what
+ * the username was, so an admin fresh from a reset typed the address here and
+ * was told it did not match. How the route tells the two apart, and why that
+ * cannot cross them over, is in the header of `/api/auth/admin-login`.
  *
  * It depends on nothing but this Worker and its database, which is why it was
  * built — it keeps working when Discord is down, when the guild is
@@ -35,10 +41,16 @@ export const prerender = false;
  * out of the nav and out of a search index, and that is the whole of what they
  * are worth.
  *
- * Sitting under `/admin` means the gate in `src/middleware.ts` would bounce the
- * signed-out visitor this page exists for. `isAdminLoginPath` in
- * `~/lib/auth/admin-path` is the exemption that stops it, matched exactly so it
- * covers this path and no other.
+ * Sitting under `/admin` means the gate in `src/middleware.ts` covers this page
+ * by default — and since 2026-09-23 the gate sends everyone it turns away
+ * *here*, so without an exemption this page would redirect to itself forever.
+ * `isAdminLoginPath` in `~/lib/auth/admin-path` is the exemption that stops it,
+ * matched exactly so it covers this path and no other.
+ *
+ * That makes this page the answer to every refused `/admin` page, for
+ * signed-out visitors and signed-in members alike. It shows the form to anybody
+ * below `ambassador` and sends anybody at or above it on to `next`, so the gate
+ * and this page can never bounce a caller between them.
  *
  * ---------------------------------------------------------------------------
  * NO JAVASCRIPT ON THIS PAGE. AT ALL.
@@ -68,8 +80,22 @@ const next = safeNext(Astro.url.searchParams.get('next'));
 // end. Same shape as `/auth/device`'s early return.
 if (hasRole(Astro.locals.user, 'ambassador')) return Astro.redirect(next, 302);
 
+/*
+ * The Discord link carries `next` too, so a member the gate sent here can sign
+ * in the ordinary way and come back to where they were going. It is already
+ * through `safeNext` above and `/auth/login` runs it again on arrival; the
+ * bare path is `/auth/login`'s own default, so it is left off rather than
+ * spelled out. The same shape `/account/delete` uses.
+ */
+const discordHref = next === '/' ? '/auth/login' : `/auth/login?next=${encodeURIComponent(next)}`;
+
 // Only the two the API route emits. Anything else in the query string is
 // somebody poking at it, and gets no message.
+//
+// `bad` is worded as "those sign-in details did not match" — not "that
+// username", now the box also takes an address — and it never says which half
+// was wrong or whether the account exists. The route does not tell this page
+// that, on purpose; see `back()` in `/api/auth/admin-login`.
 const raw = Astro.url.searchParams.get('error');
 const error = raw === 'bad' || raw === 'locked' ? raw : null;
 
@@ -113,7 +139,7 @@ const reset = Astro.url.searchParams.get('reset') === '1';
     <p class="lede">
       Admin accounts sign in here. Everyone else signs in with <a
         class="target"
-        href="/auth/login">Discord</a
+        href={discordHref}>Discord</a
       >.
     </p>
 
@@ -147,7 +173,7 @@ const reset = Astro.url.searchParams.get('reset') === '1';
               </p>
             </>
           ) : (
-            <p>That username and password did not match.</p>
+            <p>Those sign-in details did not match.</p>
           )}
         </div>
       )
@@ -158,12 +184,19 @@ const reset = Astro.url.searchParams.get('reset') === '1';
       `autocomplete` is set on both fields on purpose: this credential is meant
       to be long and unmemorable, which only works if a password manager can
       store and fill it.
+
+      The first box takes a username or an address, and keeps
+      `name="username"` and `autocomplete="username"` all the same. The name is
+      what the route reads; the token is the standard one for "the login this
+      password belongs to", which is what a password manager needs to know
+      whichever of the two was typed. `type="text"`, not `email`, because a
+      bare username is not an address and the browser would refuse it.
     */}
     <form class="panel admin-login-form" method="post" action="/api/auth/admin-login">
       <input type="hidden" name="next" value={next} />
 
       <div class="field">
-        <label for="admin-username">Username</label>
+        <label for="admin-username">Username or email</label>
         <input
           id="admin-username"
           name="username"

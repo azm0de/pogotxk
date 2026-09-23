@@ -87,17 +87,24 @@ describe('the skip list', () => {
 });
 
 describe('the admin pages', () => {
-  it('sends a signed-out visitor through sign-in, carrying where they were going', async () => {
+  /*
+   * The bounce goes to `/admin/login`, the admin password form — not to
+   * Discord's `/auth/login`, which is where it went until 2026-09-23. Discord
+   * cannot produce anybody this gate admits any more (no `DISCORD_ROLE_*` ids
+   * are set and the bootstrap id is gone), so for the two admins, who have no
+   * Discord account at all, it was a dead end.
+   */
+  it('sends a signed-out visitor to the admin sign-in, carrying where they were going', async () => {
     const res = await get('/admin');
 
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/auth/login?next=%2Fadmin');
+    expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin');
   });
 
   it('encodes a deeper path into next', async () => {
     const res = await get('/admin/map');
 
-    expect(res.headers.get('location')).toBe('/auth/login?next=%2Fadmin%2Fmap');
+    expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin%2Fmap');
   });
 
   it('turns a member away too', async () => {
@@ -110,7 +117,41 @@ describe('the admin pages', () => {
     // Signed in, but not enough. The bounce through sign-in is the honest
     // answer for a page: they may have a second account that does qualify.
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/auth/login?next=%2Fadmin');
+    expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin');
+  });
+
+  it('lands a signed-out visitor on a working form, with next in it', async () => {
+    // The redirect is only as good as the page it points at. Followed by hand,
+    // one hop, so a loop would show up as a second 302 rather than hang.
+    const bounced = await get('/admin/posts');
+    const landed = await get(bounced.headers.get('location')!);
+
+    expect(landed.status).toBe(200);
+    expect(landed.headers.get('location')).toBeNull();
+    const html = await landed.text();
+    expect(html).toContain('action="/api/auth/admin-login"');
+    expect(html).toContain('name="next" value="/admin/posts"');
+  });
+
+  it('lands a signed-in member on the same form, rather than bouncing them again', async () => {
+    /*
+     * The page shows the form to anybody below `ambassador` and forwards
+     * anybody at or above it, and the gate admits exactly the second group —
+     * so the two can never pass a caller back and forth. A member standing on
+     * the form can still use the Discord link beside it, which carries `next`.
+     */
+    const member = await seedUser(env.DB, { role: 'member' });
+    const cookie = authCookie(await seedSession(env.DB, member));
+
+    const bounced = await get('/admin/meetups', cookie);
+    expect(bounced.headers.get('location')).toBe('/admin/login?next=%2Fadmin%2Fmeetups');
+
+    const landed = await get(bounced.headers.get('location')!, cookie);
+    expect(landed.status).toBe(200);
+    expect(landed.headers.get('location')).toBeNull();
+    const html = await landed.text();
+    expect(html).toContain('action="/api/auth/admin-login"');
+    expect(html).toContain('href="/auth/login?next=%2Fadmin%2Fmeetups"');
   });
 
   it.each(['ambassador', 'admin'] as const)('lets an %s through', async (role) => {
@@ -133,7 +174,7 @@ describe('the admin pages', () => {
       const res = await get(path);
 
       expect(res.status).toBe(302);
-      expect(res.headers.get('location')).toBe(`/auth/login?next=${encodeURIComponent(path)}`);
+      expect(res.headers.get('location')).toBe(`/admin/login?next=${encodeURIComponent(path)}`);
     },
   );
 });
@@ -141,7 +182,7 @@ describe('the admin pages', () => {
 /**
  * The prefix boundary in `~/lib/auth/admin-path`, observed where it actually
  * bites: `/administrators` is not under `/admin`, and a bare `startsWith`
- * would bounce a stranger through Discord sign-in to reach a page that was
+ * would bounce a stranger to the admin sign-in form to reach a page that was
  * never private.
  *
  * `admin-path.test.ts` pins the predicate exhaustively. This is the other half
@@ -180,7 +221,7 @@ describe('a path with no route', () => {
     const res = await get('/admin/nothing-here');
 
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/auth/login?next=%2Fadmin%2Fnothing-here');
+    expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin%2Fnothing-here');
   });
 });
 

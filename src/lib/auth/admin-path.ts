@@ -11,8 +11,7 @@
  * and anything else beginning with those five letters, so the guard quietly
  * annexes names nobody has written yet. The failure mode is not a leak — it is
  * the opposite, and worse for being invisible: a public page that bounces every
- * visitor through Discord sign-in and then refuses them, for a permission the
- * page never wanted.
+ * visitor to the admin sign-in form, for a permission the page never wanted.
  *
  * It is not hypothetical under Astro's Cloudflare adapter. A path with no route
  * still reaches the middleware — `fallbackToAssets` returns nothing for a 404
@@ -41,12 +40,13 @@ export function isAdminPath(path: string): boolean {
  * visitor is meant to reach.
  *
  * It has to be exempt or it cannot do its job. `isAdminPath('/admin/login')` is
- * true — it is under `/admin` like everything else — so without this the gate
- * would send the visitor to `/auth/login`, the Discord door. That is not a
- * detour for the caller this page is for, it is a dead end: an admin account is
- * a standalone identity with no Discord account behind it, so the door they
- * would be sent to cannot admit them at all. A sign-in page behind the gate it
- * exists to get somebody through is no sign-in page.
+ * true — it is under `/admin` like everything else — and since 2026-09-23 the
+ * gate sends every page request it refuses to `/admin/login?next=…`. So
+ * without this the gate would redirect this page to itself, forever. (Before
+ * that date the gate sent refusals to `/auth/login`, the Discord door, and the
+ * failure would have been a quieter one: a dead end, because an admin account
+ * is a standalone identity with no Discord account behind it.) A sign-in page
+ * behind the gate it exists to get somebody through is no sign-in page.
  *
  * **Matched exactly, and the exactness is the design.** `isUnder` would carry
  * `/admin/login/anything` out with it; `startsWith` would take `/admin/logins`
@@ -93,12 +93,11 @@ export function isResetToken(value: string): boolean {
  * The password-reset pages: asking for a link, and redeeming one.
  *
  * The second hole in the admin gate, cut for the same reason as the first and
- * with the same discipline. An admin is a standalone identity with no Discord
- * account behind it, so a signed-out admin bounced to `/auth/login` is bounced
- * to a door that cannot admit them — and this pair of pages exists precisely
- * for the admin who can no longer get through the one door they have. A
- * recovery page behind the gate it exists to recover access to is no recovery
- * page.
+ * with the same discipline. The gate sends a signed-out visitor to the admin
+ * sign-in form, and this pair of pages exists precisely for the admin who can
+ * no longer get through that form — the one door they have, since an admin is
+ * a standalone identity with no Discord account behind it. A recovery page
+ * behind the gate it exists to recover access to is no recovery page.
  *
  * **Two shapes, and neither is wider than it has to be.**
  *
@@ -128,11 +127,12 @@ export function isResetToken(value: string): boolean {
  * visitor, which is the correct answer for an unrouted path inside the gate.
  *
  * The cost of the narrowness is honest and small: somebody who clicks a
- * *truncated* link — one a mail client wrapped, say — is redirected to Discord
- * sign-in rather than told the link is broken. That is a confusing minute for
- * one person occasionally, against an exemption that cannot be talked into
- * covering a page nobody has written yet. The trade is the same one
- * `isAdminLoginPath` makes and it goes the same way.
+ * *truncated* link — one a mail client wrapped, say — is redirected to the
+ * admin sign-in form rather than told the link is broken. That form links to
+ * `/admin/reset`, so the way on is one click away, and it is a confusing
+ * minute for one person occasionally, against an exemption that cannot be
+ * talked into covering a page nobody has written yet. The trade is the same
+ * one `isAdminLoginPath` makes and it goes the same way.
  *
  * As there, the path is not a secret and is not protecting anything: the
  * repository is public. The token's entropy, the thirty-minute expiry and the

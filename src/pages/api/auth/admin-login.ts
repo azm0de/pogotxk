@@ -1,14 +1,57 @@
 /**
  * The admin password sign-in, posted to by `/admin/login`.
  *
- * Turns a username and password from `admin_credentials` into a session. The
- * accounts it serves are standalone identities with no Discord account behind
- * them, so there is no fallback to offer a caller this route refuses — Discord
- * OAuth is the door for members, and it is not a second way into an admin
- * account. It also depends on nothing but D1, which is why it survives Discord
- * being down, the guild being misconfigured, or `DISCORD_BOOTSTRAP_ADMIN_ID`
- * being gone. See `migrations/0004_owner_password.sql`, named for the
- * terminology this feature has since left behind.
+ * Turns a username — or the recovery address on file — and a password from
+ * `admin_credentials` into a session. The accounts it serves are standalone
+ * identities with no Discord account behind them, so there is no fallback to
+ * offer a caller this route refuses — Discord OAuth is the door for members,
+ * and it is not a second way into an admin account. It also depends on nothing
+ * but D1, which is why it survives Discord being down, the guild being
+ * misconfigured, or `DISCORD_BOOTSTRAP_ADMIN_ID` being gone. See
+ * `migrations/0004_owner_password.sql`, named for the terminology this feature
+ * has since left behind.
+ *
+ * ---------------------------------------------------------------------------
+ * USERNAME OR EMAIL, AND ONE CHARACTER DECIDES WHICH
+ * ---------------------------------------------------------------------------
+ *
+ * Added 2026-09-23. An admin reset his password by email twice, both resets
+ * worked, and he was then refused here: the recovery flow is addressed by
+ * email and nothing in it had ever told him his username, so he typed the
+ * address into the box, and a lookup that only knew `username` answered "did
+ * not match" to the right password.
+ *
+ * An identifier containing `@` is looked up by `admin_credentials.email`, and
+ * anything else by `username`. Never both, and never `OR`-ed into one query:
+ *
+ *   * Each lookup is an equality on its own UNIQUE index — the `username`
+ *     constraint, or `idx_admin_credentials_email` (partial, and still usable,
+ *     because `email = ?` implies `email IS NOT NULL`). One index, one row at
+ *     most. An `OR` across two columns can match two different rows, and
+ *     `.first()` would pick one of them without saying so.
+ *   * The two namespaces cannot overlap. Every stored address contains `@`
+ *     (the column's CHECK requires it) and no login name can (the setter's
+ *     `SAFE_NAME` refuses it, a refusal this branch now depends on — see
+ *     `scripts/set-admin-password.ts`).
+ *
+ * The address goes through `normalizeEmail`, the validator the reset request
+ * and the setter use, so the address that was stored and the address looked
+ * up are the same string. Something with an `@` that it refuses is an unknown
+ * identifier — `dummyVerify`, then `bad` — and is never retried as a username.
+ *
+ * Nothing else about the door moved. An unknown identifier of either kind is
+ * answered exactly as a wrong password is, in the same time; the lockout
+ * counts per account, so a guess by address and a guess by username come out
+ * of the same five; and the audit row records which kind was typed (`via`),
+ * never what was typed.
+ *
+ * The email lookup is guarded and the username lookup is not. `email` arrived
+ * with `0005_admin_password_reset.sql`, and every push deploys before its
+ * migration is applied (`~/lib/auth/password-reset` has the argument), so for
+ * a while the column may not exist and D1 throws. That has to read as "no such
+ * account": a 500 for addresses beside a 303 for usernames would be an oracle,
+ * and the username path must keep working through that window regardless —
+ * which it does, because its query touches nothing `0005` added.
  *
  * ---------------------------------------------------------------------------
  * WHY THIS IS NOT UNDER `/api/admin/`
@@ -56,6 +99,7 @@ import {
 } from '~/lib/auth/password';
 import { createSession, sessionCookie } from '~/lib/auth/session';
 import { recordAudit } from '~/lib/db/audit';
+import { normalizeEmail } from '~/lib/notify/email';
 
 export const prerender = false;
 
@@ -92,10 +136,11 @@ type Failure = 'bad' | 'locked';
  * Back to the form with a reason.
  *
  * Only two reasons exist, and the split is the whole of what this route is
- * willing to say. `bad` covers a wrong password, an unknown username, a
- * username with no credential configured, and a row too corrupt to check —
- * four situations that must be indistinguishable, because telling them apart
- * is exactly how an attacker learns which username to keep guessing at.
+ * willing to say. `bad` covers a wrong password, an unknown username or
+ * address, a string with an `@` that is not an address at all, a username
+ * with no credential configured, and a row too corrupt to check — situations
+ * that must be indistinguishable, because telling them apart is exactly how an
+ * attacker learns which identifier to keep guessing at.
  */
 function back(kind: Failure, next: string): Response {
   const params = new URLSearchParams({ error: kind });
@@ -112,8 +157,69 @@ interface CredentialRow extends StoredHash {
   is_banned: number;
 }
 
+/**
+ * Which kind of identifier found the row. The audit rows carry this and never
+ * the identifier itself — see the note on `recordFailure`.
+ */
+type Via = 'username' | 'email';
+
 function isoNow(at: number): string {
   return new Date(at).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/*
+ * The two lookups, written out in full rather than sharing a template with the
+ * column name spliced in: a SQL string with an identifier interpolated into it
+ * is a pattern this repository refuses on sight, whatever the value is, and two
+ * greppable statements cost less than an exception to that rule.
+ *
+ * Both are one statement, joined, so a missing credential and a missing user
+ * are the same miss.
+ */
+
+/**
+ * By login name.
+ *
+ * The comparison is against the column directly rather than `lower(username)`
+ * because the schema's CHECK guarantees every stored username is already
+ * lowercase — so the bound value being lowercased is enough, and the UNIQUE
+ * index is usable. Wrapping the column in `lower()` would have forced a scan
+ * to get the identical answer.
+ */
+function findByUsername(username: string): Promise<CredentialRow | null> {
+  return env.DB.prepare(
+    `SELECT c.user_id, c.algorithm, c.iterations, c.salt, c.hash,
+            c.failed_attempts, c.locked_until, u.is_banned
+       FROM admin_credentials c
+       JOIN users u ON u.id = c.user_id
+      WHERE c.username = ?1`,
+  )
+    .bind(username)
+    .first<CredentialRow>();
+}
+
+/**
+ * By recovery address, already through `normalizeEmail` — which lowercases,
+ * matching the column's own `lower()` CHECK, so the partial UNIQUE index
+ * answers this the same way it does for the reset request.
+ *
+ * Guarded, and only this one: `email` is a `0005` column, and a schema that is
+ * not there yet must look like an address nobody has. See the header.
+ */
+async function findByEmail(email: string): Promise<CredentialRow | null> {
+  try {
+    return await env.DB.prepare(
+      `SELECT c.user_id, c.algorithm, c.iterations, c.salt, c.hash,
+              c.failed_attempts, c.locked_until, u.is_banned
+         FROM admin_credentials c
+         JOIN users u ON u.id = c.user_id
+        WHERE c.email = ?1`,
+    )
+      .bind(email)
+      .first<CredentialRow>();
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(ctx: APIContext): Promise<Response> {
@@ -145,41 +251,36 @@ export async function POST(ctx: APIContext): Promise<Response> {
   // than from a cookie we minted.
   const next = safeNext(form.get('next'));
 
-  const username = (form.get('username') ?? '').trim().toLowerCase();
+  // The field is still called `username`: it is what the form has always sent,
+  // and what a password manager has saved against. It holds either kind now.
+  const identifier = (form.get('username') ?? '').trim().toLowerCase();
   const password = form.get('password') ?? '';
 
-  // Nothing submitted: no database read, no derivation. There is no username to
-  // compare timings against, so there is nothing to hide and no reason to spend
-  // a tenth of the request's CPU budget hiding it.
-  if (!username || !password) return back('bad', next);
+  // Nothing submitted: no database read, no derivation. There is no identifier
+  // to compare timings against, so there is nothing to hide and no reason to
+  // spend a tenth of the request's CPU budget hiding it.
+  if (!identifier || !password) return back('bad', next);
 
-  /*
-   * One statement, joined, so a missing credential and a missing user are the
-   * same miss.
-   *
-   * The comparison is against the column directly rather than `lower(username)`
-   * because the schema's CHECK guarantees every stored username is already
-   * lowercase — so the bound value being lowercased is enough, and the UNIQUE
-   * index is usable. Wrapping the column in `lower()` would have forced a scan
-   * to get the identical answer.
-   */
-  const row = await env.DB.prepare(
-    `SELECT c.user_id, c.algorithm, c.iterations, c.salt, c.hash,
-            c.failed_attempts, c.locked_until, u.is_banned
-       FROM admin_credentials c
-       JOIN users u ON u.id = c.user_id
-      WHERE c.username = ?1`,
-  )
-    .bind(username)
-    .first<CredentialRow>();
+  // See the header: the `@` alone decides the column, and the two never mix.
+  const via: Via = identifier.includes('@') ? 'email' : 'username';
+
+  let row: CredentialRow | null;
+  if (via === 'email') {
+    // Not an address at all means no lookup, and the miss below. That is
+    // decidable from the characters, so skipping the read leaks nothing.
+    const email = normalizeEmail(identifier);
+    row = email ? await findByEmail(email) : null;
+  } else {
+    row = await findByUsername(identifier);
+  }
 
   const now = Date.now();
 
   if (!row) {
-    // Burn the same cost a real row would have, so "no such username" and
-    // "wrong password" take the same time. This also covers the fresh-deploy
-    // case — no credential configured at all — which is what a scanner finds,
-    // and which must be a 303 to the form rather than a 500.
+    // Burn the same cost a real row would have, so "no such username or
+    // address" and "wrong password" take the same time. This also covers the
+    // fresh-deploy case — no credential configured at all — which is what a
+    // scanner finds, and which must be a 303 to the form rather than a 500.
     await dummyVerify();
     return back('bad', next);
   }
@@ -209,7 +310,7 @@ export async function POST(ctx: APIContext): Promise<Response> {
   });
 
   if (!ok) {
-    await recordFailure(row, now);
+    await recordFailure(row, now, via);
     return back('bad', next);
   }
 
@@ -230,7 +331,7 @@ export async function POST(ctx: APIContext): Promise<Response> {
       action: 'login',
       entity: 'admin_credentials',
       entityId: row.user_id,
-      diff: { method: 'password', outcome: 'banned' },
+      diff: { method: 'password', outcome: 'banned', via },
     });
     return back('bad', next);
   }
@@ -265,12 +366,14 @@ export async function POST(ctx: APIContext): Promise<Response> {
   // user you are, and everything after that is the code every other door runs.
   const token = await createSession(env.DB, row.user_id, request.headers.get('user-agent'));
 
+  // `via` so that "somebody signed in by address" is findable later — the
+  // address itself stays out, for the reason on `recordFailure`.
   await recordAudit(env.DB, {
     actorId: row.user_id,
     action: 'login',
     entity: 'admin_credentials',
     entityId: row.user_id,
-    diff: { method: 'password' },
+    diff: { method: 'password', via },
   });
 
   const headers = new Headers();
@@ -297,8 +400,12 @@ export async function POST(ctx: APIContext): Promise<Response> {
  *
  * The escalation schedule itself stays in `~/lib/auth/lockout`, not buried in
  * SQL where no plain test can reach it.
+ *
+ * It is keyed on `user_id`, never on what was typed, which is what makes the
+ * lockout per account: a wrong password by username and a wrong password by
+ * address land on the same counter.
  */
-async function recordFailure(row: CredentialRow, now: number): Promise<void> {
+async function recordFailure(row: CredentialRow, now: number, via: Via): Promise<void> {
   const stamp = isoNow(now);
 
   const counted = await env.DB.prepare(
@@ -315,24 +422,27 @@ async function recordFailure(row: CredentialRow, now: number): Promise<void> {
   const attempts = counted?.failed_attempts ?? 0;
 
   /*
-   * The failure audit carries no username and no attempted password — nothing
-   * that identifies who was being guessed at. One day an admin will type their
-   * password into the username field, and `audit_log` is readable by every
-   * ambassador; a log that records the attempt is a log that eventually records
-   * a password in clear text.
+   * The failure audit carries no username, no address and no attempted
+   * password — nothing that identifies who was being guessed at. One day an
+   * admin will type their password into the username field, and `audit_log` is
+   * readable by every ambassador; a log that records the attempt is a log that
+   * eventually records a password in clear text. An admin's mailbox is not
+   * every ambassador's to read either. `via` says which *kind* of identifier
+   * was typed, and that is all it says.
    *
    * It is written only for a real credential row, never for an unknown
-   * username. An unknown username has no counter and therefore no lockout to
-   * bound it, so auditing it would let anyone append to `audit_log` at will —
-   * the amplifier this is otherwise careful to avoid. A known-row failure is
-   * capped at five rows before the door shuts.
+   * username or address. An unknown identifier has no counter and therefore no
+   * lockout to bound it, so auditing it would let anyone append to `audit_log`
+   * at will — the amplifier this is otherwise careful to avoid. A known-row
+   * failure is capped at five rows before the door shuts, and that holds for
+   * both kinds together, because they share the one counter.
    */
   await recordAudit(env.DB, {
     actorId: null,
     action: 'login',
     entity: 'admin_credentials',
     entityId: null,
-    diff: { outcome: 'bad-credentials' },
+    diff: { outcome: 'bad-credentials', via },
   });
 
   if (attempts < MAX_ATTEMPTS) return;

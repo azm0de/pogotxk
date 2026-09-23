@@ -39,9 +39,10 @@
  * outside and impossible to distinguish from the ordinary case, which is
  * exactly what it should be. What it must never do is 500, because a 500 on one
  * input and not another is an oracle, and because the *existing* login route
- * has to keep working through that window regardless. It does: its SELECT names
- * its columns and none of them are new, so it never touches either of the
- * objects this migration adds.
+ * has to keep working through that window regardless. It does. Its username
+ * lookup names its columns and none of them are new, so it never touches either
+ * of the objects this migration adds. Its address lookup, added 2026-09-23,
+ * does read `email`, and is guarded in the same way as the reads below.
  */
 
 import { isResetToken } from './admin-path';

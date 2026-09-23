@@ -1,6 +1,6 @@
 ---
 tags: [architecture, database]
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Data Model
@@ -81,7 +81,7 @@ The columns worth knowing:
 | `failed_attempts`, `last_failed_at` | The lockout counter, and what lets it decay on the next attempt rather than on a sweep — there is no cron ([[Why there is no cron]]) |
 | `username` | `CHECK (username = lower(username))`, so the `UNIQUE` index and the login lookup ask the same question and the index stays usable |
 
-| `email` | Added in `0005`. **Nullable and opt-in** — both production rows have none, and an admin with none cannot be reset at all. Same `lower()` CHECK as `username`, and the same reason |
+| `email` | Added in `0005`. **Nullable and opt-in** — an admin with none cannot be reset, and (since 2026-09-23) cannot sign in by address either. Same `lower()` CHECK as `username`, and the same reason. The CHECK also requires an `@`, and the setter refuses `@` in a login name, which is what lets `/api/auth/admin-login` pick the column by that one character |
 
 **One index on it, added in `0005`, where it used to have none.**
 `idx_admin_credentials_email` is UNIQUE and partial (`WHERE email IS NOT NULL`), which is how
@@ -89,8 +89,10 @@ SQLite gets a unique nullable column: `ALTER TABLE ... ADD COLUMN` refuses a UNI
 outright, so the guarantee has to be spelled as an index. The partial clause changes nothing —
 SQLite already treats NULLs as distinct — it states that several admins may have no address,
 so a reader does not have to remember that rule to know it is allowed. It is there for
-correctness rather than speed: two admins sharing an address would mean a reset request that
-cannot say which account it is for. Every other lookup is still the primary key or the unique
+correctness rather than speed: two admins sharing an address would mean a reset request — or,
+since 2026-09-23, a sign-in by address — that cannot say which account it is for. Both of those
+lookups are `WHERE c.email = ?`, which SQLite can answer from this partial index because an
+equality implies `email IS NOT NULL`. Every other lookup is still the primary key or the unique
 index SQLite already builds for `username`.
 
 **`admin_password_resets` mirrors `sessions` exactly.** Added in `0005`. `id` is the
