@@ -1,6 +1,6 @@
 ---
 tags: [runbook]
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Local Development
@@ -49,6 +49,19 @@ To exercise the admin password door instead:
 ```bash
 npm run set:password -- --create localadmin    # then sign in at /admin/login
 ```
+
+Sign in there with the login name, or with the address if you gave one with `--email`; the box
+takes either.
+
+To look at the password-reset mail without sending one:
+
+```bash
+npm run preview:reset-email -- <somewhere outside the repo>/reset-email.html
+```
+
+It renders the real template with a dummy link and prints the plain-text part. It sends
+nothing, reads no configuration and loads no sender. Switch the computer to dark mode to see
+the palette Apple Mail would use.
 
 That mints `admin:localadmin` — a standalone admin identity with no Discord account behind it,
 which is the same shape the two production admins have.
@@ -122,8 +135,8 @@ reason for the second layer, and it is why the split above is about bindings rat
 | Area | Files | What is pinned |
 |---|---|---|
 | Safety | `00-safety.test.ts` | That the outbound credentials really are blanked, and that the delivery paths cannot reach Discord even so. Named `00-` so it fails first |
-| Admin | `admin/` | Every `/api/admin/*` route × method × caller through `SELF.fetch`, the same handlers called directly with the middleware removed, the import-token hole, and the admin pages' redirect-into-sign-in |
-| Auth | `auth/` | The middleware, sessions, `/auth/login`, `/auth/callback`, logout, the device grant, the Android exchange, the state cookie, `admin-path`, account deletion, and the admin password door — byte-identical refusals, the lockout, `role_locked` with its control |
+| Admin | `admin/` | Every `/api/admin/*` route × method × caller through `SELF.fetch`, the same handlers called directly with the middleware removed, the import-token hole, and the admin pages' redirect into `/admin/login` with `next` carried into the form |
+| Auth | `auth/` | The middleware, sessions, `/auth/login`, `/auth/callback`, logout, the device grant, the Android exchange, the state cookie, `admin-path`, account deletion, and the admin password door — sign-in by username or address, byte-identical refusals, the lockout, `role_locked` with its control, and the reset flow end to end |
 | Flares | `flares/` | POST, RSVP, edit and close, the three-way fan-out, Web Push copy and reach, the LiveBoard Durable Object over real WebSockets, and the Discord close sweep |
 | Harness | `helpers/` | The factories themselves, because four suites are built on them |
 

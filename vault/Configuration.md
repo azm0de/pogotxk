@@ -1,6 +1,6 @@
 ---
 tags: [runbook, security]
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Configuration
@@ -29,7 +29,8 @@ updated: 2026-09-22
 | `VAPID_PRIVATE_KEY` | Secret | `wrangler secret` | Set 2026-08-06 |
 | `VAPID_SUBJECT` | Secret | `wrangler secret` | `mailto:jeportillo1@gmail.com` |
 | `DISCORD_GUILD_ID` | var | `wrangler.jsonc` | Public — membership check is ON; outsiders are guests |
-| `DISCORD_BOOTSTRAP_ADMIN_ID` | Secret | `wrangler secret` | Kept out of the public repo — see below |
+| `RESEND_API_KEY` | Secret | `wrangler secret` | Admin password reset by email — see [[#Turning on the admin password reset]] |
+| `RESEND_FROM` | Secret | `wrangler secret` | A **bare** address on the verified sending domain, `gnomelabz.com`. Inboxes show "PoGo TXK": the name is added in code |
 
 > [!danger] Set the bootstrap admin BEFORE the guild id, never after
 > Configuring a guild makes Discord **authoritative** over roles. With no
@@ -38,12 +39,14 @@ updated: 2026-09-22
 > of `/admin`. `DISCORD_BOOTSTRAP_ADMIN_ID` short-circuits `resolveRole` to `admin` and was,
 > until the password door existed, the only thing preventing it. Verified against
 > `resolveRole` before the 2026-08-06 deploy: with it he resolves to `admin` either way;
-> without it, `member`. The ordering is still right for a fresh deployment; on this one the
-> secret is being retired — see the note below.
+> without it, `member`. The ordering is still right for a fresh deployment. On this one the
+> secret has been **removed** — see the note below — and the trap is closed another way: the
+> admins are standalone identities pinned with `role_locked = 1`, which no Discord sign-in
+> can reach or demote.
 >
-> It is a Secret rather than a var because the repo is public: it is a personal Discord
-> user id, and it marks one account as permanently admin. Secrets survive deploys just
-> as reliably.
+> It was a Secret rather than a var because the repo is public: it is a personal Discord
+> user id, and it marks one account as permanently admin. If it is ever set again, set it
+> the same way. Secrets survive deploys just as reliably.
 
 > [!note] The admin door needs no configuration at all, and that is still the point
 > `/admin/login` takes a password stored in D1, so it depends on no variable, no secret and
@@ -58,9 +61,14 @@ updated: 2026-09-22
 >
 > That inverts what this note used to say. The password was the recovery path for a
 > bootstrap sequence that had gone wrong; it is the ordinary way in now, and
-> `DISCORD_BOOTSTRAP_ADMIN_ID` is being retired because a secret that mints an admin is the
-> single point of failure the password door was built to remove. Setting the bootstrap
-> secret before the guild id is still the right sequence for a *fresh* deployment.
+> `DISCORD_BOOTSTRAP_ADMIN_ID` is **no longer set on the live Worker**, because a secret that
+> mints an admin is the single point of failure the password door was built to remove.
+> Confirmed on 2026-09-22 by listing the live version's bindings (`wrangler versions view
+> <live id> --json`, names and types only): it is there neither as a secret nor as a plain
+> var, and `wrangler secret list` does not show it. The code in `resolveRole` still honours
+> it, so **setting it again would bring the short-circuit back** — one Discord account
+> resolving to `admin` on every sign-in. Setting the bootstrap secret before the guild id is
+> still the right sequence for a *fresh* deployment.
 >
 > **The path is not part of the configuration and not part of the defence.** It is fixed at
 > `/admin/login`, and the repo is public, so it is public knowledge. What has to be strong is
@@ -90,13 +98,14 @@ curl -s https://pogotxk.gnomelabz.workers.dev/api/push/subscribe
 ## Not set — features that stay off until they are
 
 `DISCORD_GUILD_ID` and `DISCORD_BOOTSTRAP_ADMIN_ID` were listed here as well as above for a
-while. They are **set** — see the table above; this list is only what is genuinely missing.
+while. Both were set on 2026-08-06. `DISCORD_GUILD_ID` still is — see the table above.
+`DISCORD_BOOTSTRAP_ADMIN_ID` has since been removed (confirmed absent on 2026-09-22) and is
+listed below as unset on purpose, not as something missing.
 
 | Name | Type | Enables |
 |---|---|---|
 | `DISCORD_WEBHOOK_URL` | Secret | Flares into Discord — [[Notifications]] |
-| `RESEND_API_KEY` | Secret | Admin password reset by email — see below |
-| `RESEND_FROM` | Secret | The From address for it. **Both, or nothing is sent** |
+| `DISCORD_BOOTSTRAP_ADMIN_ID` | Secret | One Discord account that always resolves to `admin`. **Unset on purpose**: the code still honours it, so setting it brings that short-circuit back. See the note under [[#Currently set]] |
 | `DISCORD_ROLE_ADMIN` / `_AMBASSADOR` | var | Automatic role mapping |
 | `DISCORD_ROLE_MEMBER` | var | A role-gated membership check. **Usually leave unset** — see [[Backlog]] |
 | `SITE_URL` | **build** var | Canonical host. Only needed at the domain cutover — see below |
@@ -114,6 +123,10 @@ Everything above is optional. Unconfigured, the feature degrades quietly rather 
 
 ### Turning on the admin password reset
 
+Done in production — both secrets are set, and resets have been delivered and completed there
+(2026-09-23). This is the procedure, kept for a fresh deployment or a rotation. **Both, or
+nothing is sent.**
+
 Two values, both **Secrets**, and `RESEND_FROM` is a Secret despite not being confidential —
 it appears in the header of every mail it sends. The reason is the warning at the top of this
 note: a plain-text var set in the dashboard is deleted by the next deploy, and Workers Builds
@@ -122,8 +135,15 @@ fewer moving parts.
 
 ```bash
 wrangler secret put RESEND_API_KEY     # https://resend.com > API Keys; sending only
-wrangler secret put RESEND_FROM        # e.g. noreply@<a gnomelabz domain>
+wrangler secret put RESEND_FROM        # a bare address, e.g. noreply@<a gnomelabz domain>
 ```
+
+> [!warning] `RESEND_FROM` is a bare address — no display name
+> `PoGo TXK <noreply@…>` in the secret is **refused**, and a refused From turns the sender off
+> entirely, silently, the same as an unset one. That is deliberate: a display name typed into
+> configuration is a header-injection shape. Inboxes still show **"PoGo TXK"** as the sender,
+> because `fromHeader` in `src/lib/notify/email.ts` wraps the validated address in a constant
+> name in code. So the secret holds only the address, and the name is not configurable.
 
 > [!danger] The sending domain must be verified in Resend first, and a failure here is silent
 > Resend refuses mail from an unverified domain. The reset endpoint **cannot report that** to
@@ -151,8 +171,29 @@ npm run set:password -- --create <name> --email you@example.com --remote
 
 Only `api.resend.com` is ever contacted, checked in code rather than trusted from
 configuration — the request carries the key in an `Authorization` header, so a wrong host
-would be a disclosure rather than a failed send. Mail is plain text with no HTML part, so
-there is no remote image that could report when an admin opened a reset mail.
+would be a disclosure rather than a failed send.
+
+The mail is **multipart** since 2026-09-23: a plain-text part, always, and a branded HTML part
+beside it, at the owner's request. The HTML carries **no remote resource of any kind** — no
+image, no web font, no stylesheet — so opening it fetches nothing and reports nothing to
+anyone. See [[Auth and Roles#It is off unless configured, and that is the default]].
+
+> [!danger] Resend's open and click tracking must stay **off** for `gnomelabz.com`
+> Resend's tracking works on the HTML part, which the reset mail now has.
+>
+> - **Click tracking** rewrites every link in the HTML to pass through a Resend tracking
+>   subdomain first. That includes the reset link, which is a working credential for thirty
+>   minutes — so every live reset link would be handed to, and recorded by, a third party's
+>   redirect on its way to the admin.
+> - **Open tracking** inserts a tracking pixel: a fetch on open that reports when an admin
+>   opened a password-reset mail and from which IP — the exact thing the mail is built not to
+>   carry.
+>
+> Both are **per-domain** settings in Resend (Domains → the domain → Configuration → "Enable
+> tracking metrics"), both are **off by default**, and neither becomes active until a CNAME for
+> a tracking subdomain is verified. Leave them off for the sending domain. If some future
+> newsletter wants them, send it from a different domain. Nothing in this repository can see
+> the setting — it lives in Resend's dashboard — so this note is the control.
 
 ## Diagnosing "I set it but it says not configured"
 

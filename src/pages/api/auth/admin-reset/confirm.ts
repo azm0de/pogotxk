@@ -92,6 +92,13 @@ export async function POST(ctx: APIContext): Promise<Response> {
 
   const form = new URLSearchParams(new TextDecoder().decode(await request.arrayBuffer()));
 
+  /*
+   * Three fields, and nothing else is read. The account is whichever one the
+   * token was issued for — never something the form names. The page carries
+   * the login name too, for password managers, but unnamed so a browser never
+   * submits it; a `username` added to this POST by hand changes nothing, and
+   * `admin-reset.test.ts` asserts exactly that.
+   */
   const token = form.get('token') ?? '';
   const password = form.get('password') ?? '';
   const again = form.get('confirm') ?? '';

@@ -56,6 +56,10 @@ import { DEFAULT_ITERATIONS, hashPassword } from '../src/lib/auth/password';
 // what makes "the address this writes is the address the route will look up"
 // a fact rather than two regexes that agree today.
 import { normalizeEmail } from '../src/lib/notify/email';
+// The same again for the `admin:` prefix: the account menu decides what to show
+// a standalone admin by checking for it, so this mints with the very constant
+// that check reads rather than a copy of the string.
+import { STANDALONE_ADMIN_PREFIX } from '../src/lib/auth/types';
 import { rows } from './d1-json';
 
 /* --------------------------------------------------------------- arguments */
@@ -324,6 +328,17 @@ function assertCount(value: number): number {
   if (!Number.isInteger(value) || value < 10_000) die(`Refusing to build SQL: bad iteration count.`);
   return value;
 }
+/*
+ * Both `--create` and the login username pass through this, and it has a
+ * second job besides keeping the SQL below honest: **it refuses `@`**, and
+ * since 2026-09-23 the sign-in route depends on that. `/api/auth/admin-login`
+ * accepts a username or the recovery address in one box and picks the column
+ * by whether the value contains `@` — so a login name with an `@` in it would
+ * be looked up as an address and could never be used to sign in. Every stored
+ * address has an `@` (the column's CHECK insists) and no login name may, which
+ * is what keeps the two namespaces apart without a migration. Widening this
+ * character class to admit `@` breaks that; it is not a formatting preference.
+ */
 const SAFE_NAME = /^[a-z0-9][a-z0-9._-]{1,62}$/;
 function assertName(label: string, value: string): string {
   if (!SAFE_NAME.test(value)) {
@@ -475,10 +490,11 @@ have a Discord account behind them at all, that is what --create is for.`,
      * **The prefix has to match what production already holds.** The rows are
      * `admin:nic` and `admin:justin`; minting under any other prefix would not
      * fail, it would quietly start a second convention and a second account for
-     * a name that already has one.
+     * a name that already has one. It is `STANDALONE_ADMIN_PREFIX`, which is
+     * also what the account menu checks to leave the Discord-only rows out.
      */
     const name = assertName('--create', (createName ?? '').toLowerCase());
-    const synthetic = `admin:${name}`;
+    const synthetic = `${STANDALONE_ADMIN_PREFIX}${name}`;
 
     // `Nic` from `nic`, matching the `global_name` the existing rows carry.
     // `name` has already been through `assertName`, so capitalising its first
@@ -761,7 +777,8 @@ Done.
   sessions     ${revokeSessions ? 'revoked' : 'left alone'}
   reset links  ${resetsRevoked ? 'revoked' : 'not revoked — is migration 0005 applied?'}
 
-Sign in at /admin/login.
+Sign in at /admin/login with the login name above, or with the reset email
+if one is on file. Either goes in the same box.
 
 That path is not a secret and is not protecting anything: the repository is
 public, so anyone can read it there. Nothing links to the page and it carries

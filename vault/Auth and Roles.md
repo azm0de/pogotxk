@@ -1,6 +1,6 @@
 ---
 tags: [architecture, security]
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Auth and Roles
@@ -31,19 +31,26 @@ Scopes requested: `identify` and `guilds.members.read`. No email, no messages, n
 | `guest` | Signed in, not in the guild | Read |
 | `member` | In the guild | Fire flares, RSVP |
 | `ambassador` | Has the ambassador role | Everything in `/admin` |
-| `admin` | Has the admin role, or is `DISCORD_BOOTSTRAP_ADMIN_ID`, or holds `role_locked = 1` | Also: hard delete, import, settings |
+| `admin` | Holds `role_locked = 1` — the standalone accounts. The code also accepts the Discord admin role or being `DISCORD_BOOTSTRAP_ADMIN_ID`, but neither is set here | Also: hard delete, import, settings |
+
+On this deployment no `DISCORD_ROLE_*` id is set and neither is `DISCORD_BOOTSTRAP_ADMIN_ID`
+(confirmed absent 2026-09-22), so a Discord sign-in yields `guest` or `member` and nothing else,
+and every `admin` is a `role_locked` standalone account.
 
 ## The admin password door
 
-`/admin/login` is a username-and-password login, and the accounts it serves are **standalone
-identities**: a `users` row under a synthetic `admin:<name>` id, a row in `admin_credentials`,
-and no Discord account anywhere behind it. An admin does not have a Discord sign-in that would
-also work; the password is the whole of their access. Production holds two of them.
+`/admin/login` takes a username — or the recovery address on file, since 2026-09-23 — and a
+password, and the accounts it serves are **standalone identities**: a `users` row under a
+synthetic `admin:<name>` id, a row in `admin_credentials`, and no Discord account anywhere behind
+it. An admin does not have a Discord sign-in that would also work; the password is the whole of
+their access. Production holds two of them.
 
 It was built for the day Discord sign-in could not produce an admin. That day is now every
-day: no `DISCORD_ROLE_ADMIN` is set, so `resolveRole` can only answer `member`, and
-`DISCORD_BOOTSTRAP_ADMIN_ID` — the one remaining short-circuit — is being retired. Once that
-secret is removed, nothing reachable through Discord resolves to `admin` at all.
+day: no `DISCORD_ROLE_*` id is set, so `resolveRole` can only answer `member` (or `guest`,
+outside the guild), and `DISCORD_BOOTSTRAP_ADMIN_ID` — the last short-circuit — is no longer
+set on the live Worker (confirmed 2026-09-22). Nothing reachable through Discord resolves to
+`admin` at all. The code still honours the secret, so setting it again would reopen that
+route for one account.
 
 > [!important] The path is not a secret, and nothing may be built on the idea that it is
 > The repository (`azm0de/pogotxk`) is **public**, so every path written in it is public
@@ -63,6 +70,15 @@ The page sits under `/admin` and the POST route deliberately does not.
   those would carry `/admin/login/anything` or `/admin/logins` out of the gate with it, turning
   one deliberate hole into an open-ended one nobody would have to notice. `admin-path.test.ts`
   pins the near-misses; `admin-login.test.ts` pins them again through the real stack.
+- **It is where the gate sends everyone it turns away.** Since 2026-09-23 a page request under
+  `/admin` from anyone below `ambassador` gets `302 /admin/login?next=<path>`. It used to go to
+  `/auth/login`, the Discord door, which could no longer admit anybody the gate would let
+  through: no `DISCORD_ROLE_*` ids are set and the bootstrap id is gone, so Discord only ever
+  produces a member, and the two admins have no Discord account at all. The page shows the form
+  to anyone below `ambassador`, forwards anyone at or above it to `next`, and links members to
+  Discord with `next` carried along — so the gate and the page can never bounce a caller between
+  them, and without the exemption the page would redirect to itself. API routes under
+  `/api/admin/` still answer JSON 401 (signed out) or 403 (signed in, not enough).
 - `POST /api/auth/admin-login` is **not** under `/api/admin/`, because everything there is
   gated and a gated login route would answer 401 to precisely the signed-out visitor it is for.
   It sits with `device/` and `mobile.ts` instead — the other routes that turn a credential into
@@ -76,20 +92,28 @@ The page sits under `/admin` and the POST route deliberately does not.
 > **authoritative**, so `upsertUser` writes that answer. A hand-promoted admin is therefore
 > demoted by their own next sign-in.
 >
-> That left exactly one path to `admin`: `DISCORD_BOOTSTRAP_ADMIN_ID`, a secret that
-> short-circuits `resolveRole` for one Discord account. One account, one secret, one
+> That left exactly one path to `admin` at the time: `DISCORD_BOOTSTRAP_ADMIN_ID`, a secret
+> that short-circuits `resolveRole` for one Discord account. One account, one secret, one
 > third-party service, and no recovery if any of the three is lost. Setting the
 > `DISCORD_ROLE_*` ids would have fixed the demotion but not the single point of failure — it
-> would just have moved it into the Discord server's role configuration.
+> would just have moved it into the Discord server's role configuration. The secret has since
+> been removed; see the next note.
 
-> [!important] The secret is being retired, and the standalone identities are the replacement
-> `DISCORD_BOOTSTRAP_ADMIN_ID` is the single point of failure this door was built to remove,
-> so keeping both is keeping the problem. The owner removes the secret from the Worker
-> himself; the code still honours it if it is set, and `resolveRole`'s bootstrap branch and
-> its tests are unchanged.
+> [!important] The secret is gone, and the standalone identities replaced it
+> `DISCORD_BOOTSTRAP_ADMIN_ID` was the single point of failure this door was built to remove,
+> so keeping both would have kept the problem. It has been removed from the Worker, and it is
+> **no longer set**: on 2026-09-22 the live version's bindings were listed (names
+> and types only) and it was not among them, as a secret or as a plain var, and
+> `wrangler secret list` does not show it either. Nobody lost access — both admins sign in at
+> `/admin/login`.
 >
-> After it is gone the roles table below still reads correctly — it describes what the code
-> does — but only one of its three routes to `admin` can actually fire on this deployment:
+> The code still honours it if it is set: `resolveRole`'s bootstrap branch
+> (`src/lib/auth/discord.ts`) and its tests are unchanged, and inert only because the variable
+> is absent. So **setting the secret again would bring the short-circuit back**, one Discord
+> account resolving to `admin` on every sign-in. Nothing in the repo stops that; not setting
+> it is the control.
+>
+> The roles table above says which of its routes to `admin` actually fire here: only
 > `role_locked = 1`, which is what `scripts/set-admin-password.ts` writes. Setting
 > `DISCORD_ROLE_AMBASSADOR` would still let Discord mint an **ambassador**, who can reach
 > `/admin`; it would not mint an admin.
@@ -124,6 +148,29 @@ all three like every other. That is the same claim `/auth/device` makes, and it 
 > Paid ($5/month) raises the budget to 30 s, where OWASP's 600,000 fits comfortably; raising
 > the constant then costs one line and invalidates no stored hash, because the count lives in
 > the row. The full numbers are in the comment above `DEFAULT_ITERATIONS`.
+
+### In the account menu
+
+Added 2026-09-23. The header's account control is built by an inline script from
+`GET /api/me.json`, which answers two booleans beside the user so that the script never
+reasons about roles or identities itself — a copy of the role order in the client is how a
+menu and the gate it links to would drift apart.
+
+- **`canAdmin`** is `canReachAdmin(user)` from `src/lib/auth/admin-path.ts`: the one statement
+  of who the gate admits (`ambassador` or better), which the middleware and `/admin/login` now
+  call too. When it is true an **Admin** link to `/admin` heads the menu. It is a convenience,
+  not a control — the gate still decides every request — and `test/admin/pages.test.ts` holds
+  it to the gate for every caller, one session asking both questions.
+- **`standaloneAdmin`** is `isStandaloneAdmin(user)`: `discord_id` starts with
+  `STANDALONE_ADMIN_PREFIX` (`admin:`), the constant `scripts/set-admin-password.ts` now mints
+  with. When it is true the menu leaves out **Use a different Discord account** — there is no
+  Discord account to switch away from — and **Delete my account**, because `deleteAccount`
+  would delete the password credential that is the account's only way in. Admin accounts are
+  managed with `npm run set:password`. It is about the identity, not the role: a Discord
+  account that is an ambassador or an admin keeps the full member menu.
+
+So a standalone admin's menu is **Admin** and **Sign out**, which keeps Discord sign-in and
+admin sign-in fully separate, as the owner asked.
 
 ### `role_locked`
 
@@ -164,17 +211,52 @@ so locking one admin out does not touch the other.
   has to be able to tell a wrong password from a wait — so spending a full PBKDF2 to hide a
   fact the message already states would only hand an attacker a way to burn the CPU budget.
 
+### Username or email, in one box
+
+Added 2026-09-23, after an admin completed two resets by email and was then refused here: the
+recovery flow is addressed by email and had never shown him his username, so he typed the
+address, and a lookup that only knew `username` answered "did not match" to the right password.
+See [[Bugs Worth Remembering#A recovery flow that never said which account it recovered]].
+
+The route picks the column by **whether the value contains `@`** — `admin_credentials.email` if
+it does, `username` if it does not. Never both, and never `OR`-ed into one query:
+
+- Each lookup is an equality on its **own UNIQUE index** — the `username` constraint, or the
+  partial `idx_admin_credentials_email` (usable, because `email = ?` implies `email IS NOT
+  NULL`). One index, at most one row. An `OR` across two columns can match two different rows,
+  and `.first()` would quietly pick one.
+- **The namespaces cannot overlap.** Every stored address contains `@` (the column's CHECK
+  demands it) and no login name can: the setter's `SAFE_NAME` refuses `@`, and that refusal is
+  now load-bearing — a login name with an `@` would be looked up as an address and could never
+  be used. No migration was needed.
+- The address goes through `normalizeEmail`, the same validator the reset request and the
+  setter use. A string with an `@` that it refuses is an **unknown identifier** — `dummyVerify`,
+  then `bad` — and is never retried as a username.
+- **The lockout is per account**, whichever kind was typed: both lookups land on the same row
+  and the counter is keyed on `user_id`, so three wrong guesses by username and two by address
+  lock the account.
+- The `login` audit rows carry **`via: 'username' | 'email'`** — which kind of identifier was
+  typed, never the identifier.
+- The address lookup reads a `0005` column, so it is **guarded**: while the migration has not
+  run, it reads as an address nobody has (`bad`), where the username path — which touches
+  nothing `0005` added — keeps working. A 500 for addresses beside a 303 for usernames would be
+  an oracle.
+
+The field is still `name="username"` with `autocomplete="username"`, labelled "Username or
+email", and a mismatch now reads "Those sign-in details did not match."
+
 ### What it refuses to say
 
-A wrong password, an unknown username, a username with no credential, and a row too corrupt to
-check are all the same answer: `303` to `/admin/login?error=bad`, byte for byte. An unknown
-username burns a real derivation first so the timing matches — measured at 56 ms against the
-wrong-password path's 60 ms, the 4 ms being two D1 writes.
+A wrong password, an unknown username or address, a string with an `@` that is not an address,
+a username with no credential, and a row too corrupt to check are all the same answer: `303` to
+`/admin/login?error=bad`, byte for byte. An unknown identifier of either kind burns a real
+derivation first so the timing matches — measured at 56 ms against the wrong-password path's
+60 ms, the 4 ms being two D1 writes.
 
-The audit log records failures with **no username and no password**, because one day an admin
-will type their password into the username field and `audit_log` is readable by every
-ambassador. A failure against an unknown username is not logged at all: it has no counter to
-bound it, so logging it would let anyone append to `audit_log` at will.
+The audit log records failures with **no username, no address and no password**, because one
+day an admin will type their password into the username field and `audit_log` is readable by
+every ambassador. A failure against an unknown identifier is not logged at all: it has no
+counter to bound it, so logging it would let anyone append to `audit_log` at will.
 
 ## Password reset by email
 
@@ -191,11 +273,12 @@ password. Migration `0005_admin_password_reset.sql`.
 > away from being gone — the setter script used to say so in three places and the lockout is
 > capped at an hour for the same reason — and a mailbox is a thing an admin already protects.
 >
-> **It is opt-in per admin.** `admin_credentials.email` is nullable and both production rows
-> have no address, so nothing is reset-able until somebody sets one. An admin who would
-> rather keep the narrower model simply never does, or clears it again with
-> `--clear-email`. Choose a mailbox with its own strong password and two-factor, and not one
-> shared with anybody.
+> **It is opt-in per admin.** `admin_credentials.email` is nullable, and an admin with no
+> address cannot be reset (or sign in by address). Production's accounts started with none;
+> addresses have since been set, and the owner's account was recovered through one on
+> 2026-09-23. An admin who would rather keep the narrower model simply never sets one, or
+> clears it again with `--clear-email`. Choose a mailbox with its own strong password and
+> two-factor, and not one shared with anybody.
 
 **The flow.** `/admin/reset` (form) → `POST /api/auth/admin-reset` (issue + mail) →
 `/admin/reset/<token>` (form) → `POST /api/auth/admin-reset/confirm` (apply) →
@@ -282,9 +365,18 @@ match** beside `isAdminLoginPath`, not a widening of it.
   it is pinned to the **shape of the thing it must admit**: one segment, 64 lowercase hex
   characters. `/admin/reset/`, `/admin/resets`, `/admin/reset-notes`, anything nested below a
   token, an uppercase token and a token of any other length all stay gated.
-- The cost is honest: somebody who clicks a *truncated* link is bounced to Discord sign-in
-  rather than told the link is broken. That is one confusing minute occasionally, against an
-  exemption that cannot be talked into covering a page nobody has written yet.
+- The cost is honest: somebody who clicks a *truncated* link is bounced to the admin sign-in
+  form rather than told the link is broken. That form links to `/admin/reset`, so the way on is
+  one click away — one confusing minute occasionally, against an exemption that cannot be talked
+  into covering a page nobody has written yet.
+
+`/admin/reset/<token>` also carries the account's **login name for password managers**: a
+`type="text"` input with `autocomplete="username"`, the username as its value, `hidden`, and
+**no `name`**. Chromium's "Create Amazing Password Forms" asks change-password forms to include
+the username this way (its own example is a text input hidden with `display: none`), so the
+browser saves the new password against the right account instead of asking or saving a second
+entry. With no `name` it is never submitted; the confirm route reads `token`, `password` and
+`confirm` and nothing else, and a `username` added to the POST by hand changes nothing — tested.
 
 Both reset pages send **`Referrer-Policy: strict-origin`**. The token is in the URL of
 `/admin/reset/<token>` — unavoidable, it is how a mailed link carries a credential — so without a
@@ -307,10 +399,52 @@ layout around it links out to Discord and the other socials, and each of those l
 ### It is off unless configured, and that is the default
 
 `RESEND_API_KEY` and `RESEND_FROM` — both, or the endpoint is inert and writes nothing. See
-[[Configuration]]. `src/lib/notify/email.ts` sends **plain text with no HTML part**, so there
-is no remote image that could tell a third party when an admin opened a password-reset mail
-and from where, and it host-checks its endpoint because the request carries the API key in a
-header: a wrong host would be a disclosure rather than a failed send.
+[[Configuration]]; both are set in production. `src/lib/notify/email.ts` host-checks its
+endpoint because the request carries the API key in a header: a wrong host would be a
+disclosure rather than a failed send.
+
+### What the mail looks like, and what it may not contain
+
+It was plain text only until 2026-09-23, when the owner asked for it to look like the site.
+It is **multipart** now: the plain-text part on every send — `sendEmail` refuses a message
+without one rather than let Resend invent it — and a branded HTML part beside it, never
+instead of it. The HTML is built in `src/lib/notify/reset-email.ts`, a pure module (so
+`npm run preview:reset-email -- <out.html>` can render the real thing for a person to look at):
+
+- **The site, drawn for mail clients.** A typeset "PoGo TXK" wordmark, white on the
+  `--accent-solid` bar over the black band, as the site header draws it; a white panel;
+  a `--accent-solid` button with white text (5.99:1) built as a table cell around the link;
+  the full link printed under it on a `--bg-sunken` plate, for clients that mangle buttons.
+  Table layout with `role="presentation"`, inline styles, a 600px column, `lang="en"`,
+  nothing under 16px, every text pairing 4.5:1 or better in both themes. The site's tokens
+  are written out as literals, because a mail client cannot resolve custom properties.
+- **Dark mode.** Clients that honour `prefers-color-scheme` (Apple Mail) get the site's own
+  dark tokens from a `<style>` block. Clients that force their own dark mode (the Gmail apps)
+  recolour it themselves, which it survives because every text element sets its own colour
+  against its own background and the red surfaces carry white text.
+- **No image, and no remote resource of any kind** — no web font, no stylesheet, no `url()`.
+  A fetch on open is a read receipt carrying the reader's IP, from any origin, ours
+  included. The only raster logo (`/art/logo-txk-classic.webp`) is built on the Pokémon GO
+  logo, which the design rules keep off anything new, so the wordmark is text. Fonts fall back
+  through the site's faces to each platform's UI face.
+- **Every interpolated value is escaped** (`&`, `<`, `>`, `"`, `'`), the link is refused
+  unless it is an absolute http(s) URL, and a control character in either value is refused in
+  both parts. The route composes the message inside the deferred send, so even a refusal
+  cannot change its answer.
+- **It names the account.** "This is for the admin account **justin**. You can sign in with
+  that username or with this email address." It used not to, on the argument that the link
+  already identifies one account; the incident that argument lost to is in
+  [[Bugs Worth Remembering#A recovery flow that never said which account it recovered]].
+  It discloses nothing new: whoever reads the mailbox can already open the link and read the
+  name off the page. The subject and the preview text stay generic.
+- **The sender shows as "PoGo TXK".** `RESEND_FROM` stays a bare, validated address; the name
+  is a constant wrapped around it in code (`fromHeader`), and a display name typed into the
+  secret is still refused.
+
+> [!danger] Resend's click and open tracking must stay off for the sending domain
+> Click tracking would rewrite the reset link — a live credential — through a Resend redirect,
+> and open tracking would add the pixel this mail is built not to carry. Both are per-domain
+> settings, off by default. See [[Configuration#Turning on the admin password reset]].
 
 > [!warning] Resend is the second outbound sender, and it gets the webhook's treatment
 > `vitest.config.ts` blanks both bindings, `test/00-safety.test.ts` proves they are blank and
@@ -386,8 +520,10 @@ capitalised name, so `--create nic` gives `Nic`.
 
 > [!important] `DISCORD_GUILD_ID` is optional on purpose
 > Requiring it meant a deployment with valid credentials still refused every sign-in — blocking
-> the very login needed to configure anything else. Without it, everyone resolves to `guest`
-> but `DISCORD_BOOTSTRAP_ADMIN_ID` still gets in.
+> the very login needed to configure anything else. Without it, everyone resolves to `guest`,
+> except the account named by `DISCORD_BOOTSTRAP_ADMIN_ID` if that secret is set — the code
+> still lets it in as `admin`. On this deployment the guild id is set and the bootstrap
+> secret is not.
 
 ## The password-prompt question, settled
 
@@ -509,8 +645,8 @@ empty jar.
 - The admin gate exempts `/admin/login` by **exact match**, `/admin/reset` by a second exact
   match, and `/admin/reset/<64 hex>` by shape. Nothing else under `/admin`. `/admin/login/`,
   `/admin/logins`, `/admin/reset/`, `/admin/resets`, `/admin/reset-notes` and anything nested
-  below a token all still redirect a signed-out visitor to Discord sign-in, which is what
-  makes each exemption one page wide rather than a section.
+  below a token all still redirect a signed-out visitor to `/admin/login?next=…`, which is
+  what makes each exemption one page wide rather than a section.
 - Reset tokens are random 256-bit values; **only their SHA-256 is stored**, the same scheme
   as sessions. They expire in 30 minutes, work once, and a newer one kills the older.
 - Both reset pages send `Referrer-Policy: strict-origin`, because the token is in the URL and a
@@ -544,12 +680,20 @@ grant, the Android exchange, the state cookie, the admin password door and `src/
 itself through `SELF.fetch`, with Discord mocked and sessions minted by the real
 `createSession`. `admin-login.test.ts` asserts the same known-answer vector the tsx suite does,
 which is the only thing that really proves the setter script and the Worker derive the same
-bytes; it also pins the byte-identical refusals and `role_locked` **with its control**.
+bytes; it also pins the byte-identical refusals and `role_locked` **with its control**, and
+signing in by address against every promise the username path makes — the same refusal, the
+same cost (a floor, minimum of three samples), the same lockout counter, `via` in the audit
+row, and a malformed or unknown address answered exactly as an unknown username.
 `admin-reset.test.ts` drives the reset end to end by reading the link out of a stubbed
 Resend call — the only supported way to get a token, and therefore the only test that proves
 the link the route composes is the link that works. It has to configure the mail sender to do
 that, which it does for one test at a time and restores afterwards; the default, unconfigured
-state is asserted separately, and nothing reaches the network at any point. The
+state is asserted separately, and nothing reaches the network at any point.
+`reset-email.test.ts` feeds the mail template hostile values directly and reads what it
+builds with workerd's own HTML parser — nothing escapes its text or attribute, no element
+outside a short allowlist appears, nothing is fetched on open — and drives `sendEmail` with a
+made-up configuration and a stubbed `fetch` to pin the payload: both parts, `PoGo TXK
+<address>`, and no send at all for a message without text. The
 authorisation gate in front of `/admin` is asserted as a full route × method × caller matrix in
 `test/admin/`, and then a second time with the middleware removed, so a handler that defends
 itself is distinguishable from one that only looks defended.

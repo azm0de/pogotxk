@@ -1,6 +1,6 @@
 ---
 tags: [reference]
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Routes
@@ -30,7 +30,7 @@ updated: 2026-09-22
 | `/auth/device` | RFC 8628 approval, for a browser whose jar holds no Discord session |
 | `/auth/logout` | Ends the session |
 | `/auth/error` | Human-readable failure |
-| `/admin/login` | The admin password form. Public despite the path — see below and [[Auth and Roles#The admin password door]] |
+| `/admin/login` | The admin password form — username **or** recovery email, and a password. Where the `/admin` gate sends every page request it refuses. Public despite the path — see below and [[Auth and Roles#The admin password door]] |
 | `/admin/reset` | Asks for a password-reset link. Public despite the path, same as above |
 | `/admin/reset/<token>` | Sets the new password. `Referrer-Policy: strict-origin` — the token is in the URL, and `no-referrer` would null the form's `Origin` |
 
@@ -44,12 +44,15 @@ updated: 2026-09-22
 | `/admin/posts` | Blog editor |
 | `/admin/media` | Media library — browse R2, fix alt text and photo credits |
 
+Below `ambassador`, a page here answers `302 /admin/login?next=<path>` — the admin form, not
+Discord's `/auth/login` (changed 2026-09-23: Discord can no longer produce anyone the gate
+admits). The API routes under `/api/admin/` answer JSON instead: 401 signed out, 403 signed in.
+
 > [!important] Three paths under this prefix are **not** gated
 > `/admin/login`, `/admin/reset` and `/admin/reset/<token>`. All three are listed under Auth
-> above, because that is what they are — the accounts behind them are standalone identities
-> with no Discord sign-in, so a gate in front of any of them would send the only people they
-> are for to a door that cannot admit them, and the reset pair exists precisely for somebody
-> who cannot get through the first one.
+> above, because that is what they are. The first is where the gate sends everyone it refuses,
+> so a gate in front of it would redirect it to itself; the reset pair exists precisely for
+> somebody who cannot get through the first one.
 >
 > The gate exempts the first two by **exact string match** and the third by the **shape of a
 > token** — one segment of 64 lowercase hex characters, which is what `randomToken()`
@@ -68,10 +71,10 @@ updated: 2026-09-22
 | Endpoint | Auth | What |
 |---|---|---|
 | `GET /api/map.json` | public | Zone, POIs, shapes, community photos |
-| `GET /api/me.json` | public | Current session or null |
+| `GET /api/me.json` | public | Current session or null, plus two booleans for the account menu: `canAdmin` (the `/admin` gate's own check, `canReachAdmin`) and `standaloneAdmin` (a password-only `admin:<name>` identity). `private, no-store` |
 | `GET /api/game/[feed].json` | public | `raids` \| `eggs` \| `research` \| `events` |
 | `GET /api/flares` | public | Active flares |
-| `POST /api/auth/admin-login` | public | The admin password login. Form encoding only, 415 otherwise; every answer is a 303 |
+| `POST /api/auth/admin-login` | public | The admin password login, by username or recovery address (`@` picks the column). Form encoding only, 415 otherwise; every answer is a 303 |
 | `POST /api/auth/admin-reset` | public | Asks for a reset link. Form encoding only, 415 otherwise. **Identical answer whether or not the address is registered** |
 | `POST /api/auth/admin-reset/confirm` | public | Redeems a link and sets the password. Form encoding only; ends at the sign-in form, never at a session |
 | `POST /api/flares` | member | Fire one |

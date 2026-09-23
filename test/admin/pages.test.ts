@@ -20,6 +20,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { safeNext } from '~/lib/auth/next';
+import { authCookie, seedSession, seedUser } from '../helpers/factories';
 import { CALLERS, ORIGIN, requestAs, seedFixtures, type Caller } from './surface';
 
 /** Every page under the console that the gate applies to. */
@@ -31,10 +32,8 @@ const PAGES = ['/admin', '/admin/map', '/admin/meetups', '/admin/posts', '/admin
  *
  * It is the admin password form. It lives under `/admin` because that is where
  * a login for the admin console belongs, and it is exempted from the role check
- * by `isAdminLoginPath` — matched exactly — because a gate in front of it would
- * bounce the signed-out admin to `/auth/login`, the Discord door. An admin
- * account is a standalone identity with no Discord account behind it, so that
- * is not a detour, it is a door that cannot admit them.
+ * by `isAdminLoginPath` — matched exactly — because it is where the gate sends
+ * everybody it refuses. A gate in front of it would redirect it to itself.
  *
  * Written down as an exception rather than folded into the matrix on purpose.
  * The alternative — loosening `ADMITTED` so that "some pages admit anonymous"
@@ -109,9 +108,10 @@ describe('the admin pages, by page and caller', () => {
       return;
     }
 
-    // 302 rather than 401: there is a useful next step, unlike on the API.
+    // 302 rather than 401: there is a useful next step, unlike on the API —
+    // the admin sign-in form, which is the only door into the console now.
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(`/auth/login?next=${encodeURIComponent(page)}`);
+    expect(res.headers.get('location')).toBe(`/admin/login?next=${encodeURIComponent(page)}`);
   });
 
   it('is the size it claims to be', () => {
@@ -142,11 +142,10 @@ describe(`${LOGIN_PAGE}, the one page here that must NOT redirect a stranger`, (
   /*
    * The exception, asserted rather than merely described.
    *
-   * Everything above says a signed-out visitor gets bounced. This page is the
-   * one that must not be, and the failure mode if it ever is would be silent:
-   * an admin would get a 302 to `/auth/login`, which looks like a working gate
-   * from every angle except the one that matters — it is the door their account
-   * does not exist behind.
+   * Everything above says a signed-out visitor gets bounced — to this page.
+   * This page is the one that must not be, and if it ever were, the bounce
+   * would point at itself: a redirect loop in front of the only door the
+   * admins have.
    */
   it.each(['anonymous', 'guest', 'member', 'banned admin'] as const)(
     'renders for %s',
@@ -200,11 +199,11 @@ describe(`${LOGIN_PAGE}, the one page here that must NOT redirect a stranger`, (
 
 describe('the next parameter', () => {
   it.each([
-    ['/admin', '/auth/login?next=%2Fadmin'],
-    ['/admin/map', '/auth/login?next=%2Fadmin%2Fmap'],
-    ['/admin/meetups', '/auth/login?next=%2Fadmin%2Fmeetups'],
-    ['/admin/posts', '/auth/login?next=%2Fadmin%2Fposts'],
-    ['/admin/media', '/auth/login?next=%2Fadmin%2Fmedia'],
+    ['/admin', '/admin/login?next=%2Fadmin'],
+    ['/admin/map', '/admin/login?next=%2Fadmin%2Fmap'],
+    ['/admin/meetups', '/admin/login?next=%2Fadmin%2Fmeetups'],
+    ['/admin/posts', '/admin/login?next=%2Fadmin%2Fposts'],
+    ['/admin/media', '/admin/login?next=%2Fadmin%2Fmedia'],
   ])('%s is encoded as %s', async (page, location) => {
     const res = await SELF.fetch(`${ORIGIN}${page}`, { redirect: 'manual' });
 
@@ -218,18 +217,27 @@ describe('the next parameter', () => {
   it('survives the round trip through safeNext unchanged', async () => {
     /*
      * The two halves of this have only ever been tested apart: the middleware
-     * builds `next`, and `/auth/login` runs whatever arrives through
+     * builds `next`, and `/admin/login` runs whatever arrives through
      * `safeNext`, which answers `/` to anything it distrusts. If the middleware
      * ever emitted a value `safeNext` rejected, the symptom would not be an
      * error — it would be every admin silently landing on the home page after
      * signing in, which nobody would report as a bug for weeks.
+     *
+     * So the value is checked twice: as `safeNext` sees it, and as the form
+     * actually carries it, in the hidden field the sign-in POST sends back.
      */
     for (const page of PAGES) {
       const res = await SELF.fetch(`${ORIGIN}${page}`, { redirect: 'manual' });
-      const next = new URL(res.headers.get('location')!, ORIGIN).searchParams.get('next');
+      const location = res.headers.get('location')!;
+      const next = new URL(location, ORIGIN).searchParams.get('next');
 
       expect(next).toBe(page);
       expect(safeNext(next)).toBe(page);
+
+      const form = await (await SELF.fetch(`${ORIGIN}${location}`, { redirect: 'manual' })).text();
+      expect(form, `${page} did not survive into the form`).toContain(
+        `name="next" value="${page}"`,
+      );
     }
   });
 
@@ -246,7 +254,7 @@ describe('the next parameter', () => {
     const res = await SELF.fetch(`${ORIGIN}//admin`, { redirect: 'manual' });
 
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/auth/login?next=%2Fadmin');
+    expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin');
   });
 
   it('carries the path but not the query string', async () => {
@@ -259,7 +267,7 @@ describe('the next parameter', () => {
      */
     const res = await SELF.fetch(`${ORIGIN}/admin/posts?status=draft`, { redirect: 'manual' });
 
-    expect(res.headers.get('location')).toBe('/auth/login?next=%2Fadmin%2Fposts');
+    expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin%2Fposts');
   });
 });
 
@@ -270,7 +278,7 @@ describe('the console is not reachable by a name that merely looks like it', () 
       /*
        * The other direction of the boundary, and the one `~/lib/auth/admin-path`
        * was extracted to fix: the failure mode is not a leak, it is a public
-       * page that bounces every visitor through Discord sign-in for a
+       * page that bounces every visitor to the admin sign-in form for a
        * permission it never wanted. A 404 proves the guard kept its hands off —
        * a redirect here would mean it had annexed the name.
        */
@@ -308,6 +316,43 @@ describe('a session that lapses mid-visit', () => {
     });
 
     expect(after.status).toBe(302);
-    expect(after.headers.get('location')).toBe('/auth/login?next=%2Fadmin');
+    expect(after.headers.get('location')).toBe('/admin/login?next=%2Fadmin');
+  });
+});
+
+describe('the account menu’s Admin link agrees with the gate', () => {
+  /*
+   * `/api/me.json` answers `canAdmin`, and the account menu shows its link to
+   * `/admin` on that and on nothing else. The link is a convenience — the gate
+   * still decides every request — but a link that leads to a bounce is a
+   * broken link, so the two are held to each other here, for every caller the
+   * matrix knows, with one session asking both questions.
+   *
+   * `requestAs` would seed a fresh user per request, which is right for the
+   * matrix and wrong here: the claim is about one person seeing one answer.
+   */
+  async function cookieFor(caller: Caller): Promise<string | null> {
+    if (caller === 'anonymous') return null;
+    const user = await seedUser(
+      env.DB,
+      caller === 'banned admin' ? { role: 'admin', isBanned: true } : { role: caller },
+    );
+    return authCookie(await seedSession(env.DB, user));
+  }
+
+  it.each(CALLERS)('%s', async (caller) => {
+    const cookie = await cookieFor(caller);
+    const headers: HeadersInit = cookie ? { cookie } : {};
+
+    const me = (await (await SELF.fetch(`${ORIGIN}/api/me.json`, { headers })).json()) as {
+      canAdmin: boolean;
+    };
+    const page = await SELF.fetch(`${ORIGIN}/admin`, { headers, redirect: 'manual' });
+
+    expect(me.canAdmin, `canAdmin said ${me.canAdmin}; /admin answered ${page.status}`).toBe(
+      page.status === 200,
+    );
+    // And both agree with the matrix above, so none of the three can drift.
+    expect(me.canAdmin).toBe(ADMITTED[caller]);
   });
 });

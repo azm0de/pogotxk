@@ -39,9 +39,10 @@
  * outside and impossible to distinguish from the ordinary case, which is
  * exactly what it should be. What it must never do is 500, because a 500 on one
  * input and not another is an oracle, and because the *existing* login route
- * has to keep working through that window regardless. It does: its SELECT names
- * its columns and none of them are new, so it never touches either of the
- * objects this migration adds.
+ * has to keep working through that window regardless. It does. Its username
+ * lookup names its columns and none of them are new, so it never touches either
+ * of the objects this migration adds. Its address lookup, added 2026-09-23,
+ * does read `email`, and is guarded in the same way as the reads below.
  */
 
 import { isResetToken } from './admin-path';
@@ -156,7 +157,15 @@ async function guarded<T>(work: () => Promise<T>, fallback: T): Promise<T> {
  * report which one happened.
  */
 export type ResetRequest =
-  | { status: 'issued'; userId: number; email: string; token: string; expiresAt: string }
+  | {
+      status: 'issued';
+      userId: number;
+      /** The login name, which the mail now states — see `reset-email.ts`. */
+      username: string;
+      email: string;
+      token: string;
+      expiresAt: string;
+    }
   /** No such address, no address on file, the account is banned, or no schema. */
   | { status: 'none' }
   /** A live unused link already went out recently. */
@@ -164,6 +173,7 @@ export type ResetRequest =
 
 interface CredentialByEmailRow {
   user_id: number;
+  username: string;
   email: string;
   /** The newest live, unused token for this user, or null. */
   recent: string | null;
@@ -193,7 +203,7 @@ export async function requestReset(
     () =>
       db
         .prepare(
-          `SELECT c.user_id, c.email,
+          `SELECT c.user_id, c.username, c.email,
                   (SELECT max(r.created_at)
                      FROM admin_password_resets r
                     WHERE r.user_id = c.user_id
@@ -238,7 +248,14 @@ export async function requestReset(
       .bind(await sha256(token), row.user_id, expiresAt, isoSeconds(now)),
   ]);
 
-  return { status: 'issued', userId: row.user_id, email: row.email, token, expiresAt };
+  return {
+    status: 'issued',
+    userId: row.user_id,
+    username: row.username,
+    email: row.email,
+    token,
+    expiresAt,
+  };
 }
 
 /* --------------------------------------------------------------- redeeming */

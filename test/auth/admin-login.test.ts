@@ -219,7 +219,8 @@ describe('a correct password', () => {
     expect(row?.action).toBe('login');
     expect(row?.actor_id).toBe(owner.id);
     expect(row?.entity).toBe('admin_credentials');
-    expect(JSON.parse(row!.diff_json)).toEqual({ method: 'password' });
+    // `via` names the kind of identifier typed — never the identifier.
+    expect(JSON.parse(row!.diff_json)).toEqual({ method: 'password', via: 'username' });
     // `audit_log` is readable by every ambassador, and one day an admin will
     // type their password into the username field.
     expect(row?.diff_json).not.toContain(cred.username);
@@ -547,9 +548,274 @@ describe('the lockout', () => {
 
     expect(row?.actor_id).toBeNull();
     expect(row?.entity_id).toBeNull();
-    expect(JSON.parse(row!.diff_json)).toEqual({ outcome: 'bad-credentials' });
+    expect(JSON.parse(row!.diff_json)).toEqual({ outcome: 'bad-credentials', via: 'username' });
     expect(row?.diff_json).not.toContain('secretadmin');
     expect(row?.diff_json).not.toContain('a wrong password');
+  });
+});
+
+/* ------------------------------------------------- the recovery address */
+
+describe('the recovery address, typed into the same box', () => {
+  /*
+   * Added 2026-09-23. An admin completed two resets by email and was then
+   * refused here, because he typed the address the resets went to — the only
+   * identifier the recovery flow had ever shown him — and the lookup only knew
+   * usernames. The box now takes either, and the route picks the column by
+   * whether the value contains `@`: one indexed equality or the other, never
+   * both and never `OR`-ed.
+   *
+   * Everything the username path promises is asserted again here for the
+   * address path, because that is what "nothing else about the door moved"
+   * has to mean: the same refusal, the same cost, the same counter, and an
+   * audit trail that says which kind of identifier was used and nothing else.
+   */
+  const ADDRESS = 'owner@example.test';
+
+  async function seedWithAddress(): Promise<{
+    owner: Awaited<ReturnType<typeof seedUser>>;
+    cred: Awaited<ReturnType<typeof seedAdminCredential>>;
+  }> {
+    const owner = await seedUser(env.DB, { role: 'admin', roleLocked: true });
+    const cred = await seedAdminCredential(env.DB, owner, {
+      username: 'theowner',
+      email: ADDRESS,
+      iterations: DEFAULT_ITERATIONS,
+    });
+    return { owner, cred };
+  }
+
+  async function onlyAuditRow(): Promise<{
+    actor_id: number | null;
+    action: string;
+    entity_id: string | null;
+    diff_json: string;
+  }> {
+    const { results } = await env.DB.prepare(
+      'SELECT actor_id, action, entity_id, diff_json FROM audit_log ORDER BY id',
+    ).all<{ actor_id: number | null; action: string; entity_id: string | null; diff_json: string }>();
+    expect(results).toHaveLength(1);
+    return results[0]!;
+  }
+
+  it('signs in by address, and the session is that account’s', async () => {
+    const { owner, cred } = await seedWithAddress();
+
+    const res = await post({ username: ADDRESS, password: cred.password });
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+
+    const user = await getSessionUser(env.DB, sessionTokenOf(res)!);
+    expect(user?.id).toBe(owner.id);
+    expect(user?.role).toBe('admin');
+  });
+
+  it('does it through the real form, as a browser submits it, and reaches the console', async () => {
+    const { cred } = await seedWithAddress();
+
+    // `next` is not typed: it rides in the form's hidden field, as for a person.
+    const sent = await submitForm(`${ORIGIN}/admin/login?next=%2Fadmin%2Fposts`, {
+      username: ADDRESS,
+      password: cred.password,
+    });
+
+    expect(sent.response.status, sent.trace).toBe(303);
+    expect(sent.response.headers.get('location')).toBe('/admin/posts');
+
+    const page = await SELF.fetch(`${ORIGIN}/admin/posts`, {
+      headers: { cookie: authCookie(sessionTokenOf(sent.response)!) },
+      redirect: 'manual',
+    });
+    expect(page.status).toBe(200);
+  });
+
+  it('folds case and trims, as the reset request does', async () => {
+    const { cred } = await seedWithAddress();
+
+    const res = await post({ username: '  Owner@Example.TEST  ', password: cred.password });
+
+    expect(res.status).toBe(303);
+    expect(sessionTokenOf(res)).toBeDefined();
+  });
+
+  it('records via: email on the login, and never the address', async () => {
+    const { owner, cred } = await seedWithAddress();
+
+    await post({ username: ADDRESS, password: cred.password });
+
+    const row = await onlyAuditRow();
+    expect(row.action).toBe('login');
+    expect(row.actor_id).toBe(owner.id);
+    expect(JSON.parse(row.diff_json)).toEqual({ method: 'password', via: 'email' });
+    // An admin's mailbox is not every ambassador's to read.
+    expect(row.diff_json).not.toContain('example.test');
+    expect(row.diff_json).not.toContain('owner@');
+  });
+
+  it('records a failure by address with via: email, and no address and no account', async () => {
+    await seedWithAddress();
+
+    await post({ username: ADDRESS, password: 'not the password at all' });
+
+    const row = await onlyAuditRow();
+    expect(row.actor_id).toBeNull();
+    expect(row.entity_id).toBeNull();
+    expect(JSON.parse(row.diff_json)).toEqual({ outcome: 'bad-credentials', via: 'email' });
+    expect(row.diff_json).not.toContain('example.test');
+    expect(row.diff_json).not.toContain('not the password');
+  });
+
+  it('refuses a banned account by address too, and says so with via: email', async () => {
+    const owner = await seedUser(env.DB, { role: 'admin', isBanned: true });
+    const cred = await seedAdminCredential(env.DB, owner, { email: ADDRESS });
+
+    const res = await post({ username: ADDRESS, password: cred.password });
+
+    expect(res.headers.get('location')).toBe('/admin/login?error=bad');
+    expect(res.headers.getSetCookie()).toHaveLength(0);
+    const row = await onlyAuditRow();
+    expect(JSON.parse(row.diff_json)).toEqual({ method: 'password', outcome: 'banned', via: 'email' });
+  });
+
+  it('COUNTS A WRONG PASSWORD BY ADDRESS AGAINST THE SAME ACCOUNT’S LOCKOUT', async () => {
+    /*
+     * The lockout is per account, not per identifier. If the two kinds kept
+     * separate counts, an attacker would get five guesses by username and five
+     * more by address — and the whole point of five is that there is no sixth.
+     */
+    const { owner, cred } = await seedWithAddress();
+
+    for (let i = 0; i < 3; i++) await post({ username: cred.username, password: `wrong ${i}` });
+    expect((await readCredential(env.DB, owner))?.failed_attempts).toBe(3);
+
+    for (let i = 0; i < 2; i++) await post({ username: ADDRESS, password: `wrong again ${i}` });
+
+    const row = await readCredential(env.DB, owner);
+    expect(row?.failed_attempts).toBe(5);
+    expect(row?.locked_until).not.toBeNull();
+
+    // Shut by either name, even to the right password.
+    for (const identifier of [cred.username, ADDRESS]) {
+      const res = await post({ username: identifier, password: cred.password });
+      expect(res.headers.get('location'), identifier).toBe('/admin/login?error=locked');
+      expect(res.headers.getSetCookie()).toHaveLength(0);
+    }
+    expect(await sessionCount()).toBe(0);
+  });
+
+  it('answers an unknown address byte-for-byte as an unknown username and a wrong password', async () => {
+    /*
+     * The enumeration guard, widened to the new column. A different answer for
+     * an unknown address would make this form a free "is this address an
+     * admin's?" oracle — the one question the reset request is built around
+     * never answering.
+     */
+    await seedWithAddress();
+
+    const wrong = await post({ username: ADDRESS, password: 'wrong wrong wrong' });
+    const wrongBody = await wrong.text();
+
+    for (const identifier of ['nobodyhere', 'nobody@example.test']) {
+      const res = await post({ username: identifier, password: 'wrong wrong wrong' });
+      expect(res.status, identifier).toBe(wrong.status);
+      expect(res.headers.get('location'), identifier).toBe(wrong.headers.get('location'));
+      expect(res.headers.get('cache-control'), identifier).toBe(wrong.headers.get('cache-control'));
+      expect([...res.headers.keys()].sort(), identifier).toEqual([...wrong.headers.keys()].sort());
+      expect(await res.text(), identifier).toBe(wrongBody);
+      expect(res.headers.getSetCookie(), identifier).toHaveLength(0);
+    }
+  });
+
+  it.each([
+    ['nothing after the at sign', 'theowner@'],
+    ['nothing before it', '@example.test'],
+    ['no dot in the domain', 'owner@example'],
+    ['a space inside', 'own er@example.test'],
+    ['two at signs', 'owner@@example.test'],
+    ['a display name', 'Owner <owner@example.test>'],
+  ])('treats %s as unknown, even beside the right password', async (_label, identifier) => {
+    /*
+     * An `@` means "this is an address", and a string `normalizeEmail` refuses
+     * is not one — so it is an unknown identifier, answered as one. It is never
+     * retried as a username: `theowner@` does not find `theowner`.
+     */
+    const { owner, cred } = await seedWithAddress();
+
+    const res = await post({ username: identifier, password: cred.password });
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/admin/login?error=bad');
+    expect(res.headers.getSetCookie()).toHaveLength(0);
+    // Unknown, so no counter moved and nothing was logged — as for an unknown
+    // username, which has no counter to bound the writes.
+    expect((await readCredential(env.DB, owner))?.failed_attempts).toBe(0);
+    expect(await auditActions()).toEqual([]);
+  });
+
+  it('never compares an @ identifier with usernames, even one that would match', async () => {
+    /*
+     * The branch, pinned from the other side. The setter refuses `@` in a login
+     * name, but the column does not, so a row with one can be written by hand.
+     * Looked up as an address it finds nothing, and it is not retried as a
+     * username — the two namespaces stay apart, and the failure is closed.
+     */
+    const owner = await seedUser(env.DB, { role: 'admin' });
+    const cred = await seedAdminCredential(env.DB, owner, { username: 'odd@name.test' });
+
+    const res = await post({ username: 'odd@name.test', password: cred.password });
+
+    expect(res.headers.get('location')).toBe('/admin/login?error=bad');
+    expect(sessionTokenOf(res)).toBeUndefined();
+  });
+
+  it('cannot reach an account with no address on file', async () => {
+    // No address is the state an admin starts in. A NULL never matches, so the
+    // address door simply is not there for that account.
+    const owner = await seedUser(env.DB, { role: 'admin' });
+    const cred = await seedAdminCredential(env.DB, owner, { username: 'noaddress' });
+
+    const res = await post({ username: 'noaddress@example.test', password: cred.password });
+
+    expect(res.headers.get('location')).toBe('/admin/login?error=bad');
+    expect(sessionTokenOf(res)).toBeUndefined();
+  });
+
+  it('spends real time on an unknown address, rather than answering instantly', async () => {
+    /*
+     * The timing half of the enumeration guard, measured exactly as the
+     * unknown-username test above measures it: a FLOOR, never a window, and the
+     * MINIMUM OF THREE SAMPLES, because timing noise only ever adds and a single
+     * sample has flaked in this file before.
+     */
+    const { owner, cred } = await seedWithAddress();
+
+    await warmUp(cred.username, owner.id);
+    // The address path prepares its own statement, so it is warmed on its own.
+    for (let i = 0; i < 3; i++) {
+      await post({ username: ADDRESS, password: 'warm up' });
+      await post({ username: 'nobody@example.test', password: 'warm up' });
+    }
+    await resetCounter(owner.id);
+
+    const sample = async (identifier: string): Promise<number> => {
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 3; i++) {
+        // A tripped lock short-circuits before hashing, and this would then
+        // pass for the wrong reason.
+        await resetCounter(owner.id);
+        const t = Date.now();
+        await post({ username: identifier, password: 'wrong wrong wrong' });
+        best = Math.min(best, Date.now() - t);
+      }
+      return best;
+    };
+
+    const wrongMs = await sample(ADDRESS);
+    const unknownMs = await sample('nobody@example.test');
+
+    expect(unknownMs).toBeGreaterThanOrEqual(0.4 * wrongMs);
   });
 });
 
@@ -759,16 +1025,17 @@ describe('what shapes of request it accepts', () => {
 describe('GET /admin/login', () => {
   it('renders the form to a signed-out visitor, carries noindex, and posts to the API', async () => {
     /*
-     * THE POINT OF THE EXEMPTION, AND THE ONLY TEST THAT WOULD NOTICE ITS LOSS.
+     * THE POINT OF THE EXEMPTION.
      *
      * This page sits under `/admin`, so the middleware's role gate covers it by
-     * default and would answer a signed-out visitor with a 302 to `/auth/login`
-     * — the Discord door they are here because they cannot use.
-     * `isAdminLoginPath` is what stops that, and if it were dropped or the wire
-     * in `src/middleware.ts` removed, nothing else in this suite would fail:
-     * every other assertion here drives the API route, which is not under
-     * `/admin` at all. So the status is checked, and then the form itself,
-     * because a 200 that rendered an error shell would also be a dead door.
+     * default — and the gate sends what it refuses to this very page, so
+     * without the exemption a signed-out visitor would be redirected here from
+     * here, forever. `isAdminLoginPath` is what stops that. Most of this suite
+     * drives the API route, which is not under `/admin` at all and would not
+     * notice the exemption going; this, the `submitForm` tests and the
+     * self-redirect test further down would. So the status is checked, and
+     * then the form itself, because a 200 that rendered an error shell would
+     * also be a dead door.
      */
     const res = await SELF.fetch(`${ORIGIN}/admin/login`, { redirect: 'manual' });
 
@@ -787,6 +1054,30 @@ describe('GET /admin/login', () => {
     expect(html).toContain('type="password"');
     expect(html).toContain('autocomplete="username"');
     expect(html).toContain('autocomplete="current-password"');
+    // The box takes either identifier, and says so — the label is the only
+    // place a person standing at the form learns the address works too.
+    expect(html).toContain('Username or email');
+  });
+
+  it('links members to Discord, carrying next along when there is one', async () => {
+    /*
+     * The gate sends every refused page here now, members included, so the
+     * "everyone else" link is how a member gets to the door that is theirs —
+     * and comes back to where they were going if their account turns out to
+     * qualify. `next` has been through `safeNext` before it is written into
+     * the link, which the hostile case proves.
+     */
+    const plain = await (await SELF.fetch(`${ORIGIN}/admin/login`)).text();
+    expect(plain).toContain('href="/auth/login"');
+
+    const carried = await (await SELF.fetch(`${ORIGIN}/admin/login?next=%2Fadmin%2Fposts`)).text();
+    expect(carried).toContain('href="/auth/login?next=%2Fadmin%2Fposts"');
+
+    const hostile = await (
+      await SELF.fetch(`${ORIGIN}/admin/login?next=${encodeURIComponent('//evil.example/phish')}`)
+    ).text();
+    expect(hostile).toContain('href="/auth/login"');
+    expect(hostile).not.toContain('evil.example');
   });
 
   it('is reachable enough to actually sign in through, end to end', async () => {
@@ -840,7 +1131,10 @@ describe('GET /admin/login', () => {
 
     const bad = await (await SELF.fetch(`${ORIGIN}/admin/login?error=bad`)).text();
     expect(bad).toContain('role="alert"');
-    expect(bad).toContain('did not match');
+    // Not "that username" any more: the box takes an address too, and the
+    // sentence must not say which half was wrong.
+    expect(bad).toContain('Those sign-in details did not match.');
+    expect(bad).not.toContain('That username and password');
   });
 
   it('ignores an error value it did not emit', async () => {
@@ -894,8 +1188,9 @@ describe('the hole the page sits in is exactly one path wide', () => {
 
     const res = await SELF.fetch(`${ORIGIN}${path}`, { redirect: 'manual' });
 
+    // Gated means sent to this page's own path, which a near-miss is not.
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(`/auth/login?next=${encodeURIComponent(path)}`);
+    expect(res.headers.get('location')).toBe(`/admin/login?next=${encodeURIComponent(path)}`);
   });
 
   it('and the ordinary console pages are untouched by it', async () => {
@@ -905,7 +1200,20 @@ describe('the hole the page sits in is exactly one path wide', () => {
     const res = await SELF.fetch(`${ORIGIN}/admin/posts`, { redirect: 'manual' });
 
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/auth/login?next=%2Fadmin%2Fposts');
+    expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin%2Fposts');
+  });
+
+  it('is what stops the gate redirecting this page to itself', async () => {
+    /*
+     * Since the gate began sending refusals to `/admin/login`, losing the
+     * exemption would no longer be a quiet dead end — it would be this page
+     * answering 302 to itself, forever. A single 200 with no Location is the
+     * proof there is no loop.
+     */
+    const res = await SELF.fetch(`${ORIGIN}/admin/login?next=%2Fadmin`, { redirect: 'manual' });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
   });
 });
 

@@ -213,6 +213,23 @@ describe('the mail path cannot reach Resend', () => {
     ).toBe('disabled');
     discord.assertNotCalled();
   });
+
+  it('refuses a message with an HTML part just the same', async () => {
+    // Since 2026-09-23 the reset mail carries a branded HTML part beside its
+    // text. A richer message is no reason for the path to open: the refusal
+    // comes from the configuration, whatever the message holds.
+    const discord = mockDiscord();
+
+    expect(
+      await sendEmail(env, {
+        to: 'admin@pogotxk.test',
+        subject: 'x',
+        text: 'x',
+        html: '<p>safety test — must never be sent</p>',
+      }),
+    ).toBe('disabled');
+    discord.assertNotCalled();
+  });
 });
 
 describe('no test reaches the network at all', () => {

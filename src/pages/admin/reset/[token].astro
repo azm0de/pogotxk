@@ -72,7 +72,8 @@ export const prerender = false;
  * ---------------------------------------------------------------------------
  *
  * Under `/admin`, so the role gate covers it by default and would send a
- * signed-out admin to the Discord door their account does not exist behind.
+ * signed-out admin to the sign-in form — the one door they have just
+ * established they cannot get through, which is why they are holding a link.
  * `isAdminResetPath` exempts it — not as an equality check, because the path
  * is different every time, but pinned to the shape of a token this code mints:
  * one segment, 64 lowercase hex characters, nothing else. The argument is at
@@ -178,6 +179,34 @@ Astro.response.headers.set('referrer-policy', 'strict-origin');
               simply the one the POST can see.
             */}
             <input type="hidden" name="token" value={token} />
+
+            {/*
+              The account's login name, for the password manager and nobody
+              else.
+
+              A change-password form with nothing but two new-password fields
+              gives a browser that offers to save the new password no account to
+              attach it to, so it asks, guesses, or saves a second entry beside
+              the old one. Chromium's "Create Amazing Password Forms" says to
+              include the username anyway, in a field marked
+              `autocomplete="username"`, hidden if the layout has no use for it —
+              and its own example is a real text input hidden with
+              `display: none`. That is this: `hidden` is `display: none`
+              (`!important`, from the global `[hidden]` rule), which also keeps
+              it out of the tab order and the accessibility tree, where it would
+              only repeat the name the lede above already says. A text input
+              rather than `type="hidden"`, as in that example, because password
+              managers look for a username among fields a person could fill.
+
+              **No `name`, deliberately.** An unnamed control is never
+              submitted, so this value cannot reach the confirm route at all.
+              The route reads `token`, `password` and `confirm` and nothing else,
+              and the account it changes is the one the token was issued for; a
+              `username` added to the POST by hand is ignored, which
+              `admin-reset.test.ts` asserts. The `id` stands in for a name,
+              which is what a password manager keys a field on when it has none.
+            */}
+            <input id="admin-reset-username" type="text" autocomplete="username" value={username} hidden />
 
             <div class="field">
               <label for="admin-new-password">New password</label>

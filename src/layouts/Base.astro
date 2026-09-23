@@ -431,7 +431,15 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           );
         };
 
-        const signedIn = (user) => {
+        /*
+         * `access` is the rest of `/api/me.json`: `canAdmin` and
+         * `standaloneAdmin`, both decided on the server. This script compares
+         * no roles and reads no ids — the role order lives in one place and a
+         * copy of it here is how the menu and the gate would drift apart — and
+         * anything other than a literal `true` counts as no, so a response
+         * missing either field gets the ordinary member menu.
+         */
+        const signedIn = (user, access) => {
           const details = el('details', { className: 'account-menu' });
           const summary = el('summary', {
             className: 'account-summary btn btn--sm btn--outline',
@@ -460,23 +468,40 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
             }),
           );
 
-          // Session actions, plus one link out. Who is signed in is already
+          // Session actions, plus links out. Who is signed in is already
           // the summary's own avatar and name; a menu that opens over it
           // should hold actions, not repeat that back as prose. Delete stays
           // a link to its own confirmation page rather than a raw button
           // here — this menu is not the place to put something irreversible
           // one misclick away.
           const panel = el('div', { className: 'account-panel panel' });
-          panel.append(
-            el('a', { href: '/auth/logout?next=' + next, textContent: 'Sign out' }),
-            // Signing out here does not sign out of Discord — this is the only
-            // way off an account picked by mistake. See commit 4e12bcb.
-            el('a', {
-              href: '/auth/logout?switch=1&next=' + next,
-              textContent: 'Use a different Discord account',
-            }),
-            el('a', { href: '/account/delete', textContent: 'Delete my account' }),
-          );
+
+          // First, and only for whoever the `/admin` gate would let through:
+          // the way into the console. A convenience, not a control — the gate
+          // still decides every request, and a hand-typed `/admin` works the
+          // same with or without this link.
+          if (access.canAdmin === true) {
+            panel.append(el('a', { href: '/admin', textContent: 'Admin' }));
+          }
+
+          panel.append(el('a', { href: '/auth/logout?next=' + next, textContent: 'Sign out' }));
+
+          // Neither of these applies to a standalone admin: there is no
+          // Discord account behind one to switch away from, and self-service
+          // deletion would drop the password credential that is its only way
+          // in. Those accounts are managed with `npm run set:password`. Every
+          // Discord account keeps both, whatever its role.
+          if (access.standaloneAdmin !== true) {
+            panel.append(
+              // Signing out here does not sign out of Discord — this is the only
+              // way off an account picked by mistake. See commit 4e12bcb.
+              el('a', {
+                href: '/auth/logout?switch=1&next=' + next,
+                textContent: 'Use a different Discord account',
+              }),
+              el('a', { href: '/account/delete', textContent: 'Delete my account' }),
+            );
+          }
 
           details.append(summary, panel);
           root.append(details);
@@ -497,7 +522,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
             if (!data) return; // Stay hidden rather than assert either state.
-            data.user ? signedIn(data.user) : signedOut();
+            data.user ? signedIn(data.user, data) : signedOut();
             root.hidden = false;
           })
           .catch(() => {
@@ -1299,7 +1324,11 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         right: 0;
         z-index: var(--z-overlay);
         /* Wide enough that "Use a different Discord account", the longest row,
-           never wraps to a second line. */
+           never wraps to a second line. Kept when that row is absent — a
+           standalone admin's menu is just "Admin" and "Sign out" — so the panel
+           is the same size whoever opens it, rather than shrinking to a sliver
+           around two short words. Checked at 880px and, in the nav sheet
+           below, at 375px, where the rows span the sheet instead. */
         min-width: 260px;
         --panel-pad: var(--space-1);
         border: 1px solid var(--border);
