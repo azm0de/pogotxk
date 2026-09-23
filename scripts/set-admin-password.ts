@@ -56,6 +56,10 @@ import { DEFAULT_ITERATIONS, hashPassword } from '../src/lib/auth/password';
 // what makes "the address this writes is the address the route will look up"
 // a fact rather than two regexes that agree today.
 import { normalizeEmail } from '../src/lib/notify/email';
+// The same again for the `admin:` prefix: the account menu decides what to show
+// a standalone admin by checking for it, so this mints with the very constant
+// that check reads rather than a copy of the string.
+import { STANDALONE_ADMIN_PREFIX } from '../src/lib/auth/types';
 import { rows } from './d1-json';
 
 /* --------------------------------------------------------------- arguments */
@@ -486,10 +490,11 @@ have a Discord account behind them at all, that is what --create is for.`,
      * **The prefix has to match what production already holds.** The rows are
      * `admin:nic` and `admin:justin`; minting under any other prefix would not
      * fail, it would quietly start a second convention and a second account for
-     * a name that already has one.
+     * a name that already has one. It is `STANDALONE_ADMIN_PREFIX`, which is
+     * also what the account menu checks to leave the Discord-only rows out.
      */
     const name = assertName('--create', (createName ?? '').toLowerCase());
-    const synthetic = `admin:${name}`;
+    const synthetic = `${STANDALONE_ADMIN_PREFIX}${name}`;
 
     // `Nic` from `nic`, matching the `global_name` the existing rows carry.
     // `name` has already been through `assertName`, so capitalising its first

@@ -1,7 +1,7 @@
 ---
 import Base from '~/layouts/Base.astro';
+import { canReachAdmin } from '~/lib/auth/admin-path';
 import { safeNext } from '~/lib/auth/next';
-import { hasRole } from '~/lib/auth/types';
 
 export const prerender = false;
 
@@ -77,8 +77,9 @@ const next = safeNext(Astro.url.searchParams.get('next'));
 
 // Already able to reach the console — there is nothing here for them, and a
 // sign-in form shown to somebody already signed in is just a confusing dead
-// end. Same shape as `/auth/device`'s early return.
-if (hasRole(Astro.locals.user, 'ambassador')) return Astro.redirect(next, 302);
+// end. Same shape as `/auth/device`'s early return. The same predicate as the
+// gate itself, so the two can never disagree about who is through.
+if (canReachAdmin(Astro.locals.user)) return Astro.redirect(next, 302);
 
 /*
  * The Discord link carries `next` too, so a member the gate sent here can sign

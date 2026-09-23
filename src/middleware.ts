@@ -9,13 +9,13 @@
 import { defineMiddleware } from 'astro:middleware';
 import { env } from 'cloudflare:workers';
 import {
+  canReachAdmin,
   isAdminLoginPath,
   isAdminPath,
   isAdminResetPath,
   isImportPath,
 } from '~/lib/auth/admin-path';
 import { getSessionUser, SESSION_COOKIE, touchSession } from '~/lib/auth/session';
-import { hasRole } from '~/lib/auth/types';
 
 const SKIP_PREFIXES = ['/_astro/', '/media/', '/favicon', '/assets/'];
 
@@ -65,7 +65,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       !isImportPath(path) &&
       !isAdminLoginPath(path) &&
       !isAdminResetPath(path) &&
-      !hasRole(context.locals.user, 'ambassador')
+      // The one statement of who gets in, shared with `/admin/login` and with
+      // the account menu's link — see `canReachAdmin`.
+      !canReachAdmin(context.locals.user)
     ) {
       if (path.startsWith('/api/')) {
         return new Response(JSON.stringify({ error: 'Forbidden' }), {

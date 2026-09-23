@@ -135,6 +135,29 @@ all three like every other. That is the same claim `/auth/device` makes, and it 
 > the constant then costs one line and invalidates no stored hash, because the count lives in
 > the row. The full numbers are in the comment above `DEFAULT_ITERATIONS`.
 
+### In the account menu
+
+Added 2026-09-23. The header's account control is built by an inline script from
+`GET /api/me.json`, which answers two booleans beside the user so that the script never
+reasons about roles or identities itself — a copy of the role order in the client is how a
+menu and the gate it links to would drift apart.
+
+- **`canAdmin`** is `canReachAdmin(user)` from `src/lib/auth/admin-path.ts`: the one statement
+  of who the gate admits (`ambassador` or better), which the middleware and `/admin/login` now
+  call too. When it is true an **Admin** link to `/admin` heads the menu. It is a convenience,
+  not a control — the gate still decides every request — and `test/admin/pages.test.ts` holds
+  it to the gate for every caller, one session asking both questions.
+- **`standaloneAdmin`** is `isStandaloneAdmin(user)`: `discord_id` starts with
+  `STANDALONE_ADMIN_PREFIX` (`admin:`), the constant `scripts/set-admin-password.ts` now mints
+  with. When it is true the menu leaves out **Use a different Discord account** — there is no
+  Discord account to switch away from — and **Delete my account**, because `deleteAccount`
+  would delete the password credential that is the account's only way in. Admin accounts are
+  managed with `npm run set:password`. It is about the identity, not the role: a Discord
+  account that is an ambassador or an admin keeps the full member menu.
+
+So a standalone admin's menu is **Admin** and **Sign out**, which keeps Discord sign-in and
+admin sign-in fully separate, as the owner asked.
+
 ### `role_locked`
 
 A `users` column, set by the setter script alongside the password. `upsertUser`'s `CASE` checks

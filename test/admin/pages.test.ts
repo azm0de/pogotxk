@@ -20,6 +20,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { safeNext } from '~/lib/auth/next';
+import { authCookie, seedSession, seedUser } from '../helpers/factories';
 import { CALLERS, ORIGIN, requestAs, seedFixtures, type Caller } from './surface';
 
 /** Every page under the console that the gate applies to. */
@@ -316,5 +317,42 @@ describe('a session that lapses mid-visit', () => {
 
     expect(after.status).toBe(302);
     expect(after.headers.get('location')).toBe('/admin/login?next=%2Fadmin');
+  });
+});
+
+describe('the account menu’s Admin link agrees with the gate', () => {
+  /*
+   * `/api/me.json` answers `canAdmin`, and the account menu shows its link to
+   * `/admin` on that and on nothing else. The link is a convenience — the gate
+   * still decides every request — but a link that leads to a bounce is a
+   * broken link, so the two are held to each other here, for every caller the
+   * matrix knows, with one session asking both questions.
+   *
+   * `requestAs` would seed a fresh user per request, which is right for the
+   * matrix and wrong here: the claim is about one person seeing one answer.
+   */
+  async function cookieFor(caller: Caller): Promise<string | null> {
+    if (caller === 'anonymous') return null;
+    const user = await seedUser(
+      env.DB,
+      caller === 'banned admin' ? { role: 'admin', isBanned: true } : { role: caller },
+    );
+    return authCookie(await seedSession(env.DB, user));
+  }
+
+  it.each(CALLERS)('%s', async (caller) => {
+    const cookie = await cookieFor(caller);
+    const headers: HeadersInit = cookie ? { cookie } : {};
+
+    const me = (await (await SELF.fetch(`${ORIGIN}/api/me.json`, { headers })).json()) as {
+      canAdmin: boolean;
+    };
+    const page = await SELF.fetch(`${ORIGIN}/admin`, { headers, redirect: 'manual' });
+
+    expect(me.canAdmin, `canAdmin said ${me.canAdmin}; /admin answered ${page.status}`).toBe(
+      page.status === 200,
+    );
+    // And both agree with the matrix above, so none of the three can drift.
+    expect(me.canAdmin).toBe(ADMITTED[caller]);
   });
 });

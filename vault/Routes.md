@@ -71,7 +71,7 @@ admits). The API routes under `/api/admin/` answer JSON instead: 401 signed out,
 | Endpoint | Auth | What |
 |---|---|---|
 | `GET /api/map.json` | public | Zone, POIs, shapes, community photos |
-| `GET /api/me.json` | public | Current session or null |
+| `GET /api/me.json` | public | Current session or null, plus two booleans for the account menu: `canAdmin` (the `/admin` gate's own check, `canReachAdmin`) and `standaloneAdmin` (a password-only `admin:<name>` identity). `private, no-store` |
 | `GET /api/game/[feed].json` | public | `raids` \| `eggs` \| `research` \| `events` |
 | `GET /api/flares` | public | Active flares |
 | `POST /api/auth/admin-login` | public | The admin password login, by username or recovery address (`@` picks the column). Form encoding only, 415 otherwise; every answer is a 303 |

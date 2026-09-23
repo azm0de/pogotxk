@@ -42,6 +42,10 @@ interface MeBody {
     trainerName: string | null;
     trainerLevel: number | null;
   } | null;
+  /** Whether the `/admin` gate would let this caller through. */
+  canAdmin: boolean;
+  /** A password-only admin identity, with no Discord account behind it. */
+  standaloneAdmin: boolean;
 }
 
 /** Astro's CSRF origin check covers DELETE as well as POST. */
@@ -219,11 +223,15 @@ describe('DELETE /api/account', () => {
 });
 
 describe('GET /api/me.json', () => {
-  it('answers null when signed out', async () => {
+  it('answers null when signed out, and no to both questions', async () => {
     const res = await SELF.fetch(ME);
 
     expect(res.status).toBe(200);
-    expect((await res.json()) as MeBody).toEqual({ user: null });
+    expect((await res.json()) as MeBody).toEqual({
+      user: null,
+      canAdmin: false,
+      standaloneAdmin: false,
+    });
   });
 
   it('answers the whole session user when signed in', async () => {
@@ -271,12 +279,91 @@ describe('GET /api/me.json', () => {
     expect(((await res.json()) as MeBody).user).toBeNull();
   });
 
+  /*
+   * The two booleans the account menu is built from. The menu is an inline
+   * script that cannot import `hasRole`, so the server answers these and the
+   * script only reads them — a second copy of the role order in the client is
+   * how a menu link and the gate it points at would drift apart.
+   *
+   * `canAdmin` is the gate's own predicate (`canReachAdmin`), and the test that
+   * it agrees with the gate caller for caller is in `test/admin/pages.test.ts`.
+   * `standaloneAdmin` is about the identity, not the role.
+   */
+  it.each([
+    ['a guest', 'guest', false],
+    ['a member', 'member', false],
+    ['an ambassador', 'ambassador', true],
+    ['an admin', 'admin', true],
+  ] as const)('tells %s whether the console is open to them', async (_label, role, canAdmin) => {
+    // A Discord account every time — a numeric snowflake — so none of these
+    // is a standalone identity, whatever its role.
+    const user = await seedUser(env.DB, { discordId: '100000000000000055', role });
+
+    const body = (await (await SELF.fetch(await asUser(env.DB, user, ME))).json()) as MeBody;
+
+    expect(body.user?.role).toBe(role);
+    expect(body.canAdmin).toBe(canAdmin);
+    expect(body.standaloneAdmin).toBe(false);
+  });
+
+  it('marks a standalone admin:<name> identity, and not a Discord admin', async () => {
+    const standalone = await seedUser(env.DB, {
+      discordId: 'admin:justin',
+      username: 'justin',
+      role: 'admin',
+      roleLocked: true,
+    });
+    const discordAdmin = await seedUser(env.DB, {
+      discordId: '100000000000000056',
+      role: 'admin',
+      roleLocked: true,
+    });
+
+    const mine = (await (await SELF.fetch(await asUser(env.DB, standalone, ME))).json()) as MeBody;
+    const theirs = (await (
+      await SELF.fetch(await asUser(env.DB, discordAdmin, ME))
+    ).json()) as MeBody;
+
+    // Both reach the console...
+    expect(mine.canAdmin).toBe(true);
+    expect(theirs.canAdmin).toBe(true);
+    // ...but only one has no Discord account behind it, and only that one
+    // loses the Discord switch and the self-service delete.
+    expect(mine.standaloneAdmin).toBe(true);
+    expect(theirs.standaloneAdmin).toBe(false);
+  });
+
+  it('keeps standaloneAdmin about the identity: a demoted admin:<name> row is still one', async () => {
+    // No Discord account appears behind it by being demoted, so the
+    // Discord-only rows stay hidden — while the console link goes, because the
+    // gate would now refuse it.
+    const demoted = await seedUser(env.DB, { discordId: 'admin:nic', role: 'member' });
+
+    const body = (await (await SELF.fetch(await asUser(env.DB, demoted, ME))).json()) as MeBody;
+
+    expect(body.canAdmin).toBe(false);
+    expect(body.standaloneAdmin).toBe(true);
+  });
+
+  it('answers no to both for a banned admin, whose session resolves to nobody', async () => {
+    const banned = await seedUser(env.DB, { discordId: 'admin:gone', role: 'admin', isBanned: true });
+
+    const body = (await (await SELF.fetch(await asUser(env.DB, banned, ME))).json()) as MeBody;
+
+    expect(body).toEqual({ user: null, canAdmin: false, standaloneAdmin: false });
+  });
+
   it('is never cached anywhere', async () => {
     const res = await SELF.fetch(ME);
 
     // Per-user and cheap to recompute. A shared cache holding this would serve
-    // one member's identity to another.
+    // one member's identity to another — and now one caller's access to the
+    // console to the next.
     expect(res.headers.get('cache-control')).toBe('private, no-store');
     expect(res.headers.get('content-type')).toContain('application/json');
+
+    const admin = await seedUser(env.DB, { discordId: 'admin:cachecheck', role: 'admin' });
+    const signedIn = await SELF.fetch(await asUser(env.DB, admin, ME));
+    expect(signedIn.headers.get('cache-control')).toBe('private, no-store');
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Which paths the admin gate covers.
+ * Which paths the admin gate covers, and who it lets through.
  *
  * Its own module, free of `astro:middleware` and `cloudflare:workers` imports,
  * for the same reason `next.ts` and `device-payload.ts` are — the decision is
@@ -19,9 +19,30 @@
  * where there is nothing to protect.
  */
 
+import { hasRole, type SessionUser } from './types';
+
 /** True for `section` itself and anything nested below it, and nothing else. */
 function isUnder(path: string, section: string): boolean {
   return path === section || path.startsWith(`${section}/`);
+}
+
+/**
+ * Who the gate lets in: `ambassador` or better, and nobody else.
+ *
+ * The one statement of that rule, and every place that needs it asks here —
+ * the gate in `src/middleware.ts`, `/admin/login`'s "already through, send them
+ * on", and `/api/me.json`'s `canAdmin`, which is what decides whether the
+ * account menu offers a link to `/admin`. They have to agree exactly: a menu
+ * link to a page the gate then refuses is a link to a bounce, and a sign-in
+ * page that disagreed with the gate about who is through would pass a caller
+ * back and forth between them. One function makes that agreement structural
+ * rather than three literals that happen to match today.
+ *
+ * `undefined` — signed out, or a session `getSessionUser` refused, a banned
+ * account among them — is nobody.
+ */
+export function canReachAdmin(user: SessionUser | undefined): boolean {
+  return hasRole(user, 'ambassador');
 }
 
 /**

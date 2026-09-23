@@ -1,6 +1,7 @@
 /**
  * Checks the auth logic that cannot be exercised without live Discord
- * credentials: role resolution, PKCE, and the role hierarchy.
+ * credentials: role resolution, PKCE, the role hierarchy, who the `/admin`
+ * gate admits, and which accounts are standalone admin identities.
  *
  *   npx tsx scripts/test-auth.ts
  */
@@ -11,8 +12,15 @@ import {
   resolveRole,
   type DiscordConfig,
 } from '../src/lib/auth/discord';
+import { canReachAdmin } from '../src/lib/auth/admin-path';
 import { safeNext, signOutTarget } from '../src/lib/auth/next';
-import { hasRole, type Role, type SessionUser } from '../src/lib/auth/types';
+import {
+  hasRole,
+  isStandaloneAdmin,
+  STANDALONE_ADMIN_PREFIX,
+  type Role,
+  type SessionUser,
+} from '../src/lib/auth/types';
 
 let failures = 0;
 function check(label: string, actual: unknown, expected: unknown): void {
@@ -80,6 +88,29 @@ check('ambassador satisfies ambassador', hasRole(asUser('ambassador'), 'ambassad
 check('admin satisfies ambassador', hasRole(asUser('admin'), 'ambassador'), true);
 check('admin satisfies admin', hasRole(asUser('admin'), 'admin'), true);
 check('ambassador is not admin', hasRole(asUser('ambassador'), 'admin'), false);
+
+console.log('\n== who the /admin gate lets through (canReachAdmin) ==');
+// The one statement of the gate's rule, shared by the middleware, /admin/login
+// and the account menu's link. Pinned per role so a change to it is a change
+// someone had to make on purpose.
+check('signed out is refused', canReachAdmin(undefined), false);
+check('guest is refused', canReachAdmin(asUser('guest')), false);
+check('member is refused', canReachAdmin(asUser('member')), false);
+check('ambassador gets in', canReachAdmin(asUser('ambassador')), true);
+check('admin gets in', canReachAdmin(asUser('admin')), true);
+
+console.log('\n== standalone admin identities (isStandaloneAdmin) ==');
+const withId = (discordId: string, role: Role): SessionUser => ({ ...asUser(role), discordId });
+check('the prefix is the one production holds', STANDALONE_ADMIN_PREFIX, 'admin:');
+check('admin:justin is standalone', isStandaloneAdmin(withId('admin:justin', 'admin')), true);
+check('a Discord admin is not', isStandaloneAdmin(withId('100000000000000042', 'admin')), false);
+check('a Discord ambassador is not', isStandaloneAdmin(withId('100000000000000043', 'ambassador')), false);
+// About the identity, not the role: a demoted standalone row still has no
+// Discord account behind it.
+check('a standalone row demoted to member still is', isStandaloneAdmin(withId('admin:nic', 'member')), true);
+check('deleted:<id> is not', isStandaloneAdmin(withId('deleted:7', 'guest')), false);
+check('the prefix must lead, not merely appear', isStandaloneAdmin(withId('x-admin:justin', 'admin')), false);
+check('signed out is not', isStandaloneAdmin(undefined), false);
 
 console.log('\n== PKCE (RFC 7636 S256) ==');
 // Test vector from RFC 7636 appendix B.
