@@ -1,6 +1,6 @@
 ---
 tags: [runbook]
-updated: 2026-09-19
+updated: 2026-09-23
 ---
 
 # Deploying
@@ -9,6 +9,23 @@ updated: 2026-09-19
 in GitHub triggers the deploy. A deploy takes 60–90 seconds from push.
 
 Manual, if ever needed: `npm run deploy`.
+
+**Every other branch uploads a version and deploys nothing.** A push to any branch but `main` runs
+the same build and then `npx wrangler versions upload`: the dashboard's **Version command**, under
+Settings → Build → Build configuration. That stores a new Worker version without routing any
+traffic to it. A pull request still gets its "Workers Builds" check, and production is untouched.
+
+Merging to `main` *is* the release. So additive migrations (`npm run db:migrate:remote`) run
+before the merge, not after it.
+
+> [!danger] The Version command said `npx wrangler deploy` until 2026-09-23
+> Until then, **every branch push went live**: unmerged, unreviewed, and ahead of any migration it
+> needed. That is how production came to run code expecting migration `0004` before `0004` had
+> been applied (2026-09-21). If a branch push ever shows up as a new entry in
+> `wrangler deployments list`, look at that box first.
+>
+> Leave the dashboard's "Set up Worker Previews" banner alone unless you mean it. Moving to Worker
+> Previews is one-way, and previews need their own variables, secrets and bindings configured.
 
 > [!warning] CI does not gate the deploy
 > `.github/workflows/ci.yml` runs typecheck and both test layers on a push to `main` and on every
