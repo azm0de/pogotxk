@@ -21,7 +21,10 @@
  *
  * 1. **A non-GET request needs an `Origin` header** or Astro refuses it before
  *    the route runs (403, plain text). `jsonRequest` sets it; a bare `Request`
- *    does not, which is the subject of one deliberate test below.
+ *    does not, which is the subject of one deliberate test below. What
+ *    `jsonRequest` sets is the site's own origin, which a browser sends only
+ *    if the page's referrer policy lets it — so the one test here that is about
+ *    the page and the route together goes through `submitForm` instead.
  * 2. **workerd freezes the clock inside a single invocation.** `Date.now()`
  *    advances only across I/O, so timing anything means bracketing a
  *    `SELF.fetch()` — never a pure call, which would measure zero.
@@ -32,6 +35,7 @@ import { describe, expect, it } from 'vitest';
 import { upsertUser, type DiscordUser } from '~/lib/auth/discord';
 import { DEFAULT_ITERATIONS, pbkdf2Sha256, verifyPassword } from '~/lib/auth/password';
 import { getSessionUser, SESSION_COOKIE } from '~/lib/auth/session';
+import { submitForm } from '../helpers/browser-form';
 import {
   authCookie,
   jsonRequest,
@@ -44,7 +48,11 @@ const ORIGIN = 'https://pogotxk.test';
 const API = `${ORIGIN}/api/auth/admin-login`;
 const FORM_TYPE = 'application/x-www-form-urlencoded';
 
-/** A form-encoded POST with the `Origin` a browser would send. */
+/**
+ * A form-encoded POST carrying this site's own `Origin`, built directly — the
+ * header a browser sends from a page whose referrer policy allows it, which is
+ * an assumption about the page rather than a fact. See `submitForm`.
+ */
 function signIn(fields: Record<string, string>): Request {
   return jsonRequest(API, {
     body: new URLSearchParams(fields).toString(),
@@ -788,29 +796,28 @@ describe('GET /admin/login', () => {
      * is the one that fails if the `action` on the form and the path of the
      * route ever stop agreeing — a rename on one side only, which is exactly
      * the mistake a move like this invites.
+     *
+     * It submits the form the way a browser does, `Origin` included. The two
+     * reset pages next door once sent `Referrer-Policy: no-referrer`, which
+     * makes a browser post `Origin: null`; Astro's check refused every real
+     * submission while every hand-built POST in the suite sailed through.
+     * `submitForm` derives the header from this page's own policy, so if this
+     * page ever grows one that nulls it, this fails with that 403.
      */
     const owner = await seedUser(env.DB, { role: 'admin' });
     const cred = await seedAdminCredential(env.DB, owner);
 
-    const html = await (await SELF.fetch(`${ORIGIN}/admin/login`)).text();
-    const action = /action="([^"]+)"/.exec(html)?.[1];
-    expect(action).toBeDefined();
+    // `next` is not typed: it comes from the page's own query string by way of
+    // the form's hidden field, as it does for a person.
+    const sent = await submitForm(`${ORIGIN}/admin/login?next=%2Fadmin%2Fposts`, {
+      username: cred.username,
+      password: cred.password,
+    });
 
-    const res = await SELF.fetch(
-      jsonRequest(`${ORIGIN}${action}`, {
-        body: new URLSearchParams({
-          username: cred.username,
-          password: cred.password,
-          next: '/admin/posts',
-        }).toString(),
-        headers: { 'content-type': FORM_TYPE },
-      }),
-      { redirect: 'manual' },
-    );
-
-    expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/admin/posts');
-    expect(sessionTokenOf(res)).toBeDefined();
+    expect(sent.action).toBe(API);
+    expect(sent.response.status, sent.trace).toBe(303);
+    expect(sent.response.headers.get('location')).toBe('/admin/posts');
+    expect(sessionTokenOf(sent.response)).toBeDefined();
   });
 
   it('carries no script of its own', async () => {

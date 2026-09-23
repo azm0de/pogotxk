@@ -10,21 +10,58 @@ export const prerender = false;
  * The page a reset link opens: choose a new admin password.
  *
  * ---------------------------------------------------------------------------
- * `Referrer-Policy: no-referrer`, AND IT IS NOT A FORMALITY
+ * `Referrer-Policy: strict-origin`, AND IT IS NOT A FORMALITY
  * ---------------------------------------------------------------------------
  *
  * **The token is in this page's URL.** That is unavoidable — it is how a link
  * in a mail carries a credential — and it means every ordinary browser
  * behaviour that passes the current URL onward is a way for a live reset link
  * to leave this page. A `Referer` header goes out with any outbound request
- * the page makes and with any link the person clicks, so without this header a
+ * the page makes and with any link the person clicks, so without a policy a
  * single click on an external link would hand the token to whoever is on the
- * other end. It is set on the response here and on every 303 the flow emits,
- * so there is no point in the journey where it is missing.
+ * other end. The goal is narrow and absolute: **the token never leaves in a
+ * `Referer`**, to anyone.
  *
- * The page carries **no external links, no images and no scripts** for the
- * same reason: a `no-referrer` policy is a browser honouring an instruction,
- * and a page with nothing to leak to does not depend on it being honoured.
+ * `no-referrer` met that goal, and this page shipped with it. It also broke the
+ * form below. A form submission inherits its page's referrer policy, and on a
+ * POST that is not CORS the Fetch standard serialises `Origin` as `null`
+ * whenever that policy is `no-referrer`. Astro's CSRF check wants `Origin` to
+ * equal this site's origin exactly, so every real submission got its
+ * plain-text 403 and no link could be redeemed from a browser at all. The
+ * suite passed throughout, because its POSTs set `Origin` by hand to the one
+ * value the check wanted; `test/helpers/browser-form.ts` now derives it from
+ * the page instead.
+ *
+ * `strict-origin` meets the goal without that side effect. It never sends a
+ * path — a `Referer` from this page carries the bare origin or nothing, to
+ * every destination — and it only nulls `Origin` on an HTTPS-to-HTTP
+ * downgrade, which a same-origin POST on this site never is. It is
+ * deliberately not `same-origin`, which reads like the stricter choice and is
+ * the leakier one: it sends the *full* URL, token included, to this site's own
+ * origin.
+ *
+ * OWASP's Forgot Password Cheat Sheet asks for `no-referrer` on the page a
+ * reset link opens, and this departs from it on purpose. The recommendation
+ * exists to keep the token out of `Referer`, which `strict-origin` does just as
+ * completely. The only thing `no-referrer` withholds beyond that is the bare
+ * origin, which is public, and the price of withholding it is a form that
+ * cannot get past Astro's origin check. See `vault/Platform Limits and
+ * Traps.md`.
+ *
+ * The 303s in this flow still send `no-referrer`, and that is not the same
+ * mistake. A redirect's policy governs only the `Referer` on the GET that
+ * follows it; the page that GET renders takes its policy from its own
+ * response, so no form ever inherits the redirect's.
+ *
+ * The page's own content carries **no external links, no images and no
+ * scripts**, for the reason the policy exists at all: a referrer policy is a
+ * browser honouring an instruction, and content with nothing to leak to does
+ * not depend on it being honoured. The layout around it is not that bare. Its
+ * header and footer link out to Discord and the other socials, and every one
+ * of those links carries `rel="noreferrer"`, which sends no `Referer` on that
+ * click whatever the page's policy says. For a visitor signed in with Discord,
+ * the account control also loads their avatar from Discord's CDN, and that
+ * request carries what the policy allows: the bare origin.
  *
  * `Cache-Control: no-store` rides along. A shared-computer browser cache
  * holding a reset form is a smaller problem than the token in history, but it
@@ -97,8 +134,10 @@ const usable = state.status === 'valid' && username !== null;
 const raw = Astro.url.searchParams.get('error');
 const error = raw === 'short' || raw === 'mismatch' ? raw : null;
 
+// `strict-origin`, never `no-referrer`: the header of this file has the
+// argument, and the 403 that `no-referrer` caused.
 Astro.response.headers.set('cache-control', 'no-store');
-Astro.response.headers.set('referrer-policy', 'no-referrer');
+Astro.response.headers.set('referrer-policy', 'strict-origin');
 ---
 
 <Base title="Choose a new admin password">

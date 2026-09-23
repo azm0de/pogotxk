@@ -83,6 +83,11 @@ function seeOther(location: string): Response {
       // where the person came from, and a Referer travelling onward from a
       // page in this flow is the leak `/admin/reset/<token>` guards against
       // for the token itself.
+      //
+      // `no-referrer` is safe here in a way it is not on the pages: it governs
+      // only the Referer on the GET that follows, and the page that GET
+      // renders takes its policy from its own response. So the form on it
+      // never inherits this one, and never posts `Origin: null` because of it.
       'referrer-policy': 'no-referrer',
     },
   });

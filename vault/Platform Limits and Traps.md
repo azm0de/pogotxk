@@ -1,6 +1,6 @@
 ---
 tags: [reference]
-updated: 2026-09-20
+updated: 2026-09-22
 ---
 
 # Platform Limits and Traps
@@ -52,6 +52,21 @@ URL when the content type is `x-www-form-urlencoded`, `multipart/form-data` or `
 So sending JSON is what makes a cross-site POST *possible*, not what makes it safe. For
 ordinary `fetch` callers that is a convenience; for anything that accepts credentials it is a
 hole, which is why `/api/auth/admin-login` accepts form encoding only and answers 415 to JSON.
+
+**A page served with `Referrer-Policy: no-referrer` cannot submit its own POST forms.** It does
+not matter whether the policy comes from the header or from `<meta name="referrer"
+content="no-referrer">`, and `rel="noreferrer"` on the `<form>` itself does the same. A form
+inherits its page's policy, and the Fetch standard sends `Origin: null` with any non-CORS
+request that is not a GET or HEAD made under `no-referrer`. The check above wants `Origin` to
+equal the site's origin exactly, so every submission gets the plain-text 403 — "Cross-site POST
+form submissions are forbidden" — from a browser that is not cross-site at all.
+
+Any page that hosts a POST form should use **`strict-origin`** instead: it never sends a path in
+`Referer`, and it only nulls `Origin` on an HTTPS-to-HTTP downgrade. Not `same-origin`, which
+reads stricter and sends the *full* URL to the site's own origin. Both admin reset forms shipped
+on 2026-09-22 with `no-referrer` — it is what OWASP's Forgot Password Cheat Sheet recommends for
+a reset page — and every real submission failed, while the suite passed because every test set
+`Origin` by hand. `submitForm` in `test/helpers/browser-form.ts` derives it from the page instead.
 
 **`<slot name="head" />` must exist** or a page's `<Fragment slot="head">` is silently discarded
 — invisible in a browser, only showing up as missing metadata in a scraper.

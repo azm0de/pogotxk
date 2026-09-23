@@ -32,7 +32,7 @@ updated: 2026-09-22
 | `/auth/error` | Human-readable failure |
 | `/admin/login` | The admin password form. Public despite the path — see below and [[Auth and Roles#The admin password door]] |
 | `/admin/reset` | Asks for a password-reset link. Public despite the path, same as above |
-| `/admin/reset/<token>` | Sets the new password. `Referrer-Policy: no-referrer` — the token is in the URL |
+| `/admin/reset/<token>` | Sets the new password. `Referrer-Policy: strict-origin` — the token is in the URL, and `no-referrer` would null the form's `Origin` |
 
 ## Admin — `ambassador` or better
 

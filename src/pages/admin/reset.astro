@@ -50,10 +50,23 @@ const raw = Astro.url.searchParams.get('error');
 const error = raw === 'bad' || raw === 'gone' || raw === 'link' ? raw : null;
 const sent = Astro.url.searchParams.get('sent') === '1';
 
-// Nothing on this page is cacheable and nothing downstream needs to know a
-// visitor came from it.
+/*
+ * Nothing on this page is cacheable, and nothing downstream needs to know a
+ * visitor came from it — so no `Referer` from here may carry the path. It is
+ * the same goal the redemption page has for its token, with less riding on it.
+ *
+ * `strict-origin` meets it: a `Referer` from this page is the bare origin or
+ * nothing. It is deliberately **not** `no-referrer`, which is what this page
+ * shipped with and what OWASP's Forgot Password Cheat Sheet asks of a reset
+ * page. `no-referrer` met the goal too, but a form inherits its page's policy,
+ * and under `no-referrer` the browser posts `Origin: null` — which Astro's CSRF
+ * check answers with a plain-text 403, so every request for a link failed
+ * before reaching the route. `strict-origin` keeps the path out of every
+ * `Referer` just the same and leaves a same-origin POST's `Origin` alone. The
+ * full argument is in the header of `reset/[token].astro`.
+ */
 Astro.response.headers.set('cache-control', 'no-store');
-Astro.response.headers.set('referrer-policy', 'no-referrer');
+Astro.response.headers.set('referrer-policy', 'strict-origin');
 ---
 
 <Base title="Reset the admin password">
