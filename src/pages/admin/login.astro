@@ -21,10 +21,11 @@ export const prerender = false;
  *
  * It depends on nothing but this Worker and its database, which is why it was
  * built — it keeps working when Discord is down, when the guild is
- * misconfigured, and when `DISCORD_BOOTSTRAP_ADMIN_ID` is gone, which it is on
- * its way to being. See `migrations/0004_owner_password.sql` for the original
- * argument; the file is named for the terminology this feature has since left
- * behind.
+ * misconfigured, and without `DISCORD_BOOTSTRAP_ADMIN_ID`, which has been unset
+ * on the live Worker since 2026-09-22 — so this form is now the only way into
+ * the admin console at all. See `migrations/0004_owner_password.sql` for the
+ * original argument; the file is named for the terminology this feature has
+ * since left behind.
  *
  * ---------------------------------------------------------------------------
  * THE PATH IS NOT A SECRET, AND IS NOT PROTECTING ANYTHING
