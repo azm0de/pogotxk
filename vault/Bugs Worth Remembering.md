@@ -1,6 +1,6 @@
 ---
 tags: [history, quality]
-updated: 2026-09-23
+updated: 2026-09-26
 ---
 
 # Bugs Worth Remembering
@@ -218,6 +218,17 @@ pointing at `discord.com`** — the live webhook, present and usable, exactly as
 **`DISCORD_CLIENT_ID` deleted itself.** Added as a plain-text var; every subsequent deploy wiped
 it. `IMPORT_TOKEN` survived because it was a Secret. Symptom: "Discord sign-in is not configured"
 despite it being configured. See [[Configuration]].
+
+**The cron that deleting from config did not delete (2026-08-05 → 2026-09-26).** The `*/30`
+trigger was taken out of `wrangler.jsonc` on purpose, with a comment explaining why. It stayed
+attached on Cloudflare anyway: `wrangler deploy` only sends schedules when `triggers.crons` is
+present, so an absent key means "leave whatever is there". Every half hour it fired at a Worker
+with no `scheduled()` handler and threw — 48 exceptions a day for seven weeks. It surfaced as
+"45 of 46 requests fail" on quiet days, which read as a site outage and sent the first look
+hunting for a broken route. No visitor request was failing; on those days one real request reached
+the Worker. `workersInvocationsScheduled` settled it in one query. The fix is `"crons": []`, which
+wrangler does send. Removing a setting from a config file only removes it from the next deploy if
+the tool treats absence as "none", and wrangler doesn't. See [[Why there is no cron]].
 
 **The offline page was never cached.** The service worker listed `/offline`, which 307s to
 `/offline/`; `Cache.put()` rejects redirected responses. The one page whose entire job is working

@@ -1,6 +1,6 @@
 ---
 tags: [decision]
-updated: 2026-09-19
+updated: 2026-09-26
 ---
 
 # Why there is no cron
@@ -31,6 +31,23 @@ The only cost of having no cron is that the first visitor after the freshness wi
 the upstream fetch.
 
 > A permanent error stream is a worse trade than a cold cache.
+
+## It was not actually gone until 2026-09-26
+
+Everything above was true of the *file*. Cloudflare kept running the trigger anyway, and the
+permanent error stream this note warns about ran for seven weeks: 48 exceptions a day, every day,
+from the 2026-08-05 schedule.
+
+`wrangler deploy` only sends schedules when `triggers.crons` is set. A missing key means "leave
+Cloudflare's copy alone", not "none", so deleting the line changed nothing on the next deploy.
+`wrangler.jsonc` now says `"triggers": { "crons": [] }`, which wrangler does send. **The empty
+list is load-bearing.** Delete it and nothing breaks today, but the next stray schedule has
+nothing to clear it.
+
+`test/scheduled.test.ts` pins both halves: the built entry exports no `scheduled()`, and the
+generated `dist/server/wrangler.json` carries `crons: []`. To check what Cloudflare really has,
+ask it rather than the file: `GET /accounts/{id}/workers/scripts/pogotxk/schedules`. See
+[[Bugs Worth Remembering]].
 
 ## Riding the read is the pattern, not the workaround
 

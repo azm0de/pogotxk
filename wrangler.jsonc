@@ -86,9 +86,19 @@
   "durable_objects": {
     "bindings": [{ "name": "LIVE", "class_name": "LiveBoard" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveBoard"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveBoard"] }],
 
-  // NO CRON. Deliberately.
+  // NO CRON. Deliberately. The empty list is load-bearing — do not delete it.
+  //
+  // `wrangler deploy` only touches schedules when `triggers.crons` is set: an
+  // absent key leaves whatever Cloudflare already has, and only `[]` clears it.
+  // Removing the old trigger from this file therefore did nothing — the
+  // `*/30 * * * *` schedule from 2026-08-05 stayed attached and threw on every
+  // run, about 48 exceptions a day, until this line went in. Pinned by
+  // test/scheduled.test.ts, which checks the generated dist/server/wrangler.json.
+  "triggers": { "crons": [] }
+
+  // Why there is no cron at all:
   //
   // A `*/30 * * * *` trigger was declared here before the handler existed, and
   // the Astro adapter emits a worker entry exporting only `default` — verified:
