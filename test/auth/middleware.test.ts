@@ -243,7 +243,7 @@ describe('the admin API', () => {
     const res = await get('/api/admin/posts');
 
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: 'Forbidden' });
+    expect(await res.json()).toEqual({ error: 'Unauthorized' });
   });
 
   it('answers 403 to a signed-in caller who is not an ambassador', async () => {
@@ -286,7 +286,7 @@ describe('the import endpoints carry their own guard', () => {
 
     // Still 401, but the route's own — `requireImportToken` sends a
     // `WWW-Authenticate` challenge and says "Unauthorized". The middleware's
-    // refusal says "Forbidden" and sends no challenge, so this proves which one
+    // refusal says "Unauthorized" and sends no challenge, so this proves which one
     // answered.
     expect(res.status).toBe(401);
     expect(res.headers.get('www-authenticate')).toContain('Bearer');
@@ -306,7 +306,7 @@ describe('the import endpoints carry their own guard', () => {
 
     expect(res.status).toBe(401);
     expect(res.headers.get('www-authenticate')).toBeNull();
-    expect(await res.json()).toEqual({ error: 'Forbidden' });
+    expect(await res.json()).toEqual({ error: 'Unauthorized' });
   });
 });
 

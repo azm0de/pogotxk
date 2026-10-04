@@ -130,17 +130,20 @@ export const onRequest = defineMiddleware(async (context, next) => {
     ) {
       if (path.startsWith('/api/')) {
         /*
-         * The body still says "Forbidden" to a signed-out caller as well.
-         * Admin audit, 2026-10, B-18 asks for "Unauthorized" there, and the
-         * decision is taken — but `test/admin/api-matrix.test.ts` and
-         * `test/helpers/factories.test.ts` pin this exact string as the
-         * middleware's signature, so the word changes together with them, in
-         * one commit, rather than here alone. The status already carries the
-         * distinction a `fetch()` caller acts on: 401 signed out, 403 not enough.
+         * The word matches the status (admin audit, 2026-10, B-18): a
+         * signed-out caller is "Unauthorized" with 401, a signed-in caller
+         * below the floor is "Forbidden" with 403. It used to say "Forbidden"
+         * for both, and the matrix in `test/admin/surface.ts` reads the body as
+         * the middleware's signature, so both changed in one commit. No-store,
+         * because a cached refusal would outlive the sign-in that cures it.
          */
-        return new Response(JSON.stringify({ error: 'Forbidden' }), {
-          status: context.locals.user ? 403 : 401,
-          headers: { 'content-type': 'application/json; charset=utf-8' },
+        const signedIn = Boolean(context.locals.user);
+        return new Response(JSON.stringify({ error: signedIn ? 'Forbidden' : 'Unauthorized' }), {
+          status: signedIn ? 403 : 401,
+          headers: {
+            'content-type': 'application/json; charset=utf-8',
+            'cache-control': 'private, no-store',
+          },
         });
       }
       /*

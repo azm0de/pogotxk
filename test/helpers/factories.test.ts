@@ -149,7 +149,7 @@ describe('write requests carry what Astro insists on', () => {
 
     // The middleware's refusal, in JSON — which is proof the request got in.
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: 'Forbidden' });
+    expect(await res.json()).toEqual({ error: 'Unauthorized' });
   });
 
   it('jsonAsUser signs it in too, so a real write is one call', async () => {

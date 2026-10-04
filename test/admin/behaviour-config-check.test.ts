@@ -105,7 +105,7 @@ describe('GET /api/admin/config-check', () => {
       headers: { authorization: 'Bearer test-import-token' },
     });
     expect(anonymous.status).toBe(401);
-    expect(await anonymous.json()).toEqual({ error: 'Forbidden' });
+    expect(await anonymous.json()).toEqual({ error: 'Unauthorized' });
 
     // … and with an ambassador's session the token adds nothing.
     const ambassador = await signedIn('ambassador');

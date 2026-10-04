@@ -274,7 +274,7 @@ describe('the import exemption', () => {
      * `import-` prefix. Everything below is the route's own `requireImportAuth`
      * doing its job, and a route that forgot to call it cannot produce any of
      * it: a challenge header, and the word "Unauthorized" rather than the
-     * middleware's "Forbidden".
+     * middleware's "Unauthorized".
      */
     expect(res.status).toBe(401);
     expect(res.headers.get('www-authenticate')).toBe('Bearer realm="pogotxk-admin"');
@@ -298,13 +298,13 @@ describe('the import exemption', () => {
 
   it('is the `import-` prefix and not the word "import"', async () => {
     // `/api/admin/imports` shares four letters and none of the exemption. The
-    // middleware answers it, which is visible in the body: "Forbidden", and no
-    // challenge.
+    // middleware answers it, which is visible in the body: "Unauthorized", and
+    // no challenge.
     const res = await SELF.fetch(`${ORIGIN}/api/admin/imports`, { redirect: 'manual' });
 
     expect(res.status).toBe(401);
     expect(res.headers.get('www-authenticate')).toBeNull();
-    expect(await res.json()).toEqual({ error: 'Forbidden' });
+    expect(await res.json()).toEqual({ error: 'Unauthorized' });
   });
 
   it('really does hand an unrouted import- path past the role gate', async () => {
@@ -322,6 +322,6 @@ describe('the import exemption', () => {
 
     const guarded = await SELF.fetch(`${ORIGIN}/api/admin/nonexistent`, { redirect: 'manual' });
     expect(guarded.status).toBe(401);
-    expect(await guarded.json()).toEqual({ error: 'Forbidden' });
+    expect(await guarded.json()).toEqual({ error: 'Unauthorized' });
   });
 });

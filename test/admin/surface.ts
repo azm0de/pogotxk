@@ -20,7 +20,7 @@
  * ---------------------------------------------------------------------------
  *
  * Three different guards sit in front of this surface and two of them answer
- * 401. The middleware refuses a signed-out caller with `{error: 'Forbidden'}`;
+ * 401. The middleware refuses a signed-out caller with `{error: 'Unauthorized'}`;
  * `requireImportToken` refuses one with `{error: 'Unauthorized'}` and a
  * `WWW-Authenticate` challenge. A test that only compared the number would pass
  * if the import exemption widened to swallow a route the middleware used to
