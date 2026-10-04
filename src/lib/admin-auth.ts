@@ -32,8 +32,13 @@ export function requireImportToken(request: Request, env: Env): Response | null 
     );
   }
 
+  // The scheme is case-insensitive, as RFC 9110 §11.1 says it is (admin
+  // audit, 2026-10, B-17): `bearer <token>` with the right token used to be
+  // refused, which only ever cost a correct caller a confusing 401. The token
+  // itself is still compared exactly, in constant time.
   const header = request.headers.get('authorization') ?? '';
-  const supplied = header.startsWith('Bearer ') ? header.slice(7) : '';
+  const scheme = /^bearer\s+/i.exec(header);
+  const supplied = scheme ? header.slice(scheme[0].length) : '';
 
   if (!supplied || !timingSafeEqual(supplied, expected)) {
     return json({ error: 'Unauthorized' }, 401, {

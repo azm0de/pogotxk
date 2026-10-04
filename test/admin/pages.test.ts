@@ -20,7 +20,13 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { safeNext } from '~/lib/auth/next';
-import { authCookie, seedSession, seedUser } from '../helpers/factories';
+import {
+  authCookie,
+  jsonRequest,
+  seedAdminCredential,
+  seedSession,
+  seedUser,
+} from '../helpers/factories';
 import { CALLERS, ORIGIN, requestAs, seedFixtures, type Caller } from './surface';
 
 /** Every page under the console that the gate applies to. */
@@ -257,17 +263,53 @@ describe('the next parameter', () => {
     expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin');
   });
 
-  it('carries the path but not the query string', async () => {
+  it('carries the query string too, all the way back to the filtered page', async () => {
     /*
-     * Documented, not endorsed. `context.url.pathname` drops `?status=draft`,
-     * so an ambassador who follows a filtered link, signs in, and comes back
-     * lands on the unfiltered list. Harmless, and a real if small papercut —
-     * reported rather than changed, because widening what goes into `next`
-     * touches an open-redirect surface and is not a thing to do in passing.
+     * It used to drop it: `context.url.pathname` lost `?status=draft`, so an
+     * ambassador who followed a filtered link and signed in came back to the
+     * unfiltered list. Changed in the admin audit, 2026-10 (A-03) — deliberately,
+     * not in passing, because it widens what goes into `next`: the middleware
+     * now runs path and query through `safeNext` on the way out, and the form
+     * and the route run it again on the way back.
+     *
+     * Followed through every hop a person makes: the bounce, the form's hidden
+     * field, and the sign-in's own `Location`.
      */
-    const res = await SELF.fetch(`${ORIGIN}/admin/posts?status=draft`, { redirect: 'manual' });
+    const target = '/admin/posts?status=draft';
+    const res = await SELF.fetch(`${ORIGIN}${target}`, { redirect: 'manual' });
 
-    expect(res.headers.get('location')).toBe('/admin/login?next=%2Fadmin%2Fposts');
+    expect(res.headers.get('location')).toBe(`/admin/login?next=${encodeURIComponent(target)}`);
+
+    const form = await (
+      await SELF.fetch(`${ORIGIN}${res.headers.get('location')}`, { redirect: 'manual' })
+    ).text();
+    expect(form).toContain('name="next" value="/admin/posts?status=draft"');
+
+    const owner = await seedUser(env.DB, { role: 'admin' });
+    const cred = await seedAdminCredential(env.DB, owner);
+    const signedIn = await SELF.fetch(
+      jsonRequest(`${ORIGIN}/api/auth/admin-login`, {
+        body: new URLSearchParams({ username: cred.username, password: cred.password, next: target }).toString(),
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      }),
+      { redirect: 'manual' },
+    );
+    expect(signedIn.headers.get('location')).toBe(target);
+  });
+
+  it('lands an admin already signed in on the full target, query and all', async () => {
+    // `/admin/login`'s own early return for somebody already through goes to
+    // `next` — which now includes the query.
+    const admin = await seedUser(env.DB, { role: 'admin' });
+    const cookie = authCookie(await seedSession(env.DB, admin));
+
+    const res = await SELF.fetch(
+      `${ORIGIN}/admin/login?next=${encodeURIComponent('/admin/posts?status=draft')}`,
+      { headers: { cookie }, redirect: 'manual' },
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/admin/posts?status=draft');
   });
 });
 

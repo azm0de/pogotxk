@@ -343,6 +343,22 @@ describe('what it refuses, and how little it says', () => {
     const wrongMs = await sample(cred.username);
     const unknownMs = await sample('nobodyhere');
 
+    /*
+     * WHAT THIS CAN AND CANNOT PROVE (admin audit, 2026-10, E-25).
+     *
+     * It catches the gross mistake: `dummyVerify` deleted, or made to skip the
+     * derivation, so an unknown name answers in a fraction of the time. At
+     * 0.4 it fails when the unknown path is more than 2.5 times cheaper.
+     *
+     * It does NOT prove the two paths are indistinguishable. A gap of a few
+     * milliseconds — the two D1 writes only the known-row path makes — passes
+     * easily, and a remote attacker averaging enough samples could in
+     * principle see one. That is accepted: the lockout caps a real account at
+     * five guesses, so what an attacker learns from timing is at most what
+     * `locked` already tells them (A-08). The floor is kept loose because the
+     * same suite runs on CI and on a Windows laptop, and a tighter ratio was
+     * measured flaking for reasons unrelated to the route.
+     */
     expect(unknownMs).toBeGreaterThanOrEqual(0.4 * wrongMs);
   });
 
@@ -444,21 +460,70 @@ describe('the lockout', () => {
     expect(after?.last_success_at).not.toBeNull();
   });
 
-  it('shuts the door on the sixth attempt after five failures', async () => {
+  it('says locked on the fifth failure, the one that shuts the door', async () => {
+    /*
+     * Admin audit, 2026-10, A-06. The fifth failure used to answer `bad` like
+     * the four before it, so the admin learned about the lock only on the
+     * sixth try — even when that try was the right password, which then read
+     * as one more failure. Now the attempt that trips the lock says so, with
+     * the wait (A-07): a fresh lock is one minute.
+     */
     const owner = await seedUser(env.DB, { role: 'admin' });
     const cred = await seedAdminCredential(env.DB, owner);
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       const res = await post({ username: cred.username, password: `wrong ${i}` });
       expect(res.headers.get('location')).toBe('/admin/login?error=bad');
     }
+
+    const fifth = await post({ username: cred.username, password: 'wrong 4' });
+    expect(fifth.status).toBe(303);
+    expect(fifth.headers.get('location')).toBe('/admin/login?error=locked&minutes=1');
+    expect(fifth.headers.getSetCookie()).toHaveLength(0);
 
     const row = await readCredential(env.DB, owner);
     expect(row?.failed_attempts).toBe(5);
     expect(row?.locked_until).not.toBeNull();
 
     const sixth = await post({ username: cred.username, password: 'wrong again' });
-    expect(sixth.headers.get('location')).toBe('/admin/login?error=locked');
+    expect(sixth.headers.get('location')).toBe('/admin/login?error=locked&minutes=1');
+  });
+
+  it('carries next through a locked answer, after the minutes', async () => {
+    const owner = await seedUser(env.DB, { role: 'admin' });
+    const cred = await seedAdminCredential(env.DB, owner, {
+      failedAttempts: 5,
+      lockedUntil: new Date(Date.now() + 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    });
+
+    const res = await post({ username: cred.username, password: cred.password, next: '/admin/map' });
+
+    expect(res.headers.get('location')).toBe('/admin/login?error=locked&minutes=1&next=%2Fadmin%2Fmap');
+  });
+
+  it('says how long a longer lock has left, rounded up', async () => {
+    // Thirty minutes less five seconds is still "about 30", never "29": the
+    // page must not send anybody back to a door that is still shut.
+    const owner = await seedUser(env.DB, { role: 'admin' });
+    const cred = await seedAdminCredential(env.DB, owner, {
+      failedAttempts: 7,
+      lockedUntil: new Date(Date.now() + 30 * 60_000 - 5_000)
+        .toISOString()
+        .replace(/\.\d{3}Z$/, 'Z'),
+    });
+
+    const res = await post({ username: cred.username, password: 'anything' });
+
+    expect(res.headers.get('location')).toBe('/admin/login?error=locked&minutes=30');
+  });
+
+  it('never says locked for an unknown name, however many tries (A-08, unchanged)', async () => {
+    // The documented trade is that `locked` exists only for real rows. The
+    // fifth-attempt change must not have widened it to unknown identifiers.
+    for (let i = 0; i < 6; i++) {
+      const res = await post({ username: 'nobodyhere', password: `wrong ${i}` });
+      expect(res.headers.get('location')).toBe('/admin/login?error=bad');
+    }
   });
 
   it('REFUSES A CORRECT PASSWORD WHILE LOCKED', async () => {
@@ -481,7 +546,7 @@ describe('the lockout', () => {
     const res = await post({ username: cred.username, password: cred.password });
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/admin/login?error=locked');
+    expect(res.headers.get('location')).toBe('/admin/login?error=locked&minutes=1');
     expect(res.headers.getSetCookie()).toHaveLength(0);
     expect(await sessionCount()).toBe(0);
     expect((await readCredential(env.DB, owner))?.failed_attempts).toBe(5);
@@ -699,7 +764,7 @@ describe('the recovery address, typed into the same box', () => {
     // Shut by either name, even to the right password.
     for (const identifier of [cred.username, ADDRESS]) {
       const res = await post({ username: identifier, password: cred.password });
-      expect(res.headers.get('location'), identifier).toBe('/admin/login?error=locked');
+      expect(res.headers.get('location'), identifier).toBe('/admin/login?error=locked&minutes=1');
       expect(res.headers.getSetCookie()).toHaveLength(0);
     }
     expect(await sessionCount()).toBe(0);
@@ -1020,6 +1085,70 @@ describe('what shapes of request it accepts', () => {
   });
 });
 
+/* ------------------------------------------------- a credential, no role */
+
+describe('a correct password on an account below ambassador', () => {
+  /*
+   * Admin audit, 2026-10, A-10. Only hand-written SQL (or a demotion after the
+   * password was set) makes this row, and it used to loop: a session was
+   * minted, `/admin/login` saw a member, showed the form again and said
+   * nothing. Now the route refuses before any session exists, with a reason
+   * the page can put into words.
+   */
+  it('answers error=role, with no cookie and no session', async () => {
+    const member = await seedUser(env.DB, { role: 'member' });
+    const cred = await seedAdminCredential(env.DB, member);
+
+    const res = await post({ username: cred.username, password: cred.password, next: '/admin/posts' });
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/admin/login?error=role&next=%2Fadmin%2Fposts');
+    expect(res.headers.getSetCookie()).toHaveLength(0);
+    expect(await sessionCount()).toBe(0);
+  });
+
+  it('records the refusal as no-role, and clears the counter the right password earned', async () => {
+    const member = await seedUser(env.DB, { role: 'member' });
+    const cred = await seedAdminCredential(env.DB, member, { failedAttempts: 2 });
+
+    await post({ username: cred.username, password: cred.password });
+
+    const row = await env.DB.prepare('SELECT actor_id, diff_json FROM audit_log').first<{
+      actor_id: number | null;
+      diff_json: string;
+    }>();
+    expect(row?.actor_id).toBe(member.id);
+    expect(JSON.parse(row!.diff_json)).toEqual({ method: 'password', outcome: 'no-role', via: 'username' });
+    expect((await readCredential(env.DB, member))?.failed_attempts).toBe(0);
+  });
+
+  it('is only reachable with the right password — a wrong one is still just bad', async () => {
+    const member = await seedUser(env.DB, { role: 'member' });
+    const cred = await seedAdminCredential(env.DB, member);
+
+    const res = await post({ username: cred.username, password: 'not the password' });
+
+    expect(res.headers.get('location')).toBe('/admin/login?error=bad');
+  });
+
+  it('lets an ambassador through, which is the line the gate draws too', async () => {
+    const amb = await seedUser(env.DB, { role: 'ambassador' });
+    const cred = await seedAdminCredential(env.DB, amb);
+
+    const res = await post({ username: cred.username, password: cred.password });
+
+    expect(res.headers.get('location')).toBe('/');
+    expect(sessionTokenOf(res)).toBeDefined();
+  });
+
+  it('is put into words on the page', async () => {
+    const html = await (await SELF.fetch(`${ORIGIN}/admin/login?error=role`)).text();
+
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('This account can sign in but does not have admin access.');
+  });
+});
+
 /* ---------------------------------------------------------------- the page */
 
 describe('GET /admin/login', () => {
@@ -1137,6 +1266,74 @@ describe('GET /admin/login', () => {
     expect(bad).not.toContain('That username and password');
   });
 
+  it('says how long the lock has left, and falls back when it cannot know', async () => {
+    // Admin audit, 2026-10, A-07.
+    const one = await (await SELF.fetch(`${ORIGIN}/admin/login?error=locked&minutes=1`)).text();
+    expect(one).toContain('Try again in about 1 minute.');
+
+    const thirty = await (await SELF.fetch(`${ORIGIN}/admin/login?error=locked&minutes=30`)).text();
+    expect(thirty).toContain('Try again in about 30 minutes.');
+
+    // Missing, out of range, or not a number: the general wording, and the
+    // value is never printed.
+    for (const query of ['', '&minutes=0', '&minutes=61', '&minutes=9999', '&minutes=%3Cb%3E5']) {
+      const html = await (await SELF.fetch(`${ORIGIN}/admin/login?error=locked${query}`)).text();
+      expect(html, query).toContain('locked for a little while');
+      expect(html, query).not.toContain('Try again in about');
+    }
+  });
+
+  it('is never cached', async () => {
+    // Admin audit, 2026-10, A-11 — the reset pages beside it already were.
+    const res = await SELF.fetch(`${ORIGIN}/admin/login`, { redirect: 'manual' });
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('after a wrong password, focuses the username box and ties the message to it', async () => {
+    /*
+     * Admin audit, 2026-10, A-13: focus used to land on <body>. With no page
+     * script allowed, `autofocus` does it, and `aria-describedby` makes the
+     * reason part of what a screen reader reads with the box. The box is not
+     * refilled — that would put the identifier in the URL.
+     */
+    const bad = await (await SELF.fetch(`${ORIGIN}/admin/login?error=bad`)).text();
+    const input = /<input[^>]*id="admin-username"[^>]*>/.exec(bad)?.[0] ?? '';
+    expect(input).toContain('autofocus');
+    expect(input).toContain('aria-describedby="admin-login-error"');
+    expect(input).not.toContain('value=');
+    expect(bad).toContain('id="admin-login-error"');
+    // The alert comes before the form in the document, so it is met first.
+    expect(bad.indexOf('role="alert"')).toBeLessThan(bad.indexOf('action="/api/auth/admin-login"'));
+
+    const plain = await (await SELF.fetch(`${ORIGIN}/admin/login`)).text();
+    const plainInput = /<input[^>]*id="admin-username"[^>]*>/.exec(plain)?.[0] ?? '';
+    expect(plainInput).not.toContain('autofocus');
+    expect(plainInput).not.toContain('aria-describedby');
+
+    // Locked: typing again is not the fix, so no focus pull.
+    const locked = await (await SELF.fetch(`${ORIGIN}/admin/login?error=locked`)).text();
+    expect(/<input[^>]*id="admin-username"[^>]*>/.exec(locked)?.[0]).not.toContain('autofocus');
+  });
+
+  /** The element the header script builds the account control inside. */
+  const ACCOUNT_SLOT = /<div[^>]*\bdata-account\b[^>]*>/;
+
+  it.each(['/admin/login', '/admin/reset', `/admin/reset/${'a'.repeat(64)}`])(
+    '%s leaves out the header account control, whose Sign in goes to Discord',
+    async (path) => {
+      // Admin audit, 2026-10, C-25. The control is built by script inside
+      // `[data-account]`; without the element the script returns at once.
+      const res = await SELF.fetch(`${ORIGIN}${path}`, { redirect: 'manual' });
+      expect(res.status).toBe(200);
+      expect(await res.text()).not.toMatch(ACCOUNT_SLOT);
+    },
+  );
+
+  it('and the control is still there on an ordinary page, which makes that mean something', async () => {
+    const html = await (await SELF.fetch(`${ORIGIN}/auth/error`, { redirect: 'manual' })).text();
+    expect(html).toMatch(ACCOUNT_SLOT);
+  });
+
   it('ignores an error value it did not emit', async () => {
     const html = await (
       await SELF.fetch(`${ORIGIN}/admin/login?error=%3Cscript%3Ealert(1)%3C%2Fscript%3E`)
@@ -1230,11 +1427,19 @@ describe('the CPU a derivation costs', () => {
    * `wrangler.jsonc`, so the plan default applies), and nothing here simulates
    * that ceiling or would fail if it were exceeded.
    *
-   * What it does catch is the thing worth catching automatically: somebody
-   * raising `DEFAULT_ITERATIONS` by an order of magnitude, or adding a second
-   * derivation to the happy path, and not noticing. At the current 10,000 the
-   * derivation costs single-digit milliseconds, so a 250 ms ceiling still trips
-   * on a 10x bump while leaving enormous headroom for a slow machine.
+   * WHAT IT CAN CATCH, CORRECTED (admin audit, 2026-10, E-25). This comment
+   * used to say a 250 ms ceiling "still trips on a 10x bump" of
+   * `DEFAULT_ITERATIONS`. The arithmetic says otherwise: a 100,000-round
+   * derivation settles at about 56 ms on the machine measured above, so a 10x
+   * bump adds roughly 50 ms and passes. A second derivation on the happy path
+   * (another ~6 ms) passes too. What trips it is a bump of around forty times
+   * or more on a fast machine, fewer on a slow one — a tripwire for a gross
+   * accident (two stray zeros, say), not a guard on the constant. The ceiling is kept generous rather than tightened because the
+   * same run happens on CI and on a Windows laptop, and a ceiling close to the
+   * real cost would fail on the slower of them for no reason in the route.
+   *
+   * The honest guard on the constant is not a timer at all: it is measuring a
+   * deployed Worker after any change to `DEFAULT_ITERATIONS`, as said below.
    *
    * MEASURED AS THE MINIMUM OF SEVERAL SAMPLES. A single sample flaked — one
    * run in five on 2026-09-21, with nothing about the route changed. The

@@ -17,6 +17,18 @@ interface Props {
    * since scrapers pick between them unpredictably.
    */
   ogType?: 'website' | 'article';
+  /**
+   * Leaves the header's account control out of the page entirely.
+   *
+   * For the admin password pages — `/admin/login` and the two reset pages —
+   * and nowhere else (admin audit, 2026-10, C-25). Signed out, that control is
+   * "Sign in", and it goes to Discord: a different door from the form on the
+   * page, and one that cannot produce an admin. An admin who could not find
+   * their way in was being offered the wrong way in, one tap away from the
+   * right one. The form pages link to Discord themselves, in words that say
+   * who it is for.
+   */
+  hideAccountControl?: boolean;
 }
 
 const {
@@ -25,6 +37,7 @@ const {
   fullBleed = false,
   ogImage = '/og-default.png',
   ogType = 'website',
+  hideAccountControl = false,
 } = Astro.props;
 
 const fullTitle = title === 'PoGo TXK' ? title : `${title} | PoGo TXK`;
@@ -301,8 +314,11 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
 
           Starts empty and unlabelled so nothing flashes before we know the
           answer; `hidden` comes off once it has something true to say.
+
+          Not rendered at all under `hideAccountControl`. The script below
+          finds no `[data-account]` and returns before it fetches anything.
         */}
-        <div class="header-account" data-account hidden></div>
+        {!hideAccountControl && <div class="header-account" data-account hidden></div>}
       </div>
     </header>
 
@@ -484,7 +500,26 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
             panel.append(el('a', { href: '/admin', textContent: 'Admin' }));
           }
 
-          panel.append(el('a', { href: '/auth/logout?next=' + next, textContent: 'Sign out' }));
+          /*
+           * Sign-out is a POST form with one button, not a link (admin audit,
+           * 2026-10, A-09). A link is a GET, and a GET can be fired by any
+           * other site — an image tag, a link in a chat — so a stranger could
+           * sign people out at will. Not a takeover, but a nuisance nobody
+           * should be able to cause. `/auth/logout` still reads `next` and
+           * `switch` from its own query string, so they ride in the action
+           * URL exactly as they used to ride in the href.
+           */
+          const signOutForm = (query, label) => {
+            const form = el('form', {
+              className: 'account-action',
+              method: 'post',
+              action: '/auth/logout?' + query,
+            });
+            form.append(el('button', { type: 'submit', textContent: label }));
+            return form;
+          };
+
+          panel.append(signOutForm('next=' + next, 'Sign out'));
 
           // Neither of these applies to a standalone admin: there is no
           // Discord account behind one to switch away from, and self-service
@@ -495,10 +530,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
             panel.append(
               // Signing out here does not sign out of Discord — this is the only
               // way off an account picked by mistake. See commit 4e12bcb.
-              el('a', {
-                href: '/auth/logout?switch=1&next=' + next,
-                textContent: 'Use a different Discord account',
-              }),
+              signOutForm('switch=1&next=' + next, 'Use a different Discord account'),
               el('a', { href: '/account/delete', textContent: 'Delete my account' }),
             );
           }
@@ -1333,19 +1365,33 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         --panel-pad: var(--space-1);
         border: 1px solid var(--border);
       }
-      .account-panel a {
+      /* The sign-out rows are a form with one button each (A-09), drawn exactly
+         as the link rows beside them. The form itself takes no room. */
+      .account-action {
+        display: contents;
+      }
+      .account-panel a,
+      .account-panel button {
         display: block;
+        width: 100%;
         min-height: 44px;
         padding: var(--space-3);
+        border: 0;
         border-radius: var(--radius-sm);
+        background: none;
         color: var(--text);
+        font: inherit;
         font-size: var(--text-md);
+        text-align: start;
         text-decoration: none;
+        cursor: pointer;
       }
-      .account-panel a:hover {
+      .account-panel a:hover,
+      .account-panel button:hover {
         background: var(--bg-sunken);
       }
-      .account-panel a:focus-visible {
+      .account-panel a:focus-visible,
+      .account-panel button:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: -2px;
       }
@@ -1431,7 +1477,8 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         box-shadow: none;
         color: var(--header-fg);
       }
-      .nav-account .account-panel a {
+      .nav-account .account-panel a,
+      .nav-account .account-panel button {
         padding: var(--space-3) var(--space-4);
         border-radius: var(--radius-pill);
         color: var(--header-fg-2);
@@ -1439,11 +1486,13 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
         font-size: var(--text-base);
         font-weight: 700;
       }
-      .nav-account .account-panel a:hover {
+      .nav-account .account-panel a:hover,
+      .nav-account .account-panel button:hover {
         background: var(--header-wash);
         color: var(--header-fg);
       }
-      .nav-account .account-panel a:focus-visible {
+      .nav-account .account-panel a:focus-visible,
+      .nav-account .account-panel button:focus-visible {
         outline: 3px solid var(--header-fg);
         outline-offset: 2px;
       }

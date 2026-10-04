@@ -19,9 +19,17 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { SESSION_COOKIE } from '~/lib/auth/session';
-import { asUser, authCookie, isoIn, seedSession, seedUser } from '../helpers/factories';
+import {
+  asUser,
+  authCookie,
+  isoIn,
+  seedSession,
+  seedUser,
+  sessionIdFor,
+} from '../helpers/factories';
 
 const ORIGIN = 'https://pogotxk.test';
+const DAY = 60 * 60 * 24;
 
 async function sessionCount(): Promise<number> {
   const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM sessions').first<{ n: number }>();
@@ -299,6 +307,152 @@ describe('the import endpoints carry their own guard', () => {
     expect(res.status).toBe(401);
     expect(res.headers.get('www-authenticate')).toBeNull();
     expect(await res.json()).toEqual({ error: 'Forbidden' });
+  });
+});
+
+/**
+ * The rolling fortnight, cookie half (admin audit, 2026-10, A-01).
+ *
+ * The D1 row has slid on use for a while; the cookie was set once at sign-in
+ * with a fortnight's `Max-Age` and never again, so the browser dropped it on
+ * day fourteen however active its owner was. The middleware now re-issues it
+ * on the same request that slides the row — at most once a day, decided by the
+ * same `slideDue` rule — and these pin when it does and when it must not.
+ */
+describe('the session cookie is re-issued as it slides', () => {
+  /** A session one minute past a day old: the first request that renews it. */
+  async function agedToken(opts: { banned?: boolean; role?: 'member' | 'ambassador' } = {}) {
+    const user = await seedUser(env.DB, { role: opts.role ?? 'member', isBanned: opts.banned });
+    return seedSession(env.DB, user, { expiresAt: isoIn(13 * DAY - 60) });
+  }
+
+  function sessionSetCookie(res: Response): string | undefined {
+    return res.headers.getSetCookie().find((c) => c.startsWith(`${SESSION_COOKIE}=`));
+  }
+
+  async function expiryOf(token: string): Promise<string | undefined> {
+    const row = await env.DB.prepare('SELECT expires_at FROM sessions WHERE id = ?1')
+      .bind(await sessionIdFor(token))
+      .first<{ expires_at: string }>();
+    return row?.expires_at;
+  }
+
+  it('renews an aged session on an ordinary response, for a full fortnight', async () => {
+    const token = await agedToken();
+
+    const res = await get('/api/me.json', authCookie(token));
+
+    expect(res.status).toBe(200);
+    const cookie = sessionSetCookie(res);
+    // The same token — renewing is not rotating — with the full lifetime and
+    // every flag the sign-in cookie carries.
+    expect(cookie).toContain(`${SESSION_COOKIE}=${token};`);
+    expect(cookie).toContain(`Max-Age=${14 * DAY}`);
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('Secure');
+    expect(cookie).toContain('SameSite=Lax');
+    // The body is untouched by the copy the middleware makes to add a header.
+    expect(((await res.json()) as { user: unknown }).user).not.toBeNull();
+  });
+
+  it('renews on a rendered page too, not only on JSON', async () => {
+    const token = await agedToken({ role: 'ambassador' });
+
+    const res = await get('/admin', authCookie(token));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(sessionSetCookie(res)).toContain(`Max-Age=${14 * DAY}`);
+  });
+
+  it('slides the row in the background on that same request', async () => {
+    const token = await agedToken();
+    const before = await expiryOf(token);
+
+    await get('/api/me.json', authCookie(token));
+
+    // The write is under `waitUntil`, so it may land a moment after the
+    // response. Each read is I/O, which is what lets it run; a handful is
+    // plenty, and a slide that never lands fails here rather than hanging.
+    let after = await expiryOf(token);
+    for (let i = 0; i < 20 && after === before; i++) after = await expiryOf(token);
+
+    expect(after).not.toBe(before);
+    expect(Date.parse(after!) - Date.now()).toBeGreaterThan((14 * DAY - 60) * 1000);
+  });
+
+  it('sends no cookie for a fresh session — at most once a day', async () => {
+    const user = await seedUser(env.DB);
+    const token = await seedSession(env.DB, user);
+
+    const res = await get('/api/me.json', authCookie(token));
+
+    expect(res.status).toBe(200);
+    expect(sessionSetCookie(res)).toBeUndefined();
+  });
+
+  it('sends no cookie for a banned user, however old the session', async () => {
+    const token = await agedToken({ banned: true });
+
+    const res = await get('/api/me.json', authCookie(token));
+
+    expect(sessionSetCookie(res)).toBeUndefined();
+  });
+
+  it('sends no cookie for a lapsed session', async () => {
+    const res = await get('/api/me.json', await expiredCookie());
+
+    expect(sessionSetCookie(res)).toBeUndefined();
+  });
+
+  it('leaves a redirect alone, which the next request will renew instead', async () => {
+    // A member at `/admin` is bounced; the bounce carries no cookie.
+    const token = await agedToken({ role: 'member' });
+
+    const res = await get('/admin', authCookie(token));
+
+    expect(res.status).toBe(302);
+    expect(sessionSetCookie(res)).toBeUndefined();
+  });
+
+  it('does not fight a route that sets the session cookie itself', async () => {
+    // Sign-out clears the cookie. A renewal appended beside the clearing would
+    // leave the browser to pick between them.
+    const token = await agedToken();
+
+    const res = await post('/auth/logout', authCookie(token));
+
+    const cookies = res.headers.getSetCookie().filter((c) => c.startsWith(`${SESSION_COOKIE}=`));
+    expect(cookies).toHaveLength(1);
+    expect(cookies[0]).toContain('Max-Age=0');
+  });
+});
+
+/**
+ * `next` keeps the query string (admin audit, 2026-10, A-03), through
+ * `safeNext`, so a bounced filter comes back — and a query is still only ever
+ * part of a same-origin path.
+ */
+describe('the admin bounce carries the query string', () => {
+  it('keeps a filter', async () => {
+    const res = await get('/admin/posts?status=draft');
+
+    expect(res.headers.get('location')).toBe(
+      `/admin/login?next=${encodeURIComponent('/admin/posts?status=draft')}`,
+    );
+  });
+
+  it.each([
+    ['a protocol-relative shape in the query', '/admin?x=//evil.example'],
+    ['a backslash shape in the query', '/admin?x=%5C%5Cevil.example'],
+    ['an encoded CRLF', '/admin?%0d%0a'],
+  ])('keeps %s as inert text in a same-origin path', async (_label, path) => {
+    const res = await get(path);
+    const next = new URL(res.headers.get('location')!, ORIGIN).searchParams.get('next')!;
+
+    expect(next.startsWith('/admin?')).toBe(true);
+    // Wherever the login form finally sends the browser, it is this origin.
+    expect(new URL(next, ORIGIN).origin).toBe(ORIGIN);
   });
 });
 

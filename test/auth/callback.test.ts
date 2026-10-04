@@ -400,7 +400,13 @@ describe('the happy path', () => {
     expect(body.get('redirect_uri')).toBe(`${ORIGIN}/auth/callback`);
   });
 
-  it('records the user agent hash on the session it mints', async () => {
+  it('mints the session without recording the user agent', async () => {
+    /*
+     * It used to store half a SHA-256 of the user agent, which nothing ever
+     * read. Admin audit, 2026-10: no longer written — comparing it would sign
+     * members out on every browser update, and an unread fingerprint is data
+     * collected for nothing. See `createSession`.
+     */
     discordSaysYes();
 
     const res = await SELF.fetch(`${ORIGIN}/auth/callback?code=c&state=${VALID_STATE}`, {
@@ -412,6 +418,7 @@ describe('the happy path', () => {
     const row = await env.DB.prepare('SELECT user_agent_hash FROM sessions').first<{
       user_agent_hash: string | null;
     }>();
-    expect(row?.user_agent_hash).toHaveLength(32);
+    expect(row).not.toBeNull();
+    expect(row?.user_agent_hash).toBeNull();
   });
 });

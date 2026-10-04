@@ -754,7 +754,7 @@ describe('what a completed reset destroys', () => {
 
     // Locked before: even the right password is refused.
     const shut = await signIn({ username: cred.username, password: cred.password });
-    expect(shut.headers.get('location')).toBe('/admin/login?error=locked');
+    expect(shut.headers.get('location')).toBe('/admin/login?error=locked&minutes=45');
 
     const token = await withMail(async (mail) => {
       await askFor({ email: cred.email! });

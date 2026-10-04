@@ -141,7 +141,7 @@ Astro.response.headers.set('cache-control', 'no-store');
 Astro.response.headers.set('referrer-policy', 'strict-origin');
 ---
 
-<Base title="Choose a new admin password">
+<Base title="Choose a new admin password" hideAccountControl>
   <Fragment slot="head">
     <meta name="robots" content="noindex, nofollow" />
   </Fragment>
@@ -212,6 +212,7 @@ Astro.response.headers.set('referrer-policy', 'strict-origin');
               <label for="admin-new-password">New password</label>
               <input
                 id="admin-new-password"
+                aria-describedby="admin-new-password-hint"
                 name="password"
                 type="password"
                 /* `new-password`, not `current-password`: it is what tells a
@@ -221,7 +222,7 @@ Astro.response.headers.set('referrer-policy', 'strict-origin');
                 minlength={MIN_PASSWORD_LENGTH}
                 required
               />
-              <p class="hint">
+              <p class="hint" id="admin-new-password-hint">
                 At least {MIN_PASSWORD_LENGTH} characters. Let a password manager generate it —
                 this account's sign-in is protected by the password's own randomness rather than
                 by anything clever behind it.
@@ -376,7 +377,9 @@ Astro.response.headers.set('referrer-policy', 'strict-origin');
     min-width: 0;
     min-height: 48px;
     padding: var(--space-2) var(--space-4);
-    border: 1.5px solid var(--border-strong);
+    /* `--text-muted`, not `--border-strong`: an input edge owes 3:1 against the
+       panel (admin audit, 2026-10, D-06); the old token measured 1.68 / 1.96. */
+    border: 1.5px solid var(--text-muted);
     border-radius: var(--radius-sm);
     background: var(--bg-panel);
     color: var(--text);

@@ -69,7 +69,7 @@ Astro.response.headers.set('cache-control', 'no-store');
 Astro.response.headers.set('referrer-policy', 'strict-origin');
 ---
 
-<Base title="Reset the admin password">
+<Base title="Reset the admin password" hideAccountControl>
   <Fragment slot="head">
     {/* Publicly reachable by design, and there is no `public/robots.txt`, so
         this tag is the only thing keeping a recovery form out of a search
@@ -235,7 +235,9 @@ Astro.response.headers.set('referrer-policy', 'strict-origin');
     min-width: 0;
     min-height: 48px;
     padding: var(--space-2) var(--space-4);
-    border: 1.5px solid var(--border-strong);
+    /* `--text-muted`, not `--border-strong`: an input edge owes 3:1 against the
+       panel (admin audit, 2026-10, D-06); the old token measured 1.68 / 1.96. */
+    border: 1.5px solid var(--text-muted);
     border-radius: var(--radius-sm);
     background: var(--bg-panel);
     color: var(--text);

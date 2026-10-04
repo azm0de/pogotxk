@@ -18,7 +18,26 @@ const EXPLANATIONS: Record<string, string> = {
     'Discord sign-in has not been set up on this deployment yet.',
 };
 
-const explanation = EXPLANATIONS[reason];
+// `Object.hasOwn`, not a bare index: `?reason=constructor` must not find a
+// function on the prototype and render it.
+const explanation = Object.hasOwn(EXPLANATIONS, reason) ? EXPLANATIONS[reason] : undefined;
+
+/*
+ * Anything not in the table above is NOT printed as text (admin audit,
+ * 2026-10, A-14). `reason` is a query parameter, so anyone can write a link
+ * to this page carrying any sentence they like — escaped, so not a script,
+ * but "Discord reported: your account is suspended, call this number" would
+ * render under our heading on our domain. That is content spoofing.
+ *
+ * What survives is the one shape that is useful to a person reporting a
+ * problem and useless to a spoofer: an OAuth error code as Discord sends it
+ * (`invalid_scope`, `temporarily_unavailable`, …) — lower-case letters and
+ * underscores, short — shown in a `<code>` as a detail. Anything else gets the
+ * generic lede and no detail at all. The callback's own free-text failures
+ * (an exception message, "Missing code or state") lose their detail line as a
+ * result; the server log still has them.
+ */
+const errorCode = !explanation && /^[a-z][a-z_]{1,39}$/.test(reason) ? reason : null;
 
 /*
  * The page used to lead with `Error 400` and print the raw reason louder than
@@ -36,7 +55,8 @@ const misconfigured = reason === 'Discord sign-in is not configured';
 const canRetry = !banned && !misconfigured;
 
 const lede =
-  explanation ?? 'The sign-in did not finish, so nothing was changed and you are not signed in.';
+  explanation ??
+  'Discord sign-in did not complete, so nothing was changed and you are not signed in.';
 ---
 
 <Base title="Sign-in problem">
@@ -48,8 +68,15 @@ const lede =
 
       <p class="lede">{lede}</p>
 
-      {/* Only when the reason is one we cannot explain: it is a detail, not the message. */}
-      {!explanation && reason && <p class="detail">Discord reported: {reason}</p>}
+      {/* Only an OAuth error code, and only when we cannot explain it: a detail
+          for a bug report, never a sentence. See `errorCode` above. */}
+      {
+        errorCode && (
+          <p class="detail">
+            Discord reported: <code>{errorCode}</code>
+          </p>
+        )
+      }
 
       <div class="actions cluster">
         {

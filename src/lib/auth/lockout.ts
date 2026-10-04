@@ -103,6 +103,41 @@ export function isLocked(lockedUntil: string | null | undefined, now: number = D
   return until > now;
 }
 
+/** The longest wait the schedule can produce, and so the most the page may say. */
+export const MAX_LOCK_MINUTES = SCHEDULE_MINUTES[SCHEDULE_MINUTES.length - 1]!;
+
+/**
+ * Whole minutes until a stored `locked_until` lifts, rounded **up** — or null
+ * when it is not a lock in force.
+ *
+ * For the locked message (admin audit, 2026-10, A-07): "wait a little while"
+ * was all the page could say although the route knew to the second. Up, so
+ * "about 1 minute" is never said with 61 seconds to go and nobody is sent back
+ * early to a door that is still shut. Clamped to 1..`MAX_LOCK_MINUTES`, so a
+ * hand-edited far-future value cannot make the page announce a ten-thousand
+ * year wait; the schedule never writes more than an hour.
+ */
+export function minutesLeft(
+  lockedUntil: string | null | undefined,
+  now: number = Date.now(),
+): number | null {
+  const until = parseStamp(lockedUntil);
+  if (until === null || until <= now) return null;
+  return Math.min(MAX_LOCK_MINUTES, Math.max(1, Math.ceil((until - now) / 60_000)));
+}
+
+/**
+ * Reads the `minutes` the route put in the query string back into a number,
+ * or null for anything it did not write — so the page falls back to its
+ * generic wording rather than printing whatever a link-crafter typed.
+ * Digits only, 1..`MAX_LOCK_MINUTES`.
+ */
+export function parseMinutesParam(raw: string | null | undefined): number | null {
+  if (!raw || !/^\d{1,2}$/.test(raw)) return null;
+  const n = Number(raw);
+  return n >= 1 && n <= MAX_LOCK_MINUTES ? n : null;
+}
+
 /**
  * The next failure count, given the previous failure's timestamp.
  *

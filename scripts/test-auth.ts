@@ -144,6 +144,20 @@ check('NUL in path blocked', safeNext('/map' + NUL + 'x'), '/');
 check('absolute URL blocked', safeNext('https://evil.example'), '/');
 check('scheme-only blocked', safeNext('javascript:alert(1)'), '/');
 
+// The admin gate now builds `next` from path AND query (admin audit, 2026-10,
+// A-03), so a bounced filter survives sign-in. The query is the part of the
+// string an outsider writes, so these pin that it can carry neither an origin
+// change nor a header break: `//` after the `?` is just text in a path, and a
+// raw CR/LF anywhere is refused outright.
+check('admin filter survives', safeNext('/admin/posts?status=draft'), '/admin/posts?status=draft');
+check('two-key query survives', safeNext('/admin/map?type=gym&q=park'), '/admin/map?type=gym&q=park');
+check('// inside the query is only text', safeNext('/admin?x=//evil'), '/admin?x=//evil');
+check('backslash inside the query is only text', safeNext('/admin?x=' + BS + BS + 'evil'), '/admin?x=' + BS + BS + 'evil');
+check('encoded CRLF stays encoded', safeNext('/admin?%0d%0a'), '/admin?%0d%0a');
+check('raw CRLF in the query is stripped, not obeyed', safeNext('/admin?a' + CR + '\nb'), '/admin?ab');
+check('NUL in the query blocked', safeNext('/admin?x=' + NUL), '/');
+check('a query cannot rescue a //host start', safeNext('//evil.example?/admin'), '/');
+
 // The invariant that actually matters, asserted the way the browser sees it:
 // whatever safeNext returns must resolve back to our own origin. This is the
 // same style of check that replaced the weaker markdown URL test.
@@ -157,6 +171,9 @@ const hostile = [
   '/' + NUL + '//evil.example',
   'https://evil.example/x',
   'javascript:alert(1)',
+  '/admin?x=//evil.example',
+  '/admin?x=' + BS + BS + 'evil.example',
+  '/admin?' + CR + '\n//evil.example',
 ];
 for (const raw of hostile) {
   const resolved = new URL(safeNext(raw), ORIGIN);
