@@ -5,6 +5,7 @@ import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 
 import type { MapData, MapPoi, PoiType } from '~/lib/db/map';
+import { httpUrlOrNull } from '~/lib/safe-url';
 import { BASEMAP_URL, basemapLayer } from './basemap';
 import { GLYPH_PATHS, GLYPH_VIEWBOX, photoIcon, poiIcon, TYPE_LABEL, userIcon } from './markerIcons';
 import './MapView.css';
@@ -295,10 +296,13 @@ function buildPoiPopup(
 
   add(root, actions);
 
-  if (poi.photo?.sourceUrl && poi.photo.sourceTitle) {
+  // Filtered by the read model already; checked again here because this is
+  // the line that makes it an href (admin audit, 2026-10, B-03).
+  const poiSource = httpUrlOrNull(poi.photo?.sourceUrl);
+  if (poiSource && poi.photo?.sourceTitle) {
     const src = el('p', 'popup-source');
     const link = el('a');
-    link.href = poi.photo.sourceUrl;
+    link.href = poiSource;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.textContent = poi.photo.sourceTitle;
@@ -869,10 +873,11 @@ export default function MapView({ initialPoi, compact = false }: MapViewProps) {
       if (photo.credit) add(fig, el('figcaption', 'credit popup-credit', photo.credit));
       add(popup, fig);
       if (photo.caption) add(popup, el('p', 'popup-desc', photo.caption));
-      if (photo.sourceUrl && photo.sourceTitle) {
+      const photoSource = httpUrlOrNull(photo.sourceUrl);
+      if (photoSource && photo.sourceTitle) {
         const src = el('p', 'popup-source');
         const a = el('a');
-        a.href = photo.sourceUrl;
+        a.href = photoSource;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
         a.textContent = photo.sourceTitle;

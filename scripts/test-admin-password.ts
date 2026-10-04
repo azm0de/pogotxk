@@ -26,7 +26,10 @@ import {
   isLocked,
   lockoutUntil,
   MAX_ATTEMPTS,
+  MAX_LOCK_MINUTES,
+  minutesLeft,
   nextFailureCount,
+  parseMinutesParam,
 } from '../src/lib/auth/lockout';
 import { normalizeEmail } from '../src/lib/notify/email';
 import { D1ShapeError, rows } from './d1-json';
@@ -217,6 +220,38 @@ check('one second later is', isLocked('2026-09-19T12:00:01Z', NOW), true);
 check('garbage is not locked', isLocked('not a timestamp', NOW), false);
 check('a half-written timestamp is not locked', isLocked('2026-13-45T99:99:99Z', NOW), false);
 check('a bare number is not locked', isLocked('12345', NOW), false);
+
+console.log('\n== minutesLeft, for the locked message ==');
+// Admin audit, 2026-10, A-07: the page now says how long is left. Rounded up,
+// so nobody is told "1 minute" with 61 seconds to go and comes back early.
+check('a fresh one-minute lock says 1', minutesLeft('2026-09-19T12:01:00Z', NOW), 1);
+check('one second left still says 1', minutesLeft('2026-09-19T12:00:01Z', NOW), 1);
+check('61 seconds rounds up to 2', minutesLeft('2026-09-19T12:01:01Z', NOW), 2);
+check('a fresh five-minute lock says 5', minutesLeft('2026-09-19T12:05:00Z', NOW), 5);
+check('the hour cap says 60', minutesLeft('2026-09-19T13:00:00Z', NOW), 60);
+check('a hand-edited far future is clamped to the cap', minutesLeft('2099-01-01T00:00:00Z', NOW), MAX_LOCK_MINUTES);
+check('the cap is the schedule’s own last step', MAX_LOCK_MINUTES, 60);
+check('an expired lock has nothing to say', minutesLeft('2026-09-19T11:59:59Z', NOW), null);
+check('the exact instant has nothing to say', minutesLeft('2026-09-19T12:00:00Z', NOW), null);
+check('null has nothing to say', minutesLeft(null, NOW), null);
+check('garbage has nothing to say', minutesLeft('12345', NOW), null);
+// Every lock the schedule can write reads back as its own length.
+for (const [attempts, minutes] of [[5, 1], [6, 5], [7, 30], [8, 60], [20, 60]] as const) {
+  check(`a fresh lock after ${attempts} failures reads ${minutes}`, minutesLeft(lockoutUntil(attempts, NOW), NOW), minutes);
+}
+
+console.log('\n== parseMinutesParam, reading it back off the query string ==');
+check('1 reads', parseMinutesParam('1'), 1);
+check('60 reads', parseMinutesParam('60'), 60);
+check('0 is refused', parseMinutesParam('0'), null);
+check('61 is refused', parseMinutesParam('61'), null);
+check('a leading plus is refused', parseMinutesParam('+5'), null);
+check('a decimal is refused', parseMinutesParam('5.5'), null);
+check('three digits are refused', parseMinutesParam('100'), null);
+check('words are refused', parseMinutesParam('five'), null);
+check('markup is refused', parseMinutesParam('<b>5</b>'), null);
+check('missing reads null', parseMinutesParam(null), null);
+check('empty reads null', parseMinutesParam(''), null);
 
 console.log('\n== the failure counter decays, because nothing sweeps it ==');
 check('no previous failure starts at 1', nextFailureCount(0, null, NOW), 1);

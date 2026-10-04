@@ -1,6 +1,6 @@
 ---
 tags: [runbook]
-updated: 2026-09-23
+updated: 2026-10-04
 ---
 
 # Local Development
@@ -21,8 +21,8 @@ account is needed.
 |---|---|
 | `npm run dev` | Dev server (daemonises — `npx astro dev stop` to kill) |
 | `npm run build` | Production build |
-| `npm test` | The 16 tsx suites — 638 assertions, no runtime and no network |
-| `npm run test:worker` | `astro build && vitest run` — 900 tests inside workerd |
+| `npm test` | The 17 tsx suites — 802 assertions, no runtime and no network |
+| `npm run test:worker` | `astro build && vitest run` — 1325 tests in 37 files inside workerd |
 | `npm run test:all` | Both layers, tsx first |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:query "SQL"` | Query local D1 |
@@ -66,6 +66,23 @@ the palette Apple Mail would use.
 That mints `admin:localadmin` — a standalone admin identity with no Discord account behind it,
 which is the same shape the two production admins have.
 
+For development and browser testing, where a password prompt is in the way, there is a
+non-interactive helper:
+
+```bash
+npm run dev:admin -- --create localadmin                       # generates a password, prints it once
+npm run dev:admin -- --create localadmin --email dev@example.com --password "<16+ characters>"
+```
+
+It writes the same two rows `set:password --create` does (a `users` row `admin:<name>` with
+`role_locked = 1`, and the `admin_credentials` row), using the app's own `hashPassword`. It is
+**local only**: `--local` is hard-coded, and any argument containing "remote" stops it. Running
+it again for the same name replaces the password, clears a lockout and signs that user's old
+sessions out. A generated password is a local development credential; don't reuse it.
+It takes `--password` on the command line, which `set:password` refuses to do, so it must never
+be pointed at a real database. `npm run dev:admin` is the npm script for it; `npx tsx
+scripts/dev-admin.ts` is the same thing.
+
 > [!danger] `set:password` refuses to run outside a real console, and that is the point
 > Under Git Bash / mintty, `node` gets a pipe rather than a console: `stdin.isTTY` is
 > `undefined`, readline's private `_writeToOutput` override silently does nothing, and **the
@@ -86,7 +103,7 @@ There are two layers, and which one a new test belongs in comes down to a single
 
 `npm run test:all` runs both, tsx first, because the tsx layer is seconds and needs no build.
 
-### `npm test` — 16 suites, 638 assertions
+### `npm test` — 17 suites, 802 assertions
 
 In the order the chain runs them. The counts are what each suite prints, so a drop is visible.
 
@@ -119,12 +136,12 @@ or filled gaps left by checks that passed while the thing they were checking was
 > and that is the right place for it: it exists to check the legacy site, so needing the legacy
 > site is the point. See [[Importing Legacy Data]].
 
-### `npm run test:worker` — 25 files, 900 tests
+### `npm run test:worker` — 37 files, 1325 tests
 
 Vitest 4.1 with `@cloudflare/vitest-pool-workers`, running inside workerd.
 
 **Why this layer had to exist.** Every API route but `/api/me.json` reaches
-`import { env } from 'cloudflare:workers'` at module scope — 19 of the 22 directly, and
+`import { env } from 'cloudflare:workers'` at module scope — 22 of the 25 directly, and
 `flares/socket.ts` and `game/[feed].json.ts` through `~/do/LiveBoard` and `~/lib/scrapedduck`.
 `src/middleware.ts` does the same. A module-scope import of a runtime-only module cannot be
 evaluated by `tsx` at all, so no amount of care makes a route importable from the tsx layer —
@@ -147,6 +164,14 @@ Each test instead starts from tables emptied in one batch, so a straggling `wait
 lands on an empty table and says nothing.
 
 ## Gotchas
+
+> [!danger] `scripts/send-real-discord-embed.mjs` posts a REAL embed
+> Despite the name, it is not a test. It sends one real message to whatever
+> `DISCORD_WEBHOOK_URL` is set to in your environment, which is the community's live Discord if
+> `.dev.vars` has the production value. It is excluded from every chain (`npm test`,
+> `test:worker`, CI) and must stay that way; only run it by hand, deliberately, with a webhook
+> you own. The audit asked for it to be renamed so that its name says what it does (the
+> conductor does this; the file was outside the docs agent's remit).
 
 > [!danger] The Vitest layer is sandboxed. `wrangler dev` is not.
 > `.dev.vars` holds a live `DISCORD_WEBHOOK_URL` for the community's real Discord, and wrangler

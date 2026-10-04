@@ -14,6 +14,7 @@
 import type { CalendarEvent } from '~/lib/events';
 import { describeRecurrence } from '~/lib/db/meetups';
 import { proxiedImageUrl } from '~/lib/game-image';
+import { httpUrlOrNull } from '~/lib/safe-url';
 import Countdown from './Countdown.astro';
 import './EventCard.css';
 
@@ -228,8 +229,11 @@ const summary = event.description?.split('\n\n')[0]?.trim() ?? '';
 const blurb = summary.length > 240 ? `${summary.slice(0, 237).trimEnd()}…` : summary;
 
 // Only link out to somewhere that is actually elsewhere; a meetup with no
-// Campfire page links back to this very card, which is not worth a link.
-const externalUrl = event.url && !event.url.includes('/events#') ? event.url : null;
+// Campfire page links back to this very card, which is not worth a link. And
+// only to a web page: a stored `javascript:` renders a plain title rather than
+// a link that runs (admin audit, 2026-10, B-02).
+const externalUrl =
+  event.url && !event.url.includes('/events#') ? httpUrlOrNull(event.url) : null;
 
 /*
  * Where the row came from, named — as a label, not a second link.

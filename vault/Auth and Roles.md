@@ -31,7 +31,7 @@ Scopes requested: `identify` and `guilds.members.read`. No email, no messages, n
 | `guest` | Signed in, not in the guild | Read |
 | `member` | In the guild | Fire flares, RSVP |
 | `ambassador` | Has the ambassador role | Everything in `/admin` |
-| `admin` | Holds `role_locked = 1` — the standalone accounts. The code also accepts the Discord admin role or being `DISCORD_BOOTSTRAP_ADMIN_ID`, but neither is set here | Also: hard delete, import, settings |
+| `admin` | Holds `role_locked = 1` — the standalone accounts. The code also accepts the Discord admin role or being `DISCORD_BOOTSTRAP_ADMIN_ID`, but neither is set here | Also: permanent delete of POIs, posts and meetups, the legacy import, `config-check`. (Ambassadors archive instead: a POI, a post or a meetup is kept as a row with status `archived` or `cancelled`.) There is no settings screen yet |
 
 On this deployment no `DISCORD_ROLE_*` id is set and neither is `DISCORD_BOOTSTRAP_ADMIN_ID`
 (confirmed absent 2026-09-22), so a Discord sign-in yields `guest` or `member` and nothing else,
@@ -207,6 +207,13 @@ so locking one admin out does not touch the other.
 - The increment is a single SQL statement with the decay rule inside it, so two simultaneous
   attempts cannot both read 4 and both write 5.
 - **A correct password while locked is still refused**, and `failed_attempts` is left alone.
+- The locked message states how long remains (admin audit, 2026-10); before that it only
+  described the schedule, and the fifth wrong attempt — the one that trips the lock — still
+  answered `bad`, so an admin only learned of the lock on the next try.
+- **Accepted, and written down**: `locked` is only ever answered for an identifier that exists,
+  so five guesses confirm an account is real and lock its owner out for a minute. The alternative
+  — hiding the lock — would leave the admin unable to tell a wrong password from a wait, which is
+  the worse failure for the only people who use this door. The one-hour cap bounds the harm.
 - The locked path does **not** hash. The response says "locked" out loud on purpose — the admin
   has to be able to tell a wrong password from a wait — so spending a full PBKDF2 to hide a
   fact the message already states would only hand an attacker a way to burn the CPU budget.
@@ -635,9 +642,10 @@ empty jar.
 - `/api/auth/admin-login` accepts `application/x-www-form-urlencoded` and nothing else. Astro's origin
   check is content-type dependent and **skips `application/json` entirely** (see
   [[Platform Limits and Traps]]), so accepting JSON there would remove the only CSRF protection
-  the route has. `/admin/login` carries no JavaScript at all, for the same reason and two others:
-  it is reached when things are already broken, and a password that never touches app code
-  cannot be logged by it.
+  the route has. `/admin/login` itself ships no script of its own and posts as a plain form, so it
+  works with scripting off and when a bundle fails to load; the `Base` layout around it does add
+  its header scripts, so the stronger claim this note used to make — that the password never
+  passes through any app code — is not literally true and is not relied on (admin audit, 2026-10).
 - `/admin/login` carries `noindex, nofollow`. The page is publicly reachable by design and there
   is no `public/robots.txt`, so that tag is the only thing keeping it out of a search index —
   and keeping it out of a search index is *all* it does. The path itself is not a control; see
@@ -665,7 +673,7 @@ Both layers, and they cover different halves of this. See [[Local Development]].
 
 `npm test` covers the decisions that are pure functions: role resolution, the bootstrap
 override, the optional member-role gate, the role hierarchy, PKCE and the `safeNext` guard —
-68 checks in `scripts/test-auth.ts` — plus the installed-app sign-in handoff in
+the checks in `scripts/test-auth.ts` — plus the installed-app sign-in handoff in
 `scripts/test-signin-surface.ts`, the device grant's bodies, response mapping, cookie
 payload and `login_required` routing split in `scripts/test-device-grant.ts`, and the password
 primitives, the lockout schedule and the reset address validator in

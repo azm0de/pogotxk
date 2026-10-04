@@ -1,6 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, SignedOutError } from '~/lib/client-api';
 import { DEFAULT_TZ, formatInZone, utcToZoned } from '~/lib/time';
+import {
+  LoadNotice,
+  scrollBehavior,
+  Toast,
+  useBeforeUnload,
+  useToast,
+  type LoadState,
+} from './admin-ui';
 import './MeetupEditor.css';
+
+interface Props {
+  /** Admins also get "Delete permanently"; everyone else cancels. */
+  isAdmin?: boolean;
+}
 
 interface Meetup {
   id: number;
@@ -24,6 +38,7 @@ interface PoiOption {
   id: number;
   name: string;
   type: string;
+  status: string;
   is_meetup_spot: number;
 }
 
@@ -48,6 +63,20 @@ const STATUS_BADGE: Record<Meetup['status'], string> = {
   draft: '',
   published: 'badge--live',
   cancelled: 'badge--retired',
+};
+
+const STATUS_FILTERS = ['all', 'draft', 'published', 'cancelled'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+
+/**
+ * The POI type words, written out here rather than imported from
+ * `markerIcons.ts`: that module imports Leaflet, which cannot load on the
+ * server, and this island is server-rendered.
+ */
+const POI_TYPE_LABEL: Record<string, string> = {
+  pokestop: 'PokéStop',
+  gym: 'Gym',
+  powerspot: 'Power Spot',
 };
 
 const EMPTY: Form = {
@@ -81,43 +110,60 @@ function announceSuffix(status: AnnounceStatus): string {
   return '';
 }
 
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; detail?: unknown };
-    const detail = Array.isArray(body.detail)
-      ? ` — ${(body.detail as { path: string; message: string }[])
-          .map((d) => `${d.path}: ${d.message}`)
-          .join(', ')}`
-      : '';
-    throw new Error(`${body.error ?? res.statusText}${detail}`);
-  }
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
-}
-
-export default function MeetupEditor() {
+export default function MeetupEditor({ isAdmin = false }: Props) {
   const [meetups, setMeetups] = useState<Meetup[]>([]);
+  const [load, setLoad] = useState<LoadState>('loading');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const [pois, setPois] = useState<PoiOption[]>([]);
+  const [filter, setFilter] = useState<StatusFilter>('all');
   const [editingId, setEditingId] = useState<number | 'new' | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
+  /** The form as it was opened (or last saved), to tell whether it is dirty. */
+  const [baseline, setBaseline] = useState<Form | null>(null);
+  /** Bumped to move focus into the form once it has rendered (C-15). */
+  const [openTick, setOpenTick] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const { message, notify, fail, clear } = useToast();
 
-  const notify = useCallback((kind: 'ok' | 'err', text: string) => {
-    setMessage({ kind, text });
-    window.setTimeout(() => setMessage(null), kind === 'ok' ? 2600 : 7000);
-  }, []);
+  const formRef = useRef<HTMLFormElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
+  const dirty =
+    editingId !== null && baseline !== null && JSON.stringify(form) !== JSON.stringify(baseline);
+  useBeforeUnload(dirty);
+
+  /** Asks before unsaved work is thrown away. `true` means go ahead. */
+  const confirmDiscard = () =>
+    !dirty ||
+    window.confirm(`Discard unsaved changes to "${form.title.trim() || 'this meetup'}"?`);
+
+  const loadedRef = useRef(false);
   const reload = useCallback(async () => {
     try {
-      const [m, p] = await Promise.all([
-        api<{ meetups: Meetup[] }>('/api/admin/meetups'),
-        api<{ pois: PoiOption[] }>('/api/admin/pois'),
-      ]);
+      const m = await api<{ meetups: Meetup[]; total?: number; truncated?: boolean }>(
+        '/api/admin/meetups',
+      );
       setMeetups(m.meetups);
+      setTruncated(
+        Boolean(m.truncated) || (typeof m.total === 'number' && m.total > m.meetups.length),
+      );
+      loadedRef.current = true;
+      setLoad('ready');
+      setLoadError(null);
+    } catch (err) {
+      if (loadedRef.current) fail(err, 'Could not reload the meetups');
+      else {
+        setLoad(err instanceof SignedOutError ? 'signedout' : 'failed');
+        setLoadError(err instanceof Error ? err.message : null);
+      }
+      return;
+    }
+    // The location list only feeds the dropdown; a failure here must not
+    // blank the meetups.
+    try {
+      const p = await api<{ pois: PoiOption[] }>('/api/admin/pois');
       // Meetup spots first — that is almost always what gets picked.
       setPois(
         [...p.pois].sort(
@@ -125,15 +171,39 @@ export default function MeetupEditor() {
         ),
       );
     } catch (err) {
-      notify('err', err instanceof Error ? err.message : 'Could not load');
+      fail(err, 'Could not load the location list');
     }
-  }, [notify]);
+  }, [fail]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
+  /*
+   * Focus and scroll after the form has rendered. The form opens above the
+   * lists, so on a long list Edit used to open it off-screen with focus left
+   * on the button (admin audit, 2026-10, C-15).
+   */
+  useEffect(() => {
+    if (openTick === 0) return;
+    formRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+    titleRef.current?.focus({ preventScroll: true });
+  }, [openTick]);
+
+  const open = (id: number | 'new', next: Form) => {
+    setForm(next);
+    setBaseline(next);
+    setEditingId(id);
+    clear();
+    setOpenTick((n) => n + 1);
+  };
+
   const startNew = () => {
+    if (editingId === 'new' && !dirty) {
+      setOpenTick((n) => n + 1);
+      return;
+    }
+    if (!confirmDiscard()) return;
     // Default to the next Wednesday at 6 PM — the community's usual slot.
     const d = new Date();
     d.setDate(d.getDate() + ((3 - d.getDay() + 7) % 7 || 7));
@@ -142,30 +212,43 @@ export default function MeetupEditor() {
       d.getDate(),
     ).padStart(2, '0')}T18:00`;
 
-    setForm({ ...EMPTY, startsAtLocal: local, endsAtLocal: local.replace('T18:00', 'T19:00') });
-    setEditingId('new');
+    open('new', { ...EMPTY, startsAtLocal: local, endsAtLocal: local.replace('T18:00', 'T19:00') });
   };
 
+  const toForm = (m: Meetup): Form => ({
+    title: m.title,
+    descriptionMd: m.description_md ?? '',
+    startsAtLocal: utcToZoned(m.starts_at, m.tz),
+    endsAtLocal: m.ends_at ? utcToZoned(m.ends_at, m.tz) : '',
+    tz: m.tz,
+    poiId: m.poi_id,
+    locationText: m.location_text ?? '',
+    campfireUrl: m.campfire_url ?? '',
+    status: m.status,
+    announce: m.announce_requested === 1,
+    announcedAt: m.announced_at,
+  });
+
   const startEdit = (m: Meetup) => {
-    setForm({
-      title: m.title,
-      descriptionMd: m.description_md ?? '',
-      startsAtLocal: utcToZoned(m.starts_at, m.tz),
-      endsAtLocal: m.ends_at ? utcToZoned(m.ends_at, m.tz) : '',
-      tz: m.tz,
-      poiId: m.poi_id,
-      locationText: m.location_text ?? '',
-      campfireUrl: m.campfire_url ?? '',
-      status: m.status,
-      announce: m.announce_requested === 1,
-      announcedAt: m.announced_at,
-    });
-    setEditingId(m.id);
+    if (editingId === m.id) {
+      setOpenTick((n) => n + 1);
+      return;
+    }
+    if (!confirmDiscard()) return;
+    open(m.id, toForm(m));
+  };
+
+  const close = () => {
+    if (!confirmDiscard()) return;
+    setEditingId(null);
+    setBaseline(null);
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
+    clear();
+    const sent = form;
     try {
       const payload = {
         title: form.title,
@@ -180,11 +263,14 @@ export default function MeetupEditor() {
         announce: form.announce,
       };
       if (editingId === 'new') {
-        const created = await api<Saved>('/api/admin/meetups', {
+        const created = await api<Saved & { id: number }>('/api/admin/meetups', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
         notify('ok', `Meetup created${announceSuffix(created.announced)}`);
+        // Stay in the form, now editing what was just made — as the news
+        // editor does — rather than closing it and dropping focus on <body>.
+        setEditingId(created.id);
       } else {
         const saved = await api<Saved>(`/api/admin/meetups/${editingId}`, {
           method: 'PATCH',
@@ -192,39 +278,122 @@ export default function MeetupEditor() {
         });
         notify('ok', `Meetup saved${announceSuffix(saved.announced)}`);
       }
+      setBaseline(sent);
       await reload();
-      setEditingId(null);
+      headingRef.current?.focus();
     } catch (err) {
-      notify('err', err instanceof Error ? err.message : 'Could not save');
+      fail(err, 'Could not save');
     } finally {
       setBusy(false);
     }
   };
 
-  const remove = async (m: Meetup) => {
-    if (!window.confirm(`Delete "${m.title}"? This cannot be undone.`)) return;
+  /**
+   * Cancel is the default (admin audit, 2026-10 — Justin's decision): the row
+   * is kept with status `cancelled`, which the calendar feed carries as a
+   * cancellation. Permanent delete is a separate, admin-only button.
+   */
+  const cancelMeetup = async (m: Meetup) => {
+    const editingThis = editingId === m.id;
+    if (
+      !window.confirm(
+        `Cancel "${m.title}"? It stays listed as cancelled, and the calendar feed tells subscribers.` +
+          (editingThis && dirty ? ' Your unsaved changes to it will be lost.' : ''),
+      )
+    )
+      return;
     setBusy(true);
+    clear();
     try {
       await api(`/api/admin/meetups/${m.id}`, { method: 'DELETE' });
+      if (editingThis) {
+        setEditingId(null);
+        setBaseline(null);
+      }
       await reload();
-      if (editingId === m.id) setEditingId(null);
-      notify('ok', 'Deleted');
+      notify('ok', `Cancelled "${m.title}"`);
     } catch (err) {
-      notify('err', err instanceof Error ? err.message : 'Could not delete');
+      fail(err, 'Could not cancel the meetup');
     } finally {
       setBusy(false);
     }
   };
 
+  const destroy = async (m: Meetup) => {
+    if (!window.confirm(`Delete "${m.title}" permanently? This cannot be undone.`)) return;
+    setBusy(true);
+    clear();
+    try {
+      await api(`/api/admin/meetups/${m.id}?hard=1`, { method: 'DELETE' });
+      if (editingId === m.id) {
+        setEditingId(null);
+        setBaseline(null);
+      }
+      await reload();
+      notify('ok', `Deleted "${m.title}" permanently`);
+    } catch (err) {
+      fail(err, 'Could not delete');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const counts = useMemo(() => {
+    const out: Record<string, number> = { all: meetups.length };
+    for (const m of meetups) out[m.status] = (out[m.status] ?? 0) + 1;
+    return out;
+  }, [meetups]);
+
   const now = new Date().toISOString();
+  const filtered = useMemo(
+    () => (filter === 'all' ? meetups : meetups.filter((m) => m.status === filter)),
+    [meetups, filter],
+  );
   const upcoming = useMemo(
-    () => meetups.filter((m) => (m.ends_at ?? m.starts_at) >= now),
-    [meetups, now],
+    () => filtered.filter((m) => (m.ends_at ?? m.starts_at) >= now),
+    [filtered, now],
   );
   const past = useMemo(
-    () => meetups.filter((m) => (m.ends_at ?? m.starts_at) < now),
-    [meetups, now],
+    () => filtered.filter((m) => (m.ends_at ?? m.starts_at) < now),
+    [filtered, now],
   );
+
+  /**
+   * The location dropdown: published places only, with duplicates told apart.
+   *
+   * It listed every POI — archived ones included — and the park has several
+   * places sharing a name ("Boy Scouts of America" twice, "Walk Through
+   * History" three times) with nothing to tell them apart (C-20). A shared name
+   * now carries its type, and a shared name *and* type its id.
+   */
+  const poiOptions = useMemo(() => {
+    const live = pois.filter((p) => p.status === 'published');
+    const byName = new Map<string, number>();
+    const byNameType = new Map<string, number>();
+    for (const p of live) {
+      byName.set(p.name, (byName.get(p.name) ?? 0) + 1);
+      byNameType.set(`${p.name}|${p.type}`, (byNameType.get(`${p.name}|${p.type}`) ?? 0) + 1);
+    }
+    return live.map((p) => {
+      let label = p.name;
+      if ((byName.get(p.name) ?? 0) > 1) label += ` — ${POI_TYPE_LABEL[p.type] ?? p.type}`;
+      if ((byNameType.get(`${p.name}|${p.type}`) ?? 0) > 1) label += ` #${p.id}`;
+      // A word, not a glyph: an <option> cannot carry a drawn icon, and "★"
+      // told a screen reader "black star".
+      if (p.is_meetup_spot) label += ' (meetup spot)';
+      return { id: p.id, label };
+    });
+  }, [pois]);
+
+  /** The saved location, when it is no longer one the dropdown offers. */
+  const offList = useMemo(() => {
+    if (form.poiId === null || pois.length === 0) return null;
+    if (poiOptions.some((o) => o.id === form.poiId)) return null;
+    const p = pois.find((x) => x.id === form.poiId);
+    return p
+      ? { id: p.id, label: `${p.name} (${p.status})`, status: p.status }
+      : { id: form.poiId, label: `Location #${form.poiId} (removed)`, status: 'removed' };
+  }, [form.poiId, pois, poiOptions]);
 
   // Live preview of what the stored instant will be, so an author can see
   // straight away that "6 PM" means 6 PM Central and not 6 PM UTC.
@@ -268,66 +437,89 @@ export default function MeetupEditor() {
         <button type="button" className="btn btn--outline btn--sm" onClick={() => startEdit(m)}>
           Edit
         </button>
-        <button
-          type="button"
-          className="btn btn--danger btn--sm"
-          onClick={() => void remove(m)}
-          disabled={busy}
-        >
-          Delete
-        </button>
+        {m.status !== 'cancelled' && (
+          <button
+            type="button"
+            className="btn btn--outline btn--sm"
+            onClick={() => void cancelMeetup(m)}
+            disabled={busy}
+          >
+            Cancel meetup
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            className="btn btn--danger btn--sm"
+            onClick={() => void destroy(m)}
+            disabled={busy}
+          >
+            Delete permanently
+          </button>
+        )}
       </div>
     </li>
   );
+
+  const filterWord = filter === 'all' ? '' : `${filter} `;
 
   return (
     <div className="meetups admin-page">
       <header className="meetups-head">
         <div>
           <h1>Meetups</h1>
-          <p>
-            This replaces editing <code className="admin-code">meetup.js</code> every week.
-            Published meetups appear on the home page and in the calendar feed.
-          </p>
+          <p>Published meetups appear on the home page and in the calendar feed.</p>
         </div>
         <button type="button" className="btn btn--primary" onClick={startNew}>
           New meetup
         </button>
       </header>
 
-      {message && (
-        <p className={`meetups-toast meetups-toast--${message.kind}`} role="status">
-          {message.text}
-        </p>
-      )}
+      <Toast message={message} onDismiss={clear} />
 
       {editingId !== null && (
-        <form className="meetup-form panel admin-form" onSubmit={submit}>
-          <h2>{editingId === 'new' ? 'New meetup' : 'Edit meetup'}</h2>
+        <form
+          className="meetup-form panel admin-form"
+          onSubmit={submit}
+          ref={formRef}
+          aria-labelledby="meetup-form-heading"
+        >
+          <h2 id="meetup-form-heading" ref={headingRef} tabIndex={-1}>
+            {editingId === 'new' ? 'New meetup' : 'Edit meetup'}
+          </h2>
 
           <label>
-            <span>Title</span>
+            <span>
+              Title <em>(required)</em>
+            </span>
             <input
+              ref={titleRef}
               value={form.title}
               onChange={(e) => set('title', e.target.value)}
               placeholder="e.g. Azelf Raid Hour"
               required
+              aria-required="true"
               maxLength={200}
             />
           </label>
 
           <div className="form-grid">
             <label>
-              <span>Starts</span>
+              <span>
+                Starts <em>(required)</em>
+              </span>
               <input
                 type="datetime-local"
                 value={form.startsAtLocal}
                 onChange={(e) => set('startsAtLocal', e.target.value)}
                 required
+                aria-required="true"
               />
             </label>
             <label>
-              <span>Ends (optional)</span>
+              <span>
+                Ends <em>(optional)</em>
+              </span>
               <input
                 type="datetime-local"
                 value={form.endsAtLocal}
@@ -338,32 +530,42 @@ export default function MeetupEditor() {
 
           {preview && (
             <p className="form-note">
-              Interpreted as <strong>{preview}</strong> in{' '}
-              <code className="admin-code">{form.tz}</code>. The site works out CST vs CDT
-              automatically.
+              {/* "Central time", not the zone id `America/Chicago` — nobody in
+                  Texarkana thinks in zone ids (C-19). */}
+              Interpreted as <strong>{preview}</strong>{' '}
+              {form.tz === DEFAULT_TZ ? (
+                'Central time'
+              ) : (
+                <>
+                  in <code className="admin-code">{form.tz}</code>
+                </>
+              )}
+              . The site works out CST vs CDT automatically.
             </p>
           )}
 
           <div className="form-grid">
             <label>
-              <span>Location (a map POI)</span>
+              <span>
+                Location, a map place <em>(optional)</em>
+              </span>
               <select
                 value={form.poiId ?? ''}
                 onChange={(e) => set('poiId', e.target.value ? Number(e.target.value) : null)}
               >
                 <option value="">— none —</option>
-                {/* A word, not a glyph: an <option> cannot carry a drawn icon,
-                    and "★" told a screen reader "black star". */}
-                {pois.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.is_meetup_spot ? ' (meetup spot)' : ''}
+                {offList && <option value={offList.id}>{offList.label}</option>}
+                {poiOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              <span>Or free text</span>
+              <span>
+                Or free text <em>(optional)</em>
+              </span>
               <input
                 value={form.locationText}
                 onChange={(e) => set('locationText', e.target.value)}
@@ -373,8 +575,20 @@ export default function MeetupEditor() {
             </label>
           </div>
 
+          {offList && (
+            <p className="form-note">
+              This meetup's saved location is{' '}
+              {offList.status === 'removed'
+                ? 'no longer on the map'
+                : `${offList.status}, so it is not on the public map`}
+              . Pick a published place, or leave it as it is.
+            </p>
+          )}
+
           <label>
-            <span>Details (Markdown)</span>
+            <span>
+              Details <em>(optional, Markdown)</em>
+            </span>
             <textarea
               rows={4}
               value={form.descriptionMd}
@@ -386,7 +600,9 @@ export default function MeetupEditor() {
 
           <div className="form-grid">
             <label>
-              <span>Campfire link (optional)</span>
+              <span>
+                Campfire link <em>(optional)</em>
+              </span>
               <input
                 type="url"
                 value={form.campfireUrl}
@@ -451,32 +667,74 @@ export default function MeetupEditor() {
             <button type="submit" className="btn btn--primary" disabled={busy}>
               {busy ? 'Saving…' : editingId === 'new' ? 'Create meetup' : 'Save changes'}
             </button>
-            <button
-              type="button"
-              className="btn btn--outline"
-              onClick={() => setEditingId(null)}
-              disabled={busy}
-            >
-              Cancel
+            {/* "Close", not "Cancel": the rows now have a "Cancel meetup". */}
+            <button type="button" className="btn btn--outline" onClick={close} disabled={busy}>
+              Close
             </button>
+            <span className="admin-save-state" aria-live="polite">
+              {dirty ? 'Unsaved changes' : editingId === 'new' ? 'Not saved yet' : 'No unsaved changes'}
+            </span>
           </div>
         </form>
       )}
 
-      <section>
-        <h2>Upcoming ({upcoming.length})</h2>
-        {upcoming.length ? (
-          <ul className="admin-rows">{upcoming.map(row)}</ul>
-        ) : (
-          <p className="empty-state">Nothing scheduled. Create one above.</p>
-        )}
-      </section>
+      <div className="meetups-filters" role="group" aria-label="Filter by status">
+        {STATUS_FILTERS.map((value) => {
+          const label = value === 'all' ? 'All' : value[0]?.toUpperCase() + value.slice(1);
+          return (
+            <button
+              key={value}
+              type="button"
+              className="chip"
+              aria-pressed={filter === value}
+              aria-label={`${label}, ${counts[value] ?? 0}`}
+              onClick={() => setFilter(value)}
+            >
+              {label}
+              <span className="filter-count">{counts[value] ?? 0}</span>
+            </button>
+          );
+        })}
+      </div>
 
-      {past.length > 0 && (
-        <section>
-          <h2>Past ({past.length})</h2>
-          <ul className="admin-rows meetup-list--past">{past.slice(0, 20).map(row)}</ul>
-        </section>
+      {truncated && load === 'ready' && (
+        <p className="form-note">
+          Showing the newest {meetups.length} meetups. Older ones are not listed here.
+        </p>
+      )}
+
+      {load !== 'ready' ? (
+        <LoadNotice
+          state={load}
+          what="the meetups"
+          error={loadError}
+          onRetry={() => {
+            setLoad('loading');
+            void reload();
+          }}
+        />
+      ) : (
+        <>
+          <section>
+            <h2>Upcoming ({upcoming.length})</h2>
+            {upcoming.length ? (
+              <ul className="admin-rows">{upcoming.map(row)}</ul>
+            ) : (
+              <p className="empty-state">
+                {filter === 'all'
+                  ? 'Nothing scheduled. Create one above.'
+                  : `No upcoming ${filterWord}meetups.`}
+              </p>
+            )}
+          </section>
+
+          {past.length > 0 && (
+            <section>
+              <h2>Past ({past.length})</h2>
+              <ul className="admin-rows meetup-list--past">{past.slice(0, 20).map(row)}</ul>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

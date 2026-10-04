@@ -14,15 +14,44 @@
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
-import { handler, json, requireUser } from '~/lib/api';
+import { ApiError, handler, json, requireUser } from '~/lib/api';
 import { deleteAccount } from '~/lib/auth/deletion';
 import { clearedSessionCookie } from '~/lib/auth/session';
+import { isStandaloneAdmin } from '~/lib/auth/types';
+import { recordAudit } from '~/lib/db/audit';
 
 export const prerender = false;
 
 export const DELETE = handler(async (ctx: APIContext) => {
   const user = requireUser(ctx);
+
+  /*
+   * A standalone admin (`admin:<name>`, no Discord account behind it) has
+   * exactly one way in — its password credential — and deletion removes that
+   * credential on purpose. The account menu already hides the button for these
+   * identities; the route did not, so one request locked an owner out of
+   * their own site with nothing to sign back in with (admin audit, 2026-10,
+   * B-16). Those accounts are managed from a terminal with `npm run
+   * set:password`, where the person doing it can see what they are doing.
+   */
+  if (isStandaloneAdmin(user)) {
+    throw new ApiError(403, 'Admin accounts are managed with set:password');
+  }
+
   await deleteAccount(env.DB, user.id);
+
+  // The row is anonymised in place, so the id still resolves — to "Deleted
+  // user" — and the entry says that a deletion happened and when, not who.
+  // Nothing identifying goes in the diff, which is the point of the request.
+  // After the deletion rather than inside its batch, and best-effort: a log
+  // that cannot be written must never stand between someone and the deletion
+  // they asked for.
+  await recordAudit(env.DB, {
+    actorId: user.id,
+    action: 'delete',
+    entity: 'account',
+    entityId: user.id,
+  }).catch((err) => console.error('Account deletion audit failed', err));
 
   return json(
     { ok: true },

@@ -30,7 +30,7 @@ Replaces the hand-maintained static site at [pokemontxk.com](https://pokemontxk.
 | Structure | [[Architecture Overview]] · [[Data Model]] · [[Routes]] |
 | Look | [[Design System]] |
 | Behaviour | [[Auth and Roles]] · [[Flares and Realtime]] · [[Notifications]] |
-| Operating it | [[Local Development]] · [[Deploying]] · [[Configuration]] · [[Importing Legacy Data]] |
+| Operating it | [[Local Development]] · [[Deploying]] · [[Configuration]] · [[Importing Legacy Data]] · [[Handover for Nick]] |
 | Android | [[Android App]] |
 | Obligations | [[Attribution Obligations]] · [[Never Touch the Game]] |
 | History | [[Migration from the Old Site]] · [[Bugs Worth Remembering]] |
@@ -74,6 +74,6 @@ into its own section, clickable event cards linking back to Leek Duck, and Poké
 app icons. See [[Design System]].
 
 Production runs whatever is on `main`; a push deploys in 60–90 seconds. Tests are in two layers:
-`npm test` is 15 tsx suites over the pure helpers, and `npm run test:worker` is 858 Vitest tests
+`npm test` is 17 tsx suites over the pure helpers, and `npm run test:worker` is 1325 Vitest tests
 running inside workerd against real bindings. `npm run test:all` runs both. See
 [[Local Development]].

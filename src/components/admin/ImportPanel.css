@@ -97,17 +97,17 @@
   font-variant-numeric: tabular-nums;
 }
 
-.import-warn {
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--live);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--live) 8%, transparent);
-  display: grid;
-  gap: var(--space-2);
-  justify-items: start;
-}
-.import-warn p {
+/* The importer refused a populated database (409). Not an error — the guard
+   doing its job — so ink on the sunken plate, not red. The red warning box
+   that stood here belonged to "Clear and re-import anyway", which is gone
+   (admin audit, 2026-10, B-12). */
+.import-note {
   margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--text);
   font-size: var(--text-md);
 }
 
@@ -119,6 +119,13 @@
   color: #fff; /* white on --live: 5.00:1 light, 5.99:1 dark */
   font-size: var(--text-md);
   font-weight: 700;
+}
+/* The "Sign in again" link on the red plate: the global ring is red-on-red. */
+.import-error a {
+  text-decoration-color: currentColor;
+}
+.import-error a:focus-visible {
+  outline-color: #fff;
 }
 
 .import-done {

@@ -7,7 +7,8 @@
  * ~/lib/time.
  */
 
-import type { CalendarEvent } from '~/lib/events';
+import { nextOccurrence, type CalendarEvent } from '~/lib/events';
+import { httpUrlOrNull } from '~/lib/safe-url';
 
 export type MeetupStatus = 'draft' | 'published' | 'cancelled';
 
@@ -124,7 +125,10 @@ function toMeetup(row: MeetupRow): Meetup {
     poiLat: row.poi_lat,
     poiLng: row.poi_lng,
     locationText: row.location_text,
-    campfireUrl: row.campfire_url,
+    // Guarded on the way out as well as on the way in: a row written before the
+    // routes refused `javascript:` must still never reach an href (admin audit,
+    // 2026-10, B-02).
+    campfireUrl: httpUrlOrNull(row.campfire_url),
     recurrenceRule: row.recurrence_rule,
     status: row.status,
     updatedAt: row.updated_at,
@@ -228,6 +232,39 @@ export function describeRecurrence(rule: string | null): string | null {
     .filter((day): day is string => Boolean(day));
 
   return days.length ? `${every} on ${days.join(', ')}` : every;
+}
+
+/** What an RRULE may be spelled with. No spaces, quotes or line breaks — the
+ * rule is copied into the iCalendar feed, where a newline starts a new property. */
+const RRULE_CHARACTERS = /^(RRULE:)?[A-Z0-9=;,+-]+$/i;
+
+/** An anchor in the past, and a `now` a year later, for `isUsableRecurrenceRule`. */
+const PROBE_ANCHOR = '2024-01-01T18:00:00Z';
+const PROBE_NOW = new Date('2025-01-01T00:00:00Z');
+
+/**
+ * Whether the events page can actually expand `rule`.
+ *
+ * The admin routes accepted any 300 characters as a recurrence rule, and the
+ * parser in `~/lib/events` quietly ignores one it cannot read — so a typo meant
+ * a weekly meetup that showed once and then sat under "past" for ever, with no
+ * error anywhere (admin audit, 2026-10, B-24). Rather than a second grammar
+ * here that could drift from that parser, this asks the parser itself: a
+ * meetup anchored a year ago with this rule must roll forward to a later
+ * occurrence. `nextOccurrence` hands back the very same object when it cannot,
+ * which is what the identity check reads.
+ */
+export function isUsableRecurrenceRule(rule: string): boolean {
+  if (!RRULE_CHARACTERS.test(rule)) return false;
+  const probe: CalendarEvent = {
+    uid: 'probe',
+    summary: 'probe',
+    start: PROBE_ANCHOR,
+    end: null,
+    rrule: rule,
+    source: 'meetup',
+  };
+  return nextOccurrence(probe, PROBE_NOW, 'UTC') !== probe;
 }
 
 /**

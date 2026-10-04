@@ -1,6 +1,6 @@
 ---
 tags: [planning]
-updated: 2026-09-23
+updated: 2026-10-04
 ---
 
 # Backlog
@@ -79,7 +79,8 @@ recording rather than just ticking.
 - [x] ~~Web push~~ — VAPID keypair generated and set 2026-08-06;
       `/api/push/subscribe` reports `enabled: true`. See [[Configuration]]
 - [ ] **Test the bubble on a real phone**, ideally over Pokémon GO. See [[Android App]]
-- [ ] **Rotate the Discord client secret** — it passed through a chat transcript during setup
+- [ ] **Rotate the Discord client secret** — one item, tracked under **Discord server admin** below
+      ("Rotate the client secret"), and on the pre-go-live checklist in [[Admin Audit 2026-10]]
 - [x] ~~**Retire `DISCORD_BOOTSTRAP_ADMIN_ID`**~~ — gone from the live Worker, confirmed
       2026-09-22: absent from the live version's bindings (names and types only) and from
       `wrangler secret list`. It was the last route to `admin` that ran through a third party.
@@ -163,7 +164,8 @@ different permissions.
       and only the private channel needs Nick. Not listed → ask for Team membership, or
       create your own per the note above. The app exists and is named **PogoTXK** — that
       much is confirmed from its public record
-- [ ] **Rotate the client secret** — it passed through a chat transcript during setup. A
+- [ ] **Rotate the client secret** — it passed through a chat transcript during setup. This is
+      the one entry for it; the line under **Blocked on the owner** points here. A
       fresh app makes this automatic; an existing one needs Reset Secret. Have it sent via a
       password manager share, never chat or email, then `npx wrangler secret put
       DISCORD_CLIENT_SECRET` and paste at the prompt — the piped-literal form puts a
@@ -377,7 +379,8 @@ and is 100 again now.
       only `adminOnly` nav entry the layout was built for. `PRODUCT.md` lists it under
       **explicitly undecided**, so this is not simply unbuilt — nobody has settled whether the
       site wants a settings table at all, or whether these belong in `wrangler.jsonc` where a
-      change is reviewable in git. Worth answering before anyone writes the schema
+      change is reviewable in git. Worth answering before anyone writes the schema.
+      *2026-10-04, admin audit:* still undecided, and left alone on purpose
 - [ ] **Community POI problem reports.** `poi_reports` and the moderation queue exist in the
       schema; no UI yet. Report-only by decision (2026-08-15) — a visitor can flag that an
       existing POI moved, closed or has wrong info, never propose a new one. `poi_id` is
@@ -402,18 +405,9 @@ right, and these are the ones where it probably is not.
       here" — and will never find out they did. Needs a product decision rather than a patch:
       either the topic follows the kind, or the subscribe endpoint stops offering a narrowing it
       cannot honour
-- [ ] **The middleware's `next` drops the query string.** `src/middleware.ts` builds it from
-      `context.url.pathname` alone, so `/admin/posts?status=draft` becomes
-      `next=%2Fadmin%2Fposts` and a filtered link loses its filter across sign-in. Small, and
-      deliberately not a change to make in passing: widening what goes into `next` widens the
-      open-redirect surface, and this codebase has shipped that bug twice already (see
-      [[Bugs Worth Remembering]]). Whatever is added has to go through `safeNext` and be
-      asserted there
-- [ ] **`requireImportToken` is case-sensitive on the auth scheme.** `src/lib/admin-auth.ts`
-      tests `header.startsWith('Bearer ')`, so `bearer <token>` is refused although RFC 7235
-      says the scheme is case-insensitive. It errs strict, which is the safe direction, and the
-      only caller is our own importer — filed so that the next person staring at a 401 with a
-      correct token knows where to look
+- [x] ~~**The middleware's `next` drops the query string.**~~ — closed 2026-10-04 by the admin audit, see [[Admin Audit 2026-10]]. The query now
+      travels through `safeNext` like the path does (A-03)
+- [x] ~~**`requireImportToken` is case-sensitive on the auth scheme.**~~ — closed 2026-10-04 by the admin audit, see [[Admin Audit 2026-10]] (B-17)
 - [ ] **`/go?action=` has no automated coverage**, despite a demonstrated real failure mode. It
       was silently swallowed whenever the POI fetch failed or the zone came back empty — which
       is exactly the condition it gets tapped in, a phone at a gym on park wifi — so the
@@ -443,15 +437,8 @@ right, and these are the ones where it probably is not.
       ever been observed by a test, by design. The gap is deliberate and it is still a gap: the
       only way to close it is a private webhook of your own, by hand, once. Pairs with the
       repoint step under **Discord server admin** above
-- [ ] **`pruneExpiredSessions` is dead code.** `src/lib/auth/session.ts`, commented
-      "Housekeeping for the cron trigger" — a cron this Worker does not have and is not getting
-      ([[Why there is no cron]]). Nothing calls it. Expiry is enforced on read, so no session is
-      ever honoured past its date and nothing is *wrong*; what accumulates is dead rows. Either
-      give it the read-path sweep the rest of this codebase uses, or delete it and the comment
-- [ ] **`sessions.user_agent_hash` is written and never read.** Set on every `createSession`,
-      described in `0001_initial.sql` as a "coarse hijack signal, not PII". Nothing compares it
-      to anything, so it is a signal that cannot signal. Either it becomes a check during
-      session resolution or it should stop being collected
+- [x] ~~**`pruneExpiredSessions` is dead code.**~~ — closed 2026-10-04 by the admin audit, see [[Admin Audit 2026-10]]
+- [x] ~~**`sessions.user_agent_hash` is written and never read.**~~ — closed 2026-10-04 by the admin audit, see [[Admin Audit 2026-10]]
 
 > [!note] Two migrations are numbered `0002_`, and that is deliberate
 > Noticed again while pointing `readD1Migrations` at `migrations/`. It was investigated on
@@ -460,11 +447,14 @@ right, and these are the ones where it probably is not.
 > it — and `0002_poi_reports_report_only.sql` opens with `DROP TABLE IF EXISTS poi_reports`.
 > `readD1Migrations` orders by `parseInt` of the prefix, so the pair compares equal and keeps
 > directory order, which is harmless because they touch different tables. **Do not "fix" it.**
-> The next migration is `0003_*`, and `0003_announcements.sql` already took it.
+> The next migration is `0006_*`: `0003` to `0005` are taken. Read the directory rather than
+> this line.
 
 ## Known rough edges
 
-- [x] ~~Unbounded admin queries~~ — bounded, and the post list no longer carries bodies
+- [x] ~~Unbounded admin queries~~ — the post list is capped at 200 and carries no bodies, and the
+      media list is capped at 500. Meetups and POIs `GET` were **not** bounded until the 2026-10
+      admin audit (B-20, 104 POIs was already 34 KB); that audit bounds them. See [[Admin Audit 2026-10]]
 - [x] ~~`--live` contrast below AA~~ — split into `--live` and `--live-text`, both pass
 - [x] ~~Live board not announced to screen readers~~ — announces a count on change
 - [x] ~~`SEQUENCE` can decrease~~ — pinned for global events, still derived for meetups
@@ -568,15 +558,42 @@ right, and these are the ones where it probably is not.
       undecided**. The question is not how but how far: one hand-made card per static route is
       an afternoon, one generated per event and per meetup needs an image pipeline the Worker
       cannot run without the zone. **Now more visible than it was:** the announcement embeds
-      link back to the site, so every announced post and meetup is a Discord unfurl
+      link back to the site, so every announced post and meetup is a Discord unfurl.
+      *2026-10-04, admin audit:* untouched
+
+## Deferred by the admin audit — 2026-10-04
+
+Found by the [[Admin Audit 2026-10]], judged not worth doing before the admin handover, and
+recorded so they are not lost. None of them blocks Nick.
+
+- [ ] **Row ids are reused (B-14).** Tables are declared without `AUTOINCREMENT`
+      (`0001_initial.sql`), so once the highest-numbered row is deleted the next insert takes
+      its id. Audit history then mixes two different entities under one id, and a stale browser
+      tab could `PATCH` the wrong row. Archive-by-default makes deletes rarer but does not stop
+      it. The fix is a table-rebuild migration (SQLite cannot add `AUTOINCREMENT` in place), so
+      it is a real piece of work on live data: take an export first
+- [ ] **No way to delete a media upload (B-22).** There is no `DELETE` route under
+      `/api/admin/media`. Removing an upload today means SQL for the row plus `wrangler r2` for
+      the object. Needs a decision about what happens to a photo a POI or post still points at
+- [ ] **The timing guards in `admin-login.test.ts` are weak (E-25).** The floor is "unknown
+      identifier takes at least 0.4 times a wrong password" and the ceiling is under 250 ms;
+      neither would notice the iteration count being raised tenfold. Low flake risk, low power.
+      Tighten them or accept them as a smoke check
+- [ ] **CI never type-checks `.astro` files (E-CI-1).** `npm run check` runs `astro check`, but
+      `@astrojs/check` is not installed, so that script is dead, and CI runs only `tsc
+      --noEmit`, which skips `.astro`. A type error in a page ships. Fix: add `@astrojs/check`
+      and `typescript` as dev dependencies and run `astro check` in `.github/workflows/ci.yml`
+- [ ] **The Settings page stays undecided and per-page OG images stay untouched** — see their
+      entries above; nothing in the audit changed either
 
 ## Audit still owed
 
 Three of five production auditors reported before the run was stopped on 2026-08-05. Their
-findings are fixed and deployed. **Two never reported** — the remaining surfaces have not had an
-adversarial read:
+findings are fixed and deployed. **Two never reported**. The admin console one has now been
+done (2026-10-04); the live board has not had an adversarial read:
 
-- [ ] Admin console and moderation authorisation boundaries
+- [x] ~~Admin console and moderation authorisation boundaries~~ — done: the [[Admin Audit 2026-10]]
+      (closed 2026-10-04 by the admin audit)
 - [ ] Durable Object / live board under concurrency
 
 Worth finishing before the site is announced to the community, given that the three that did run

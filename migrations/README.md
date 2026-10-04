@@ -41,7 +41,7 @@ sorts after `0002_poi_reports_report_only` deterministically, matching the
 order they were actually applied in. `0003` was never claimed by either of
 these, despite the appearance of a gap, and `0003_announcements.sql` has since
 taken it. The next free number is therefore whatever follows the highest file
-present — **`0005_*`** as of `0004_owner_password.sql`. Read the directory
+present — **`0006_*`** as of `0005_admin_password_reset.sql`. Read the directory
 rather than this line; a number written down here goes stale the moment
 somebody ships a migration without editing it, which is exactly what happened
-to the previous version of this paragraph.
+to the previous two versions of this paragraph.

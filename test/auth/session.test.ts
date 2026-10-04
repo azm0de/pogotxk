@@ -12,10 +12,13 @@
  *   would read as "signed out" rather than "refused". The row staying put is
  *   the observable difference between the two branches.
  * - **The slide is measured from age, not from what remains.** See the comment
- *   at session.ts:17-30 — the renewal rule was once written the other way
- *   round, which quietly turned the rolling fortnight into a hard deadline.
- *   "Fresh session writes nothing" and "a day-old session slides" are the pair
- *   that tells those two readings apart.
+ *   on `SLIDE_INTERVAL_SECONDS` in session.ts — the renewal rule was once
+ *   written the other way round, which quietly turned the rolling fortnight
+ *   into a hard deadline. "Fresh session writes nothing" and "a day-old
+ *   session slides" are the pair that tells those two readings apart. The
+ *   cookie half of the slide (admin audit, 2026-10, A-01) is observable only
+ *   on a response, so it is pinned in `middleware.test.ts`; `slideDue` below
+ *   is the rule both halves share.
  */
 
 import { env } from 'cloudflare:test';
@@ -27,9 +30,14 @@ import {
   createSession,
   deviceGrantCookie,
   getSessionUser,
+  maybePruneExpiredSessions,
+  PRUNE_ONE_IN,
   pruneExpiredSessions,
+  renewSession,
+  resolveSession,
   sessionCookie,
   sha256,
+  slideDue,
   stateCookie,
   touchSession,
 } from '~/lib/auth/session';
@@ -156,6 +164,57 @@ describe('touchSession', () => {
   });
 });
 
+describe('slideDue, the rule the row and the cookie share', () => {
+  const NOW = Date.parse('2026-10-04T12:00:00Z');
+  const at = (seconds: number) => new Date(NOW + seconds * 1000).toISOString();
+
+  it('is not due for a session minted just now', () => {
+    expect(slideDue(at(14 * DAY), NOW)).toBe(false);
+  });
+
+  it('is not due a second before it has aged a day', () => {
+    expect(slideDue(at(13 * DAY + 1), NOW)).toBe(false);
+  });
+
+  it('is due at exactly a day old, and after', () => {
+    expect(slideDue(at(13 * DAY), NOW)).toBe(true);
+    expect(slideDue(at(13 * DAY - 60), NOW)).toBe(true);
+    expect(slideDue(at(60), NOW)).toBe(true);
+  });
+
+  it('is never due on a value it cannot read', () => {
+    expect(slideDue('not a date', NOW)).toBe(false);
+  });
+});
+
+describe('resolveSession', () => {
+  it('returns the row expiry beside the same user getSessionUser returns', async () => {
+    const user = await seedUser(env.DB, { username: 'misty' });
+    const token = await seedSession(env.DB, user);
+
+    const resolved = await resolveSession(env.DB, token);
+
+    expect(resolved?.user).toEqual(await getSessionUser(env.DB, token));
+    expect(resolved?.expiresAt).toBe(await expiryOf(token));
+  });
+
+  it('refuses exactly what getSessionUser refuses', async () => {
+    const banned = await seedUser(env.DB, { isBanned: true });
+    expect(await resolveSession(env.DB, await seedSession(env.DB, banned))).toBeUndefined();
+    expect(await resolveSession(env.DB, undefined)).toBeUndefined();
+    expect(await resolveSession(env.DB, 'f'.repeat(64))).toBeUndefined();
+  });
+
+  it('renewSession puts the row back to a full fortnight', async () => {
+    const user = await seedUser(env.DB);
+    const token = await seedSession(env.DB, user, { expiresAt: isoIn(3 * DAY) });
+
+    await renewSession(env.DB, token);
+
+    expect(Date.parse((await expiryOf(token))!) - Date.now()).toBeGreaterThan((14 * DAY - 60) * 1000);
+  });
+});
+
 describe('createSession', () => {
   it('stores the hash of the token and never the token', async () => {
     const user = await seedUser(env.DB);
@@ -171,7 +230,13 @@ describe('createSession', () => {
     expect(row?.user_agent_hash).toBeNull();
   });
 
-  it('records a truncated hash of the user agent when one is given', async () => {
+  it('stores no user agent hash even when given a user agent', async () => {
+    /*
+     * Admin audit, 2026-10: the hash was written and never read. Comparing it
+     * would sign members out on every browser update, and keeping it unread is
+     * a fingerprint collected for nothing, so `createSession` stopped writing
+     * it. The column stays (a migration to drop it buys nothing).
+     */
     const user = await seedUser(env.DB);
     const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)';
     await createSession(env.DB, user.id, ua);
@@ -180,8 +245,7 @@ describe('createSession', () => {
       user_agent_hash: string | null;
     }>();
 
-    expect(row?.user_agent_hash).toBe((await sha256(ua)).slice(0, 32));
-    expect(row?.user_agent_hash).toHaveLength(32);
+    expect(row?.user_agent_hash).toBeNull();
   });
 
   it('mints a different token every time', async () => {
@@ -274,21 +338,36 @@ describe('deviceGrantCookie lifetime', () => {
 });
 
 /**
- * Two things that work and that nothing uses. Pinned rather than endorsed: if
- * either is ever wired up, these say what it already does; if either is deleted
- * instead, deleting the tests with it is the honest change.
+ * The lapsed-row sweep, which sat uncalled — written for a cron trigger that
+ * does not exist — until the admin audit, 2026-10, wired it to the read path:
+ * the middleware calls `maybePruneExpiredSessions` under `waitUntil` on one
+ * cookie-carrying request in `PRUNE_ONE_IN`. The roll is a parameter, so both
+ * outcomes are pinned here without stubbing `Math.random`.
  *
- * - `pruneExpiredSessions` is written for a cron trigger that does not exist.
- *   `wrangler.jsonc` has no `crons`, and the built entry exports no
- *   `scheduled()` — it says so itself, in the comment explaining why the
- *   trigger was removed. Nothing calls this function anywhere in the repo.
- * - `sessions.user_agent_hash` is written by `createSession` and read by
- *   nothing. There is no "your sessions" screen and no device list.
- *
- * Neither is a leak: `getSessionUser` deletes an expired row the moment it is
- * presented, so the table accumulates only sessions nobody ever comes back to.
+ * (`sessions.user_agent_hash`, the other thing this block used to pin as
+ * "written and read by nothing", is no longer written — see `createSession`.)
  */
-describe('written, correct, and called by nothing', () => {
+describe('the lapsed-session sweep', () => {
+  it('maybePruneExpiredSessions sweeps on a low roll', async () => {
+    const user = await seedUser(env.DB);
+    await seedSession(env.DB, user, { expiresAt: isoIn(-60) });
+    const live = await seedSession(env.DB, user);
+
+    expect(await maybePruneExpiredSessions(env.DB, 0)).toBe(1);
+    expect(await sessionCount()).toBe(1);
+    expect(await getSessionUser(env.DB, live)).toBeDefined();
+  });
+
+  it('maybePruneExpiredSessions does nothing on any other roll', async () => {
+    const user = await seedUser(env.DB);
+    await seedSession(env.DB, user, { expiresAt: isoIn(-60) });
+
+    // The first roll that misses, and the top of the range.
+    expect(await maybePruneExpiredSessions(env.DB, 1 / PRUNE_ONE_IN)).toBeNull();
+    expect(await maybePruneExpiredSessions(env.DB, 0.999)).toBeNull();
+    expect(await sessionCount()).toBe(1);
+  });
+
   it('pruneExpiredSessions removes exactly the lapsed rows', async () => {
     const user = await seedUser(env.DB);
     await seedSession(env.DB, user, { expiresAt: isoIn(-3600) });
@@ -304,20 +383,6 @@ describe('written, correct, and called by nothing', () => {
 
   it('pruneExpiredSessions reports zero on an empty table', async () => {
     expect(await pruneExpiredSessions(env.DB)).toBe(0);
-  });
-
-  it('the user agent hash is stored but nothing resolves it back', async () => {
-    const user = await seedUser(env.DB);
-    const ua = 'Mozilla/5.0 (iPhone)';
-    await createSession(env.DB, user.id, ua);
-
-    // Truncated to 32 hex characters — half a SHA-256, which is a fingerprint
-    // and not a reversible record of the device.
-    const row = await env.DB.prepare('SELECT user_agent_hash FROM sessions').first<{
-      user_agent_hash: string;
-    }>();
-    expect(row?.user_agent_hash).not.toContain(ua);
-    expect(row?.user_agent_hash).toMatch(/^[0-9a-f]{32}$/);
   });
 });
 

@@ -34,28 +34,8 @@
   font-size: var(--text-md);
 }
 
-/* Reserved height so the layout does not jump when a message appears. */
-.posts-toast {
-  margin: 0;
-  min-height: 1.1rem; /* one line of --text-md at --lh-ui; the message's own box */
-  padding: 0;
-  border-radius: var(--radius-sm);
-  font-weight: 700;
-  font-size: var(--text-md);
-}
-.posts-toast--ok,
-.posts-toast--err {
-  padding: var(--space-3) var(--space-4);
-  color: #fff; /* on --accent-solid 5.99:1 and on --live 5.00:1, both themes */
-}
-/* `--accent-solid`, not `--accent`: `--accent` inverts to a light red in dark
-   mode and this pairing measured 3.0:1 there. */
-.posts-toast--ok {
-  background: var(--accent-solid); /* white on it: 5.99:1, both themes */
-}
-.posts-toast--err {
-  background: var(--live); /* white on it: 5.00:1 light, 5.99:1 dark */
-}
+/* The result toast is the shared `.admin-toast` (admin-ui.css). This file's
+   red-on-success copy was retired by the admin audit (2026-10, C-13). */
 
 /* ------------------------------------------------------------------ form -- */
 
@@ -122,14 +102,30 @@
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-.hero-upload-btn input {
+/*
+ * `.admin-form` in the selector on purpose. Admin.astro's shared
+ * `.admin-form input { width: 100%; min-height: 44px }` has the same
+ * specificity as a bare `.hero-upload-btn input` and won, so the "hidden"
+ * input was a full-width absolutely-positioned box — and the News page
+ * scrolled sideways at 1280 and 768 (admin audit, 2026-10, D-01).
+ */
+.admin-form .hero-upload-btn input {
   /* Not `display: none`: a hidden-but-focusable input is what gives the
      label its focus ring through `:focus-within`. */
   position: absolute;
   width: 1px;
+  min-width: 0;
   height: 1px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
   opacity: 0;
   pointer-events: none;
+}
+/* The label is the positioning context, so the 1px input cannot land
+   anywhere that widens the page. */
+.hero-upload-btn {
+  position: relative;
 }
 
 /* ------------------------------------------------------------------ tags -- */
@@ -146,12 +142,16 @@
   gap: var(--space-2);
   min-height: 44px;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--field-border, var(--border-strong));
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
 }
-.tag-input:focus-within {
-  border-color: var(--text);
+/* The same 3px ring every other field draws, on the box that looks like the
+   field (D-22) — it was a 1px border change. Keyed to the text input only,
+   so focusing a tag's remove button does not ring the whole box as well. */
+.tag-input:has(> input:focus-visible) {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 .tag-input input {
   flex: 1;
@@ -193,6 +193,14 @@
 }
 .tag-chip button:hover {
   background: rgb(255 255 255 / 0.22);
+}
+/* The global ring (--accent, offset outward) measured 2.81 / 2.68:1 against
+   the ink pill (D-10). Drawn inside the button instead, in the pill's own
+   text colour: --bg on --text is 15.72:1 light, 16.46:1 dark. */
+.tag-chip button:focus-visible {
+  outline: 2px solid var(--bg);
+  outline-offset: -3px;
+  border-radius: 50%;
 }
 .tag-chip button svg {
   width: 12px;
@@ -312,7 +320,9 @@
      site that needs a mono face. The site ships none; this is the OS stack
      DESIGN.md points `.prose code` at. */
   font-family: ui-monospace, monospace !important;
-  font-size: var(--text-md) !important;
+  /* 16px, the size iOS will not zoom into on focus. It was 14px, the one
+     typed-into field on the site that zoomed the page (C-16). */
+  font-size: var(--text-base) !important;
   line-height: var(--lh-body);
   resize: vertical;
 }

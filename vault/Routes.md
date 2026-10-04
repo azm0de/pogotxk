@@ -1,6 +1,6 @@
 ---
 tags: [reference]
-updated: 2026-09-23
+updated: 2026-10-04
 ---
 
 # Routes
@@ -20,6 +20,8 @@ updated: 2026-09-23
 | `/about` `/conduct` `/terms` `/privacy` | Static |
 | `/offline` | Service worker fallback |
 | `/rss.xml` | Feed |
+| `/account/delete` | Self-service account deletion (the page Google Play's data-deletion rule points at). Works from a plain browser: signed out, it offers Discord sign-in and returns here |
+| `/media/[...key]` | Objects from R2 (photos), immutable cache. A page-level route that happens to serve bytes, not part of the JSON API |
 
 ## Auth
 
@@ -28,7 +30,7 @@ updated: 2026-09-23
 | `/auth/login` | Starts Discord OAuth. Renders a config diagnostic when unconfigured |
 | `/auth/callback` | Completes it |
 | `/auth/device` | RFC 8628 approval, for a browser whose jar holds no Discord session |
-| `/auth/logout` | Ends the session |
+| `/auth/logout` | Ends the session. A POST form button since the admin audit (2026-10); a plain GET still works from our own pages but a cross-site link can no longer sign someone out |
 | `/auth/error` | Human-readable failure |
 | `/admin/login` | The admin password form — username **or** recovery email, and a password. Where the `/admin` gate sends every page request it refuses. Public despite the path — see below and [[Auth and Roles#The admin password door]] |
 | `/admin/reset` | Asks for a password-reset link. Public despite the path, same as above |
@@ -77,16 +79,21 @@ admits). The API routes under `/api/admin/` answer JSON instead: 401 signed out,
 | `POST /api/auth/admin-login` | public | The admin password login, by username or recovery address (`@` picks the column). Form encoding only, 415 otherwise; every answer is a 303 |
 | `POST /api/auth/admin-reset` | public | Asks for a reset link. Form encoding only, 415 otherwise. **Identical answer whether or not the address is registered** |
 | `POST /api/auth/admin-reset/confirm` | public | Redeems a link and sets the password. Form encoding only; ends at the sign-in form, never at a session |
+| `POST /api/auth/device/start` | public | Begins a device-grant sign-in: asks Discord for a code, parks the polling credential in an HttpOnly cookie |
+| `POST /api/auth/device/poll` | public (cookie) | One poll of that sign-in; on approval it creates the session |
+| `POST /api/auth/mobile` | public | Finishes a sign-in that began in the Android app: the app posts the authorization code and PKCE verifier, and gets a session cookie back |
+| `DELETE /api/account` | signed in | Deletes the caller's own account (anonymised in place, not removed). Standalone `admin:` identities are refused |
 | `POST /api/flares` | member | Fire one |
 | `PATCH /api/flares/[id]` | member | RSVP or close |
 | `GET /api/flares/socket` | public | WebSocket upgrade → Durable Object |
 | `GET/POST/DELETE /api/push/subscribe` | mixed | VAPID key / manage subscription |
-| `/api/admin/pois` `/meetups` `/posts` `/media` | ambassador | CRUD |
+| `/api/admin/pois` `/meetups` `/posts` | ambassador | List, create, edit. Delete **archives by default**: POIs, posts (`archived`) and meetups (`cancelled`) are kept as rows. Permanent delete is **admin only**, asked for with `?hard=1` (POIs have always worked this way; posts and meetups were brought in line by the 2026-10 admin audit) |
+| `GET/POST /api/admin/media` | ambassador | List, upload. There is no media DELETE route yet — see [[Backlog]] |
 | `PATCH /api/admin/media/[id]` | ambassador | Attribution fields only |
 | `GET /img/leekduck/[...path]` | public | Cached proxy for Leek Duck event artwork |
-| `POST /api/admin/import-legacy` `/import-media` | admin **or** token | [[Importing Legacy Data]] |
-| `GET /api/admin/config-check` | admin **or** token | Which variables the Worker can see |
-| `GET /media/[...key]` | public | R2 objects, immutable cache |
+| `GET /img/discord/[...path]` | public | Cached proxy for Discord scheduled-event cover art, allowlisted to `guild-events/…` on Discord's CDN |
+| `POST /api/admin/import-legacy` `/import-media` | admin **or** token | [[Importing Legacy Data]]. A non-browser caller needs an `Origin` header or a JSON content type. `import-legacy` refuses a populated database (409); there is no `?force` |
+| `GET /api/admin/config-check` | **admin session only** | Which variables the Worker can see. The import token is not accepted here; an ambassador gets 403 "Requires admin" |
 
 ## See also
 

@@ -1,6 +1,6 @@
 ---
 tags: [history, quality]
-updated: 2026-09-26
+updated: 2026-10-04
 ---
 
 # Bugs Worth Remembering
@@ -436,6 +436,34 @@ The mail: it now says the login name, and that either the name or the address it
 will sign in. It had left the name out on purpose, reasoning that the link already identifies
 the account — true, and beside the point, because the person holding the link still has to
 type *something* at the door afterwards.
+
+## Found by the 2026-10 admin audit
+
+**A "rolling" fortnight that only rolled in the database.** The session code said the 14 days
+slid forward on use, and the D1 row did: every request pushed `expires_at` out. The cookie was
+set once, at sign-in, with `Max-Age=1209600`, and nothing ever sent it again. So an admin who
+used the console every day was still signed out on day 14, with a perfectly healthy session row
+behind them. Found by reading every login response header, not by any test.
+
+It was missed because the two halves lived in different layers and each looked right alone. The
+comment described the row; the tests asserted the row; nobody asserted that a response after
+sign-in carried a fresh `Set-Cookie`. The browser only knows what the header tells it.
+
+> A promise made to the browser has to be tested on the response the browser receives. State
+> that is right in the database proves nothing about the cookie that points at it.
+
+**A bad timezone on a meetup took the home page down.** `PATCH /api/admin/meetups/:id` checked
+the zone only when the same request also changed the time, so `{"tz":"Bad/Zone"}` was stored
+with a 200. If that meetup was the next one, `/` threw `Invalid time zone specified` and answered
+500 to every visitor. Creating a meetup with the same bad zone was refused with a 422; only the
+update path had the gap.
+
+The check had been written where a zone is *usually* set, next to the time, instead of where it
+*can* be set.
+
+> Validate a field at every place it can be written, not only the place it usually is. And a
+> public page must never trust an admin-entered value that selects behaviour (a zone, a status,
+> a kind): it renders for strangers, so it degrades on a bad value instead of throwing.
 
 ## See also
 

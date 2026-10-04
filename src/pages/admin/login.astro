@@ -1,6 +1,7 @@
 ---
 import Base from '~/layouts/Base.astro';
 import { canReachAdmin } from '~/lib/auth/admin-path';
+import { parseMinutesParam } from '~/lib/auth/lockout';
 import { safeNext } from '~/lib/auth/next';
 
 export const prerender = false;
@@ -54,25 +55,42 @@ export const prerender = false;
  * and this page can never bounce a caller between them.
  *
  * ---------------------------------------------------------------------------
- * NO JAVASCRIPT ON THIS PAGE. AT ALL.
+ * THIS PAGE SHIPS NO SCRIPT OF ITS OWN, AND THE FORM NEEDS NONE
  * ---------------------------------------------------------------------------
  *
- * Three reasons, each sufficient on its own:
+ * Said precisely, because it used to say "no JavaScript on this page, at all",
+ * and that was not true as served (admin audit, 2026-10, A-12): `Base.astro`
+ * puts its header scripts — the menu, the account control, the in-app sign-in
+ * hand-off — on every page, this one included, and they run here as anywhere.
+ * What is true, and asserted in `test/auth/admin-login.test.ts`:
  *
- * 1. **It is the break-glass door**, so it is reached at exactly the moment
- *    other things are broken. A form that needs a bundle to have loaded, parsed
- *    and run is a form that can fail for the same reasons the rest of the site
- *    just did. A plain `<form>` posts from a browser with scripting off, from a
- *    text browser, and from a half-loaded page.
- * 2. **A form-encoded body is the more protected option.** Astro's origin check
- *    polices form-like content types and skips `application/json` entirely
- *    (`vault/Platform Limits and Traps.md`), so the `fetch`-and-JSON shape the
- *    rest of this app uses would *remove* the CSRF protection here rather than
- *    add anything.
- * 3. **The password never passes through app code.** With no script, the value
- *    goes from the input straight into the request body. Nothing can read it,
- *    buffer it, put it in a state object, or carry it into an error report.
+ * - Nothing inside `<main>` is a script, an island or a `client:` directive.
+ * - The form is a plain POST that works with scripting off. That is the
+ *   break-glass promise: this page is reached at exactly the moment other
+ *   things are broken, and a plain `<form>` posts from a browser with scripting
+ *   off, from a text browser, and from a half-loaded page.
+ * - A form-encoded body is the more protected option. Astro's origin check
+ *   polices form-like content types and skips `application/json` entirely
+ *   (`vault/Platform Limits and Traps.md`), so the `fetch`-and-JSON shape the
+ *   rest of this app uses would *remove* the CSRF protection here.
+ *
+ * What is NOT claimed any more: that "the password never touches app code".
+ * No code of ours reads the field, but the header scripts share the page, so
+ * the honest statement is that nothing here handles the password, not that
+ * nothing could. Keep the header scripts free of anything that reads inputs.
+ *
+ * The account control in that header is hidden on this page (C-25): its
+ * "Sign in" goes to Discord, a different door from this one, and offering both
+ * on one screen asked an admin to pick the wrong one.
  */
+
+/*
+ * Never cached (A-11). The page reflects `error`, `minutes` and `next` from
+ * its own query string and is answered differently to a signed-in caller, so a
+ * stored copy is wrong for the next person on a shared machine. The reset
+ * pages beside it already send the same header.
+ */
+Astro.response.headers.set('cache-control', 'no-store');
 
 const next = safeNext(Astro.url.searchParams.get('next'));
 
@@ -91,7 +109,7 @@ if (canReachAdmin(Astro.locals.user)) return Astro.redirect(next, 302);
  */
 const discordHref = next === '/' ? '/auth/login' : `/auth/login?next=${encodeURIComponent(next)}`;
 
-// Only the two the API route emits. Anything else in the query string is
+// Only the three the API route emits. Anything else in the query string is
 // somebody poking at it, and gets no message.
 //
 // `bad` is worded as "those sign-in details did not match" — not "that
@@ -99,7 +117,12 @@ const discordHref = next === '/' ? '/auth/login' : `/auth/login?next=${encodeURI
 // was wrong or whether the account exists. The route does not tell this page
 // that, on purpose; see `back()` in `/api/auth/admin-login`.
 const raw = Astro.url.searchParams.get('error');
-const error = raw === 'bad' || raw === 'locked' ? raw : null;
+const error = raw === 'bad' || raw === 'locked' || raw === 'role' ? raw : null;
+
+// How long the lock has left, as the route computed it (A-07). Read through
+// the same validator that bounds it, so a hand-typed `minutes=9999` or
+// `minutes=<b>` falls back to the general wording instead of being printed.
+const minutes = error === 'locked' ? parseMinutesParam(Astro.url.searchParams.get('minutes')) : null;
 
 /**
  * Set by `POST /api/auth/admin-reset/confirm` after a password has actually
@@ -115,7 +138,7 @@ const error = raw === 'bad' || raw === 'locked' ? raw : null;
 const reset = Astro.url.searchParams.get('reset') === '1';
 ---
 
-<Base title="Admin sign-in">
+<Base title="Admin sign-in" hideAccountControl>
   <Fragment slot="head">
     {/*
       The page is publicly reachable — it has to be, or it is no use on the day
@@ -159,13 +182,24 @@ const reset = Astro.url.searchParams.get('reset') === '1';
       )
     }
 
+    {/*
+      Immediately before the form, and the only `role="alert"` on the page, so
+      it is the first thing a screen reader announces and sits right above the
+      field it is about (A-13). The username box points at it with
+      `aria-describedby`, so when that box takes focus the reason is read out
+      again with it.
+    */}
     {
       error && (
-        <div class="notice" role="alert">
+        <div class="notice" role="alert" id="admin-login-error">
           {error === 'locked' ? (
             <>
               <p>
-                <strong>Too many wrong attempts, so this is locked for a little while.</strong>
+                <strong>
+                  {minutes
+                    ? `Too many wrong attempts, so this account is locked. Try again in about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
+                    : 'Too many wrong attempts, so this account is locked for a little while.'}
+                </strong>
               </p>
               <p>
                 Five wrong passwords lock the account for a minute, and each further wrong attempt
@@ -174,6 +208,11 @@ const reset = Astro.url.searchParams.get('reset') === '1';
                 on this one account, so another admin can still sign in.
               </p>
             </>
+          ) : error === 'role' ? (
+            <p>
+              This account can sign in but does not have admin access. Ask Justin to check its
+              role.
+            </p>
           ) : (
             <p>Those sign-in details did not match.</p>
           )}
@@ -193,6 +232,14 @@ const reset = Astro.url.searchParams.get('reset') === '1';
       password belongs to", which is what a password manager needs to know
       whichever of the two was typed. `type="text"`, not `email`, because a
       bare username is not an address and the browser would refuse it.
+
+      After `error=bad` the username box takes focus (A-13), so a keyboard user
+      can retype straight away instead of starting from the top of the page.
+      Not after `locked` or `role`, where typing again is not the fix. The box
+      is NOT refilled with what was typed: the only way to carry it here would
+      be the redirect's query string, which puts the identifier — sometimes an
+      address, one day a password typed into the wrong box — into the history,
+      the server logs and the `Referer`. A password manager refills it anyway.
     */}
     <form class="panel admin-login-form" method="post" action="/api/auth/admin-login">
       <input type="hidden" name="next" value={next} />
@@ -207,6 +254,8 @@ const reset = Astro.url.searchParams.get('reset') === '1';
           autocapitalize="none"
           autocorrect="off"
           spellcheck="false"
+          aria-describedby={error ? 'admin-login-error' : undefined}
+          autofocus={error === 'bad'}
           required
         />
       </div>
@@ -321,7 +370,12 @@ const reset = Astro.url.searchParams.get('reset') === '1';
     min-width: 0;
     min-height: 48px;
     padding: var(--space-2) var(--space-4);
-    border: 1.5px solid var(--border-strong);
+    /* `--text-muted`, not `--border-strong` (admin audit, 2026-10, D-06): an
+       input's edge is the only thing that shows where to type, so it owes
+       3:1 against the panel it sits on. `--border-strong` measured 1.68 light
+       and 1.96 dark; `--text-muted` is 6.32 on white and well over 3 on the
+       dark panel. */
+    border: 1.5px solid var(--text-muted);
     border-radius: var(--radius-sm);
     background: var(--bg-panel);
     color: var(--text);

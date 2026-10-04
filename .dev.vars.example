@@ -12,23 +12,39 @@
 # Register both:
 #   http://localhost:4321/auth/callback                                   (dev)
 #   https://<your-worker>.workers.dev/auth/callback                       (prod)
-#   https://pokemontxk.com/auth/callback                       (prod, custom domain)
+#   https://pokemontxk.com/auth/callback                       (custom domain - not live yet)
 #
-# Leave "Public Client" OFF — we use a client secret from the server side.
+# Public Client must be ON (OAuth2 tab). The device sign-in at /auth/device
+# needs it, and the ordinary token endpoint still accepts the client secret
+# below alongside PKCE, so nothing else changes. Details and the second portal
+# step (Social SDK enrollment) are in vault/Auth and Roles.md. The secret itself
+# is still used from the server side only.
+#
+# pokemontxk.com is NOT live yet: it still runs the old static site, so do not
+# register its redirect until that domain points at this Worker.
 DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
 
 # Your Discord server. Enable Developer Mode (Settings > Advanced), then
 # right-click the server icon > Copy Server ID.
 #
-# No bot token is needed: guild roles are read with the signed-in user's own
-# access token via the `guilds.members.read` scope.
-DISCORD_GUILD_ID=
+# Not a secret: in production it is a plain var in wrangler.jsonc, in the open.
+# The dev platform proxy only surfaces .dev.vars, though, so local dev needs its
+# own copy, or getDiscordEvents reports "DISCORD_GUILD_ID is not set" and the
+# "Next meetup" card falls back to its empty state. Define it ONCE, here - a
+# second definition further down silently wins over this one.
+DISCORD_GUILD_ID=1249232349972004897
+
+# Reading guild roles at sign-in needs no bot: it uses the signed-in user's own
+# access token via the `guilds.members.read` scope. The "Next meetup" board is
+# different - it reads the server's scheduled events and DOES need a bot token
+# (DISCORD_BOT_TOKEN, further down).
 
 # Role IDs from your Discord server, mapped to site roles.
 # Enable Developer Mode in Discord, then right-click a role > Copy Role ID.
 # All optional. Without them, anyone in the guild becomes a `member` and nobody
-# is an admin — so set DISCORD_BOOTSTRAP_ADMIN_ID at minimum.
+# is made an admin by Discord. That is intended: admins are standalone accounts
+# (see the bootstrap note below).
 DISCORD_ROLE_ADMIN=
 DISCORD_ROLE_AMBASSADOR=
 # Optional. If set, this specific role is required to count as a member —
@@ -36,8 +52,16 @@ DISCORD_ROLE_AMBASSADOR=
 # guild at all is enough.
 DISCORD_ROLE_MEMBER=
 
-# Your own Discord user ID. Always resolves to admin regardless of roles, so
-# you can sign in and configure everything else. Right-click yourself > Copy User ID.
+# DELIBERATELY UNSET IN PRODUCTION - LEAVE BLANK. The code still honours this
+# id (one Discord account that always resolves to admin), so setting it would
+# bring back a single point of failure the password door exists to remove. The
+# way an admin is made is a standalone account with a password:
+#
+#   npm run set:password -- --create <name> --email you@example.com
+#
+# run from a real console (PowerShell or Windows Terminal; it refuses Git Bash).
+# For a throwaway local admin without a prompt: npx tsx scripts/dev-admin.ts
+# --create <name>. See vault/Auth and Roles.md.
 DISCORD_BOOTSTRAP_ADMIN_ID=
 
 # --- Discord fan-out (optional) ---
@@ -87,17 +111,17 @@ RESEND_FROM=
 # the link, their SHA-256 in the row.
 
 # --- Maintenance endpoints ---
-# Bearer token guarding /api/admin/import-legacy and /api/admin/import-media.
-# Stopgap until Discord OAuth lands, at which point those routes move behind
-# the `admin` role. Generate with: openssl rand -hex 32
+# Bearer token for the two import endpoints ONLY: /api/admin/import-legacy and
+# /api/admin/import-media. Those accept either an admin session or this token.
+# It is not a stopgap and it does not unlock anything else - config-check, for
+# one, takes an admin session only. A curl call with the token also needs
+# -H "Origin: https://<site>" (or a JSON content type), or Astro's CSRF check
+# answers 403 before the route runs. Generate with: openssl rand -hex 32
 IMPORT_TOKEN=
 
-# Discord scheduled-event sync for the "Next meetup" card.
-# The guild id is a plain var in wrangler.jsonc, so production has it — but the
-# dev platform proxy only surfaces .dev.vars, so local dev needs its own copy or
-# getDiscordEvents reports "DISCORD_GUILD_ID is not set" and the card falls back
-# to the empty state. Not a secret; it is in wrangler.jsonc in the open.
-DISCORD_GUILD_ID=1249232349972004897
-# Read-only bot ("Pogo TXK Events", View Channels only). Production keeps this in
-# `wrangler secret put DISCORD_BOT_TOKEN`, never in a file.
+# Discord scheduled-event sync for the "Next meetup" card (discord-events.ts).
+# Needs DISCORD_GUILD_ID (defined once, above) AND a bot token. Read-only bot
+# ("Pogo TXK Events", View Channels only). Production keeps this in
+# `wrangler secret put DISCORD_BOT_TOKEN`, never in a file. Without it the card
+# falls back to its empty state.
 DISCORD_BOT_TOKEN=

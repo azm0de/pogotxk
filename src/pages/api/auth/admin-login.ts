@@ -82,13 +82,16 @@
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
+import { canReachAdmin } from '~/lib/auth/admin-path';
 import {
   isLocked,
   lockoutUntil,
   MAX_ATTEMPTS,
+  minutesLeft,
   windowStart,
 } from '~/lib/auth/lockout';
 import { safeNext } from '~/lib/auth/next';
+import type { Role, SessionUser } from '~/lib/auth/types';
 import {
   DEFAULT_ITERATIONS,
   dummyVerify,
@@ -130,20 +133,29 @@ function seeOther(location: string, extra?: Headers): Response {
   return new Response(null, { status: 303, headers });
 }
 
-type Failure = 'bad' | 'locked';
+type Failure = 'bad' | 'locked' | 'role';
 
 /**
  * Back to the form with a reason.
  *
- * Only two reasons exist, and the split is the whole of what this route is
+ * Three reasons exist, and the split is the whole of what this route is
  * willing to say. `bad` covers a wrong password, an unknown username or
  * address, a string with an `@` that is not an address at all, a username
  * with no credential configured, and a row too corrupt to check — situations
  * that must be indistinguishable, because telling them apart is exactly how an
  * attacker learns which identifier to keep guessing at.
+ *
+ * `locked` carries `minutes`, the whole minutes left on the lock rounded up
+ * (admin audit, 2026-10, A-07), so the page can say how long to wait. A small
+ * integer computed from the row, never the identifier, and identical for a
+ * right and a wrong password against the same lock.
+ *
+ * `role` is only ever answered after the correct password (A-10), so it tells
+ * nobody anything they did not already prove.
  */
-function back(kind: Failure, next: string): Response {
+function back(kind: Failure, next: string, minutes?: number | null): Response {
   const params = new URLSearchParams({ error: kind });
+  if (kind === 'locked' && minutes) params.set('minutes', String(minutes));
   // '/' is the page's own default; sending it makes for a longer URL and no
   // difference in behaviour.
   if (next !== '/') params.set('next', next);
@@ -155,6 +167,7 @@ interface CredentialRow extends StoredHash {
   failed_attempts: number;
   locked_until: string | null;
   is_banned: number;
+  role: Role;
 }
 
 /**
@@ -189,7 +202,7 @@ function isoNow(at: number): string {
 function findByUsername(username: string): Promise<CredentialRow | null> {
   return env.DB.prepare(
     `SELECT c.user_id, c.algorithm, c.iterations, c.salt, c.hash,
-            c.failed_attempts, c.locked_until, u.is_banned
+            c.failed_attempts, c.locked_until, u.is_banned, u.role
        FROM admin_credentials c
        JOIN users u ON u.id = c.user_id
       WHERE c.username = ?1`,
@@ -210,7 +223,7 @@ async function findByEmail(email: string): Promise<CredentialRow | null> {
   try {
     return await env.DB.prepare(
       `SELECT c.user_id, c.algorithm, c.iterations, c.salt, c.hash,
-              c.failed_attempts, c.locked_until, u.is_banned
+              c.failed_attempts, c.locked_until, u.is_banned, u.role
          FROM admin_credentials c
          JOIN users u ON u.id = c.user_id
         WHERE c.email = ?1`,
@@ -298,9 +311,12 @@ export async function POST(ctx: APIContext): Promise<Response> {
    *
    * It leaks nothing about the password either: this response is byte-identical
    * whether the submitted password was right or wrong, which is the headline
-   * assertion in `test/auth/admin-login.test.ts`.
+   * assertion in `test/auth/admin-login.test.ts`. The `minutes` it carries is
+   * computed from the row alone, so it does not break that either.
    */
-  if (isLocked(row.locked_until, now)) return back('locked', next);
+  if (isLocked(row.locked_until, now)) {
+    return back('locked', next, minutesLeft(row.locked_until, now));
+  }
 
   const ok = await verifyPassword(password, {
     algorithm: row.algorithm,
@@ -310,7 +326,17 @@ export async function POST(ctx: APIContext): Promise<Response> {
   });
 
   if (!ok) {
-    await recordFailure(row, now, via);
+    /*
+     * The failure that trips the lock says so (admin audit, 2026-10, A-06).
+     * It used to answer `bad` like the four before it, so the admin learned
+     * about the lock only on the next try — even when that try was the right
+     * password, which then looked like a second failure. Nothing new leaks:
+     * an unknown identifier still answers `bad` every time, and that `locked`
+     * exists only for real rows is the documented trade (A-08), unchanged —
+     * it now shows on the fifth guess rather than the sixth.
+     */
+    const lockedUntil = await recordFailure(row, now, via);
+    if (lockedUntil) return back('locked', next, minutesLeft(lockedUntil, now));
     return back('bad', next);
   }
 
@@ -321,8 +347,9 @@ export async function POST(ctx: APIContext): Promise<Response> {
    * minted here would be inert — but minting one anyway would be a session for
    * an account we have decided cannot act, and `/auth/callback` sets the
    * precedent of refusing outright. The counter is reset because the password
-   * was in fact correct, and the answer is `bad` because that is all this route
-   * ever says about why it will not let you in.
+   * was in fact correct, and the answer is `bad` because a ban is not something
+   * this door explains — unlike `role` below, which is a configuration mistake
+   * the account's owner needs to hear about.
    */
   if (row.is_banned === 1) {
     await clearFailures(row.user_id, now);
@@ -337,6 +364,30 @@ export async function POST(ctx: APIContext): Promise<Response> {
   }
 
   await clearFailures(row.user_id, now);
+
+  /*
+   * Authenticated, but the account cannot reach the console (admin audit,
+   * 2026-10, A-10).
+   *
+   * A credential row on a user below `ambassador` can only be made by
+   * hand-written SQL, or by a demotion after the password was set. It used to
+   * get a session, then `/admin/login` saw a member, showed the form again and
+   * said nothing — a loop with no message. Now it is refused here, before any
+   * session exists, with a reason only a correct password can reach. The same
+   * predicate as the gate, so the two cannot disagree about who is through.
+   */
+  // Only `role` is read by the predicate; the rest of a SessionUser does not
+  // exist yet, because no session does.
+  if (!canReachAdmin({ role: row.role } as SessionUser)) {
+    await recordAudit(env.DB, {
+      actorId: row.user_id,
+      action: 'login',
+      entity: 'admin_credentials',
+      entityId: row.user_id,
+      diff: { method: 'password', outcome: 'no-role', via },
+    });
+    return back('role', next);
+  }
 
   /*
    * Rehash inline, never under `waitUntil`.
@@ -404,8 +455,12 @@ export async function POST(ctx: APIContext): Promise<Response> {
  * It is keyed on `user_id`, never on what was typed, which is what makes the
  * lockout per account: a wrong password by username and a wrong password by
  * address land on the same counter.
+ *
+ * Returns the `locked_until` it wrote when this failure tripped the lock, and
+ * null otherwise, so the caller can answer `locked` on the very attempt that
+ * shut the door (A-06).
  */
-async function recordFailure(row: CredentialRow, now: number, via: Via): Promise<void> {
+async function recordFailure(row: CredentialRow, now: number, via: Via): Promise<string | null> {
   const stamp = isoNow(now);
 
   const counted = await env.DB.prepare(
@@ -445,10 +500,10 @@ async function recordFailure(row: CredentialRow, now: number, via: Via): Promise
     diff: { outcome: 'bad-credentials', via },
   });
 
-  if (attempts < MAX_ATTEMPTS) return;
+  if (attempts < MAX_ATTEMPTS) return null;
 
   const until = lockoutUntil(attempts, now);
-  if (!until) return;
+  if (!until) return null;
 
   await env.DB.prepare(
     'UPDATE admin_credentials SET locked_until = ?2, updated_at = ?2 WHERE user_id = ?1',
@@ -470,6 +525,8 @@ async function recordFailure(row: CredentialRow, now: number, via: Via): Promise
     entityId: row.user_id,
     diff: { attempts, until },
   });
+
+  return until;
 }
 
 /** Clears the counter and any expired lock, and stamps the success. */

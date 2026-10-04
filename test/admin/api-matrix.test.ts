@@ -38,10 +38,13 @@ import {
 async function assertAnsweredBy(res: Response, expected: Outcome): Promise<void> {
   switch (expected.by) {
     case 'middleware':
-      // `src/middleware.ts` — no challenge, and the word is "Forbidden".
+      // `src/middleware.ts` — no challenge, and the word matches the status:
+      // "Unauthorized" to a stranger, "Forbidden" to a member who is not enough.
       expect(res.headers.get('content-type')).toContain('application/json');
       expect(res.headers.get('www-authenticate')).toBeNull();
-      expect(await res.json()).toEqual({ error: 'Forbidden' });
+      expect(await res.json()).toEqual({
+        error: expected.status === 401 ? 'Unauthorized' : 'Forbidden',
+      });
       break;
 
     case 'import-guard':
@@ -91,6 +94,12 @@ describe('the admin API, by route and caller', () => {
     });
 
     expect(res.status).toBe(expected.status);
+    if (expected.by === 'route' || expected.by === 'role-check') {
+      // Anything a route itself answers is private to the caller and must not
+      // be kept by a cache (admin audit, 2026-10, B-20). The middleware's own
+      // refusals are not the routes' to set and are left out.
+      expect(res.headers.get('cache-control')).toBe('private, no-store');
+    }
     await assertAnsweredBy(res, expected);
 
     if (before !== null) {
@@ -104,8 +113,8 @@ describe('the admin API, by route and caller', () => {
     // produced an empty or half-length one would make every assertion above
     // vacuous while the suite still reported green.
     expect(CALLERS).toHaveLength(6);
-    expect(ADMIN_ROUTES).toHaveLength(21);
-    expect(GRID).toHaveLength(21 * 6);
+    expect(ADMIN_ROUTES).toHaveLength(23);
+    expect(GRID).toHaveLength(23 * 6);
   });
 });
 

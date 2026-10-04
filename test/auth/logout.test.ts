@@ -96,6 +96,89 @@ describe('signing out', () => {
   });
 });
 
+/**
+ * Admin audit, 2026-10, A-09: sign-out was a GET link, and with
+ * `SameSite=Lax` the cookie rides along on a cross-site top-level navigation —
+ * so any page could sign a visitor out with a link. POST is now the canonical
+ * shape (the account menu posts a form), and a GET the browser marks as
+ * coming from another site no longer ends anything.
+ */
+describe('a sign-out another site starts', () => {
+  function getFrom(site: string | null, token: string, query = ''): Promise<Response> {
+    const headers = new Headers({ cookie: authCookie(token) });
+    if (site !== null) headers.set('sec-fetch-site', site);
+    return SELF.fetch(`${ORIGIN}/auth/logout${query}`, { headers, redirect: 'manual' });
+  }
+
+  it.each(['cross-site', 'same-site'])('does not end the session over a %s GET', async (site) => {
+    const user = await seedUser(env.DB);
+    const token = await seedSession(env.DB, user);
+
+    const res = await getFrom(site, token);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.getSetCookie()).toHaveLength(0);
+    expect(await sessionCount()).toBe(1);
+  });
+
+  it('drops switch=1 on a refused GET rather than starting a Discord round trip', async () => {
+    const user = await seedUser(env.DB);
+    const token = await seedSession(env.DB, user);
+
+    const res = await getFrom('cross-site', token, '?switch=1&next=%2Fgo');
+
+    expect(res.headers.get('location')).toBe('/go');
+    expect(await sessionCount()).toBe(1);
+  });
+
+  it.each([
+    ['our own link', 'same-origin'],
+    ['a typed URL or bookmark', 'none'],
+    ['a browser too old to say', null],
+  ])('still signs out over GET from %s', async (_label, site) => {
+    const user = await seedUser(env.DB);
+    const token = await seedSession(env.DB, user);
+
+    const res = await getFrom(site, token);
+
+    expect(clearsSession(res)).toBe(true);
+    expect(await sessionCount()).toBe(0);
+  });
+
+  it('refuses a cross-site POST before the route runs — Astro’s origin check', async () => {
+    const user = await seedUser(env.DB);
+    const token = await seedSession(env.DB, user);
+
+    const res = await SELF.fetch(`${ORIGIN}/auth/logout`, {
+      method: 'POST',
+      headers: {
+        cookie: authCookie(token),
+        origin: 'https://evil.example',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      redirect: 'manual',
+    });
+
+    expect(res.status).toBe(403);
+    expect(await sessionCount()).toBe(1);
+  });
+
+  it('the account menu signs out with a POST form, not a link', async () => {
+    /*
+     * The menu is built in the browser by an inline script in `Base.astro`, so
+     * what can be pinned here is that script as served: it builds a form that
+     * posts to `/auth/logout`, and no longer an anchor pointing at it.
+     */
+    const html = await (await SELF.fetch(`${ORIGIN}/auth/error`)).text();
+
+    expect(html).toContain("method: 'post'");
+    expect(html).toContain("action: '/auth/logout?' + query");
+    expect(html).not.toContain("href: '/auth/logout");
+  });
+});
+
 describe('where it sends you', () => {
   it('honours a same-origin next', async () => {
     expect((await logout('?next=%2Fgo')).headers.get('location')).toBe('/go');

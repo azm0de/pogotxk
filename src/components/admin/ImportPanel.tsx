@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react';
+import { api, ApiError, SignedOutError } from '~/lib/client-api';
+import { SignedOutText } from './admin-ui';
 import './ImportPanel.css';
 
 interface Props {
@@ -34,102 +36,137 @@ type Phase = 'idle' | 'metadata' | 'media' | 'done' | 'error';
 const MEDIA_BATCH = 30;
 const MAX_PASSES = 12;
 
+/**
+ * The one-time import from the old site.
+ *
+ * It runs once. On a database that already holds locations the importer
+ * answers 409 and changes nothing, and there is no override: the "Clear and
+ * re-import anyway" button, which wiped every admin edit, is gone (admin audit,
+ * 2026-10, B-12 — Justin's decision). A re-import from scratch is a developer
+ * task. What stays safe to repeat is the photo copy, which skips anything
+ * already stored, so a populated site is offered only that.
+ */
 export default function ImportPanel({ poiCount, mediaCount }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [needsForce, setNeedsForce] = useState(false);
+  const [signedOut, setSignedOut] = useState(false);
+  /** The importer answered 409: there is data here already. */
+  const [refused, setRefused] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState(0);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<LegacyResult | null>(null);
+  const [photosOnly, setPhotosOnly] = useState(false);
 
   const say = useCallback((line: string) => setLog((l) => [...l, line]), []);
 
-  const post = async <T,>(url: string): Promise<T> => {
-    const res = await fetch(url, {
-      method: 'POST',
-      // Astro rejects cross-site form-shaped POSTs; this marks it as an API call.
-      headers: { 'content-type': 'application/json' },
-    });
-    const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-    if (!res.ok && res.status !== 409) {
-      throw Object.assign(new Error(body.error ?? res.statusText), { status: res.status, body });
+  /** The resumable photo copy. Shared by a first import and a top-up. */
+  const copyPhotos = useCallback(async () => {
+    setPhase('media');
+    let pass = 0;
+    for (;;) {
+      if (++pass > MAX_PASSES) throw new Error('Too many passes; stopping.');
+
+      const step = await api<MediaResult>(`/api/admin/import-media?limit=${MEDIA_BATCH}`, {
+        method: 'POST',
+      });
+      if (step.error) throw new Error(step.error);
+
+      const doneSoFar = (step.alreadyPresent ?? 0) + (step.uploaded ?? 0);
+      setUploaded(doneSoFar);
+      setTotal(step.total ?? 0);
+      say(`Pass ${pass}: ${doneSoFar} of ${step.total ?? 0} photos in place.`);
+
+      for (const f of step.failed ?? []) say(`Failed: ${f.key} — ${f.reason}`);
+
+      // Guard against a pass that makes no progress, so a permanently
+      // failing photo cannot spin here forever.
+      if (step.done || (step.remaining ?? 0) === 0) break;
+      if ((step.uploaded ?? 0) === 0) {
+        throw new Error(`Stalled with ${step.remaining} photos remaining.`);
+      }
     }
-    return Object.assign(body, { __status: res.status }) as T;
+  }, [say]);
+
+  const reset = () => {
+    setError(null);
+    setSignedOut(false);
+    setRefused(null);
+    setLog([]);
+    setUploaded(0);
+    setTotal(0);
+    setSummary(null);
   };
 
-  const run = useCallback(
-    async (force: boolean) => {
-      setPhase('metadata');
-      setError(null);
-      setNeedsForce(false);
-      setLog([]);
-      setUploaded(0);
-      setTotal(0);
-      setSummary(null);
+  const stopped = (err: unknown) => {
+    if (err instanceof SignedOutError) {
+      setSignedOut(true);
+      say('Stopped: signed out.');
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      say(`Stopped: ${message}`);
+    }
+    setPhase('error');
+  };
 
+  const runImport = useCallback(async () => {
+    reset();
+    setPhotosOnly(false);
+    setPhase('metadata');
+    try {
+      say('Reading the old site’s locations, map shapes and meetups from pokemontxk.com…');
+      let meta: LegacyResult;
       try {
-        say('Reading markers.js, script.js and meetup.js from pokemontxk.com…');
-        const meta = await post<LegacyResult & { __status: number }>(
-          `/api/admin/import-legacy${force ? '?force=1' : ''}`,
-        );
-
-        if (meta.__status === 409) {
-          setNeedsForce(true);
+        meta = await api<LegacyResult>('/api/admin/import-legacy', { method: 'POST' });
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          // Not a failure: the guard doing its job. Nothing was changed.
+          const why = err.body.error ?? 'The database already contains locations.';
+          setRefused(why);
+          say(`${why} Nothing was changed.`);
           setPhase('idle');
-          say(meta.error ?? 'Database already contains POIs.');
           return;
         }
-
-        setSummary(meta);
-        say(
-          `Imported ${meta.pois?.total ?? 0} locations ` +
-            `(${meta.pois?.byType.pokestop ?? 0} stops, ${meta.pois?.byType.gym ?? 0} gyms, ` +
-            `${meta.pois?.byType.powerspot ?? 0} power spots), ${meta.pois?.campsite ?? 0} Campsite.`,
-        );
-        say(
-          `Raid route ${meta.shapes?.raidRoutePoints ?? 0} points, ` +
-            `hotspot ${meta.shapes?.hotspotPoints ?? 0} points.`,
-        );
-        for (const w of meta.warnings ?? []) say(`Warning: ${w}`);
-
-        setPhase('media');
-        setTotal(meta.media?.rows ?? 0);
-        say(`Copying ${meta.media?.rows ?? 0} photos into R2…`);
-
-        let pass = 0;
-        for (;;) {
-          if (++pass > MAX_PASSES) throw new Error('Too many passes; stopping.');
-
-          const step = await post<MediaResult>(`/api/admin/import-media?limit=${MEDIA_BATCH}`);
-          if (step.error) throw new Error(step.error);
-
-          const doneSoFar = (step.alreadyPresent ?? 0) + (step.uploaded ?? 0);
-          setUploaded(doneSoFar);
-          setTotal(step.total ?? 0);
-          say(`Pass ${pass}: ${doneSoFar} of ${step.total ?? 0} photos in place.`);
-
-          for (const f of step.failed ?? []) say(`Failed: ${f.key} — ${f.reason}`);
-
-          // Guard against a pass that makes no progress, so a permanently
-          // failing photo cannot spin here forever.
-          if (step.done || (step.remaining ?? 0) === 0) break;
-          if ((step.uploaded ?? 0) === 0) {
-            throw new Error(`Stalled with ${step.remaining} photos remaining.`);
-          }
-        }
-
-        say('Done. The map is live.');
-        setPhase('done');
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-        say(`Stopped: ${message}`);
-        setPhase('error');
+        throw err;
       }
-    },
-    [say],
-  );
+
+      setSummary(meta);
+      say(
+        `Imported ${meta.pois?.total ?? 0} locations ` +
+          `(${meta.pois?.byType.pokestop ?? 0} stops, ${meta.pois?.byType.gym ?? 0} gyms, ` +
+          `${meta.pois?.byType.powerspot ?? 0} power spots), ${meta.pois?.campsite ?? 0} Campsite.`,
+      );
+      say(
+        `Raid route ${meta.shapes?.raidRoutePoints ?? 0} points, ` +
+          `hotspot ${meta.shapes?.hotspotPoints ?? 0} points.`,
+      );
+      for (const w of meta.warnings ?? []) say(`Warning: ${w}`);
+
+      setTotal(meta.media?.rows ?? 0);
+      say(`Copying ${meta.media?.rows ?? 0} photos into R2…`);
+      await copyPhotos();
+
+      say('Done. The map is live.');
+      setPhase('done');
+    } catch (err) {
+      stopped(err);
+    }
+    // `reset` and `stopped` only call stable setters and `say`.
+  }, [say, copyPhotos]);
+
+  const runPhotos = useCallback(async () => {
+    reset();
+    setPhotosOnly(true);
+    try {
+      say('Checking every legacy photo is stored, and copying any that are missing…');
+      await copyPhotos();
+      say('Done. Every legacy photo is in place.');
+      setPhase('done');
+    } catch (err) {
+      stopped(err);
+    }
+  }, [say, copyPhotos]);
 
   const busy = phase === 'metadata' || phase === 'media';
   const hasData = poiCount > 0;
@@ -140,11 +177,20 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
       <div className="import-head">
         <div>
           <h2>Legacy data import</h2>
-          <p>
-            Pulls every PokéStop, Gym, Power Spot, photo, the raid route and the hotspot from{' '}
-            <code className="admin-code">pokemontxk.com</code> into this site. Safe to re-run — it
-            upserts rather than duplicating, and skips photos already stored.
-          </p>
+          {hasData ? (
+            <p>
+              The map was imported from <code className="admin-code">pokemontxk.com</code>. The
+              import runs once: on a site that already has locations it stops without changing
+              anything, so edits made here are never overwritten. Copying photos is safe to repeat
+              — it skips any already stored.
+            </p>
+          ) : (
+            <p>
+              Pulls every PokéStop, Gym, Power Spot, photo, the raid route and the hotspot from{' '}
+              <code className="admin-code">pokemontxk.com</code> into this site. It runs once, on
+              an empty site.
+            </p>
+          )}
         </div>
         <div className="import-state">
           <span>
@@ -156,10 +202,10 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
         </div>
       </div>
 
-      {!hasData && phase === 'idle' && (
+      {!hasData && phase === 'idle' && !refused && (
         <p className="import-callout">
-          This site has no map data yet. Run the import to bring across all 104 locations and 72
-          photos.
+          This site has no map data yet. Run the import to bring across the old site's locations
+          and photos.
         </p>
       )}
 
@@ -182,32 +228,33 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
         </div>
       )}
 
-      {needsForce && (
-        <div className="import-warn" role="alert">
-          <p>
-            There is already map data here. Re-importing clears the imported locations, photo
-            records, map shapes and meetups first, then rebuilds them from the live site.
-          </p>
-          <p>
-            <strong>Anything added or edited in the admin console will be lost.</strong>
-          </p>
-          <button type="button" className="btn btn--danger btn--sm" onClick={() => void run(true)}>
-            Clear and re-import anyway
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <p className="import-error" role="alert">
-          {error}
+      {refused && (
+        <p className="import-note" role="status">
+          {refused} Nothing was changed. Starting over from the old site is a developer task: the
+          rows are cleared in the database first.
         </p>
       )}
 
-      {phase === 'done' && summary && (
+      {(error || signedOut) && (
+        <p className="import-error" role="alert">
+          <strong>Error: </strong>
+          {signedOut ? <SignedOutText /> : error}
+        </p>
+      )}
+
+      {phase === 'done' && (
         <p className="import-done">
           <span>
-            Imported {summary.pois?.total} locations and {summary.media?.rows} photos.{' '}
-            {summary.media?.withCredit} carry a photographer credit.
+            {summary && !photosOnly ? (
+              <>
+                Imported {summary.pois?.total} locations and {summary.media?.rows} photos.{' '}
+                {summary.media?.withCredit} carry a photographer credit.
+              </>
+            ) : (
+              <>
+                {uploaded} of {total} photos in place.
+              </>
+            )}
           </span>
           <a className="btn btn--outline btn--sm btn--arrow" href="/map">
             Open the map
@@ -219,7 +266,7 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
         <button
           type="button"
           className="btn btn--primary"
-          onClick={() => void run(false)}
+          onClick={() => void (hasData ? runPhotos() : runImport())}
           disabled={busy}
           aria-busy={busy}
         >
@@ -228,7 +275,7 @@ export default function ImportPanel({ poiCount, mediaCount }: Props) {
             : phase === 'media'
               ? 'Copying photos…'
               : hasData
-                ? 'Re-run import'
+                ? 'Copy any missing photos'
                 : 'Import from pokemontxk.com'}
         </button>
         {phase === 'done' && (

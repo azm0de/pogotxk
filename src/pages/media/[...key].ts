@@ -116,6 +116,11 @@ export async function GET({ params, request }: APIContext): Promise<Response> {
   // Advertised on every response, not just ranged ones — it is how a client
   // knows it may ask for a range at all.
   headers.set('accept-ranges', 'bytes');
+  // The stored content-type is the uploader's claim, checked against the bytes
+  // since the admin audit (2026-10, B-07) but not for objects stored before
+  // it. Telling the browser not to second-guess it means a mislabelled object
+  // is shown wrongly at worst, never sniffed into something that runs.
+  headers.set('x-content-type-options', 'nosniff');
 
   // `onlyIf` returns a bodyless object when the precondition fails — that is a
   // 304, not a 200 with an empty payload.

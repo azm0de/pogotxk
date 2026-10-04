@@ -98,16 +98,27 @@ describe('requireImportToken', () => {
     ['a bare token with no scheme', TOKEN],
     ['the scheme with no token', 'Bearer '],
     ['the scheme and only spaces', 'Bearer    '],
-    /*
-     * RFC 7235 says the auth scheme is case-insensitive, and `startsWith`
-     * makes this one case-sensitive, so a caller who types `bearer` is refused
-     * a token that is correct. It is strict rather than permissive — the safe
-     * direction — and pinning it here means a future relaxation has to be
-     * deliberate. Reported as a finding rather than changed.
-     */
-    ['a lower-cased scheme, which this guard does not accept', `bearer ${TOKEN}`],
+    ['a lower-cased scheme with only spaces', 'bearer    '],
+    ['the scheme glued to the token', `Bearer${TOKEN}`],
+    ['a lower-cased scheme with a wrong token', `bearer ${TOKEN}x`],
   ])('refuses %s', (_label, header) => {
     expect(requireImportToken(withAuth(header), env)?.status).toBe(401);
+  });
+
+  it.each([
+    /*
+     * The scheme is case-insensitive (RFC 9110 §11.1). It used to be matched
+     * with `startsWith('Bearer ')`, so `bearer <correct token>` was refused —
+     * strict in the safe direction, but a correct caller got a 401 with no
+     * hint why. Relaxed deliberately in the admin audit, 2026-10 (B-17); the
+     * token is still compared exactly.
+     */
+    ['lower case', `bearer ${TOKEN}`],
+    ['upper case', `BEARER ${TOKEN}`],
+    ['mixed case', `BeArEr ${TOKEN}`],
+    ['more than one space', `Bearer   ${TOKEN}`],
+  ])('accepts the scheme in %s', (_label, header) => {
+    expect(requireImportToken(withAuth(header), env)).toBeNull();
   });
 
   it('refuses a token of the right length that is wrong', () => {
@@ -263,7 +274,7 @@ describe('the import exemption', () => {
      * `import-` prefix. Everything below is the route's own `requireImportAuth`
      * doing its job, and a route that forgot to call it cannot produce any of
      * it: a challenge header, and the word "Unauthorized" rather than the
-     * middleware's "Forbidden".
+     * middleware's "Unauthorized".
      */
     expect(res.status).toBe(401);
     expect(res.headers.get('www-authenticate')).toBe('Bearer realm="pogotxk-admin"');
@@ -287,13 +298,13 @@ describe('the import exemption', () => {
 
   it('is the `import-` prefix and not the word "import"', async () => {
     // `/api/admin/imports` shares four letters and none of the exemption. The
-    // middleware answers it, which is visible in the body: "Forbidden", and no
-    // challenge.
+    // middleware answers it, which is visible in the body: "Unauthorized", and
+    // no challenge.
     const res = await SELF.fetch(`${ORIGIN}/api/admin/imports`, { redirect: 'manual' });
 
     expect(res.status).toBe(401);
     expect(res.headers.get('www-authenticate')).toBeNull();
-    expect(await res.json()).toEqual({ error: 'Forbidden' });
+    expect(await res.json()).toEqual({ error: 'Unauthorized' });
   });
 
   it('really does hand an unrouted import- path past the role gate', async () => {
@@ -311,6 +322,6 @@ describe('the import exemption', () => {
 
     const guarded = await SELF.fetch(`${ORIGIN}/api/admin/nonexistent`, { redirect: 'manual' });
     expect(guarded.status).toBe(401);
-    expect(await guarded.json()).toEqual({ error: 'Forbidden' });
+    expect(await guarded.json()).toEqual({ error: 'Unauthorized' });
   });
 });

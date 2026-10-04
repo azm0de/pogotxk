@@ -1,9 +1,10 @@
 /*
  * Primitives — the shared vocabulary of the trail-map kiosk world.
  *
- * Imported by Base.astro only. Never by Admin.astro: that single fact is what
- * keeps the admin editors out of the redesign while `.btn`, `.card` and the rest
- * become global names.
+ * Imported by Base.astro and, since the owner brought admin into the world
+ * (W4), by Admin.astro too. `.btn--danger` and `.badge--retired` were promoted
+ * here from the admin islands; this is their only definition (an unlayered
+ * copy in Admin.astro used to override both — removed, admin audit 2026-10).
  *
  * Everything here sits in `@layer primitives`, which is declared *below* the
  * unlayered cascade in global.css. Astro scoped styles are unlayered, so a page
