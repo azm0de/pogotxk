@@ -174,3 +174,25 @@ before the merge, and the last two items after.
 - [ ] **Run the health sweep** in [[Deploying#Health sweep]] against the live address, and sign in
       once as an admin to check the dashboard.
 - [ ] Give Nick [[Handover for Nick]].
+| D-01 | major | news (form open) | `PostEditor.css` `.hero-upload-btn input` vs `Admin.astro` `.admin-form input {width:100%}` | The visually hidden file input is forced to 100% width by the shared form rule, so the News page scrolls sideways at 1280 and 768 (not at 375) | scrollWidth 1521 vs 1265 at 1280; 924 vs 753 at 768 | 2ecc0b3 | part-2 (P2-C) |
+| D-02 / C-14 | major | map | `.editor-filters .chip` | Type chips' accessible names are the bare counts "66", "16", "22"; the type is an aria-hidden dot | DOM | 2ecc0b3 | part-2 (P2-C) |
+| D-03 | major | map | 104 Leaflet markers | `tabindex=0 role=button` with no accessible name: 104 unnamed tab stops before the form | DOM | 2ecc0b3 | part-2 (P2-C: aria-label = POI name) |
+| D-04 | major | map | list rows and chip dots | POI type is conveyed only by a 9px coloured dot (dot-to-dot contrast 1.18–1.53) | measured | 2ecc0b3 | part-2 (P2-C: type word or shape) |
+| D-05 / C-17 | major | map | Add POI | Placing a POI is click-only (`map.on('click')`, MapEditor.tsx:198); no keyboard path | code + browser | 2ecc0b3 | part-2 (P2-C: "Add at map centre" button + lat/lng edit) |
+| D-06 | major | all forms | inputs, selects, textareas | Input border vs surface is 1.46 / 2.05 (admin), 1.68 / 1.96 (login, reset): inputs are white on white with a border that fails 3:1 | measured light / dark | 2ecc0b3 | part-2 (P2-C admin forms via Admin.astro; P2-A login/reset pages) |
+| D-07 / C-13 | major | editors | toasts | Success and error toasts are the same hue with no icon or prefix; dark mode both exactly rgb(200,7,28) | measured | 2ecc0b3 | part-2 (P2-C) |
+| D-08 | minor | editors | required fields | Only native `required`; no visible marker, no `aria-required`; "(optional)" used inconsistently | DOM | 2ecc0b3 | part-2 (P2-C) |
+| D-09 | minor | editors | placeholder text | Placeholder contrast 4.01 light (posts, meetups), 3.61–3.78 dark | measured | 2ecc0b3 | part-2 (P2-C: darker placeholder token) |
+| D-10 | minor | news | tag remove button | Focus ring vs inverted pill 2.81 / 2.68 (< 3) | measured | 2ecc0b3 | part-2 (P2-C) |
+| D-11 | minor | map | marker focus ring | 2.41 in dark mode against the light basemap | measured | 2ecc0b3 | part-2 (P2-C) |
+| D-13 | minor | meetups, map | `.meetups-toast`, `.editor-toast` | Live regions are rendered conditionally, inserted already holding their text, so screen readers may not announce them; `.posts-toast` is always mounted (correct pattern) | DOM | 2ecc0b3 | part-2 (P2-C: always-mounted region) |
+| D-14 | minor | map | `.editor-item.is-active`, `.editor-star` | Selection is a class only (no aria-current); the campsite star is aria-hidden so its meaning is lost | DOM | 2ecc0b3 | part-2 (P2-C) |
+| D-15 | minor | reset page | new-password hint | `.hint` not tied by `aria-describedby` | source | 2ecc0b3 | part-2 (P2-A) |
+| D-16 / C-29 | minor | all pages at 375 | admin nav | Scrolls in a 167px box with hidden scrollbar; three tabs off-screen with no cue | measured | 2ecc0b3 | part-2 (P2-C) |
+| D-17 | polish | map at 375×812 | map pane | With a POI selected the map is 139px tall and the list 97px | measured | 2ecc0b3 | part-2 (P2-C: collapse list/form on phones) |
+| D-18 | polish | map | Add POI mode | Escape does not cancel (Cancel button does) | code | 2ecc0b3 | part-2 (P2-C) |
+| D-19 | polish | media | dialog | `aria-labelledby` is only "Attribution"; background not inert; scroll not locked | DOM | 2ecc0b3 | part-2 (P2-C) |
+| D-20 | polish | news | filter chips, preview | Chip names read "All2", "Draft0"; preview region unnamed; author headings demoted skip a level | DOM | 2ecc0b3 | part-2 (P2-C) |
+| D-21 | polish | map | disabled "Saved" | Effective 3.26 in light; exempt (disabled) but used as status | measured | 2ecc0b3 | part-2 (P2-C, with C-24) |
+| D-22 | polish | news | tag input wrapper | Focus is a 1px border change rather than the 3px ring used elsewhere | measured | 2ecc0b3 | part-2 (P2-C) |
+| D-pass | — | all admin pages | — | Verified OK: one h1 per page, no skipped levels; every control named except markers; no target below 24×24; text contrast ≥ 5.57 everywhere in both schemes; focus rings 3px solid (two exceptions above); reduced-motion rule covers admin; `min-width:0` present; no overflow at 375 except D-01; media dialog traps focus, Escape closes, focus returns; login/reset pages: noindex, labels, autocomplete, role=alert, 16px inputs; import panel has progressbar/aria-live/alert. **All 20 items closed by the 2026-09-01 audit are still closed.** | measured 2026-10-04 | 2ecc0b3 | verified OK |
