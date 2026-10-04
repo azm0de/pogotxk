@@ -30,7 +30,7 @@ updated: 2026-10-04
 | `/auth/login` | Starts Discord OAuth. Renders a config diagnostic when unconfigured |
 | `/auth/callback` | Completes it |
 | `/auth/device` | RFC 8628 approval, for a browser whose jar holds no Discord session |
-| `/auth/logout` | Ends the session. Moving from a GET link to a POST form button (admin audit, 2026-10), so a cross-site link can no longer sign someone out |
+| `/auth/logout` | Ends the session. A POST form button since the admin audit (2026-10); a plain GET still works from our own pages but a cross-site link can no longer sign someone out |
 | `/auth/error` | Human-readable failure |
 | `/admin/login` | The admin password form — username **or** recovery email, and a password. Where the `/admin` gate sends every page request it refuses. Public despite the path — see below and [[Auth and Roles#The admin password door]] |
 | `/admin/reset` | Asks for a password-reset link. Public despite the path, same as above |

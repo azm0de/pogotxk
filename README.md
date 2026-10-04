@@ -51,7 +51,7 @@ npm test             # the tsx suites — pure helpers, no runtime
 npm run test:worker  # astro build && vitest run — the Worker suite, inside workerd
 ```
 
-<!-- counts: conductor updates -->
+17 tsx suites, 802 assertions, and 37 Worker test files with 1,325 tests (measured 2026-10-04)
 Current counts: suites and assertions for `npm test`, files and tests for `npm run test:worker`
 (the exact numbers live in [`vault/Local Development.md`](<vault/Local Development.md>)).
 

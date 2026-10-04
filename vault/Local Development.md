@@ -21,8 +21,8 @@ account is needed.
 |---|---|
 | `npm run dev` | Dev server (daemonises — `npx astro dev stop` to kill) |
 | `npm run build` | Production build |
-| `npm test` | The 16 tsx suites — 638 assertions, no runtime and no network |
-| `npm run test:worker` | `astro build && vitest run` — 900 tests inside workerd |
+| `npm test` | The 17 tsx suites — 802 assertions, no runtime and no network |
+| `npm run test:worker` | `astro build && vitest run` — 1325 tests in 37 files inside workerd |
 | `npm run test:all` | Both layers, tsx first |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run db:query "SQL"` | Query local D1 |
@@ -103,7 +103,7 @@ There are two layers, and which one a new test belongs in comes down to a single
 
 `npm run test:all` runs both, tsx first, because the tsx layer is seconds and needs no build.
 
-### `npm test` — 16 suites, 638 assertions
+### `npm test` — 17 suites, 802 assertions
 
 In the order the chain runs them. The counts are what each suite prints, so a drop is visible.
 
@@ -136,12 +136,12 @@ or filled gaps left by checks that passed while the thing they were checking was
 > and that is the right place for it: it exists to check the legacy site, so needing the legacy
 > site is the point. See [[Importing Legacy Data]].
 
-### `npm run test:worker` — 25 files, 900 tests
+### `npm run test:worker` — 37 files, 1325 tests
 
 Vitest 4.1 with `@cloudflare/vitest-pool-workers`, running inside workerd.
 
 **Why this layer had to exist.** Every API route but `/api/me.json` reaches
-`import { env } from 'cloudflare:workers'` at module scope — 19 of the 22 directly, and
+`import { env } from 'cloudflare:workers'` at module scope — 22 of the 25 directly, and
 `flares/socket.ts` and `game/[feed].json.ts` through `~/do/LiveBoard` and `~/lib/scrapedduck`.
 `src/middleware.ts` does the same. A module-scope import of a runtime-only module cannot be
 evaluated by `tsx` at all, so no amount of care makes a route importable from the tsx layer —

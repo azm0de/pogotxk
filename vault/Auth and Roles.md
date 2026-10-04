@@ -673,7 +673,7 @@ Both layers, and they cover different halves of this. See [[Local Development]].
 
 `npm test` covers the decisions that are pure functions: role resolution, the bootstrap
 override, the optional member-role gate, the role hierarchy, PKCE and the `safeNext` guard —
-68 checks in `scripts/test-auth.ts` — plus the installed-app sign-in handoff in
+the checks in `scripts/test-auth.ts` — plus the installed-app sign-in handoff in
 `scripts/test-signin-surface.ts`, the device grant's bodies, response mapping, cookie
 payload and `login_required` routing split in `scripts/test-device-grant.ts`, and the password
 primitives, the lockout schedule and the reset address validator in
