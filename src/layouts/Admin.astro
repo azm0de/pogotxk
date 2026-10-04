@@ -560,6 +560,12 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
       .admin-signout {
         /* 24px standalone target (SC 2.5.8) without moving the bar's baseline. */
         display: inline-block;
+        /* A button is a flex item here (the form is display: contents) and a
+           flex item may shrink and wrap its label — measured at 25px wide and
+           two lines tall in the browser pass. The link it replaced never
+           wrapped, so neither may this. */
+        flex: none;
+        white-space: nowrap;
         padding-block: 5px;
         padding-inline: 0;
         margin-block: -5px;
