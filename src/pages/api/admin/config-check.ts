@@ -2,18 +2,24 @@
  * Reports which configuration variables the Worker can actually see.
  *
  * Deliberately returns booleans and lengths only — never values — so it is safe
- * to call against production. Guarded by IMPORT_TOKEN.
+ * to call against production. Guarded by a signed-in admin session, and by
+ * nothing else.
+ *
+ * It used to accept the import bearer token as well, which made a secret meant
+ * for one first-run job into a key for the whole configuration report, and let
+ * an ambassador past the middleware only to be asked for a token they should
+ * never hold (admin audit, 2026-10, B-09). Sign in as an admin and open:
+ *
+ *   https://.../api/admin/config-check
  *
  * Exists because "I added the secret but the feature still says it is not
  * configured" is otherwise almost impossible to diagnose from outside: a
  * trailing space or a mistyped name looks identical to a missing variable.
- *
- *   curl "https://.../api/admin/config-check" -H "Authorization: Bearer $IMPORT_TOKEN"
  */
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
-import { json, requireImportAuth } from '~/lib/admin-auth';
+import { handler, json, requireRole } from '~/lib/api';
 import { webhookUrl } from '~/lib/notify/discord';
 
 export const prerender = false;
@@ -29,7 +35,9 @@ export const prerender = false;
 const EXPECTED = [
   { name: 'DISCORD_CLIENT_ID', required: true, note: 'Discord sign-in' },
   { name: 'DISCORD_CLIENT_SECRET', required: true, note: 'Discord sign-in' },
-  { name: 'IMPORT_TOKEN', required: true, note: 'these maintenance endpoints' },
+  // Optional since a signed-in admin can run the import: the token only matters
+  // for the very first run on a fresh deployment, before anyone can sign in.
+  { name: 'IMPORT_TOKEN', required: false, note: 'first-run legacy import without a session' },
   { name: 'DISCORD_GUILD_ID', required: false, note: 'guild membership check' },
   { name: 'DISCORD_BOOTSTRAP_ADMIN_ID', required: false, note: 'first admin' },
   { name: 'DISCORD_ROLE_ADMIN', required: false, note: 'role mapping' },
@@ -39,11 +47,17 @@ const EXPECTED = [
   { name: 'VAPID_PUBLIC_KEY', required: false, note: 'web push' },
   { name: 'VAPID_PRIVATE_KEY', required: false, note: 'web push' },
   { name: 'VAPID_SUBJECT', required: false, note: 'web push' },
+  // Read by the code and missing from this list until the admin audit
+  // (2026-10, B-10) — so the diagnostic accused a working bot token of being
+  // a typo, and said nothing at all about the reset mailer.
+  { name: 'DISCORD_BOT_TOKEN', required: false, note: '"Next meetup" from Discord events' },
+  { name: 'RESEND_API_KEY', required: false, note: 'admin password-reset email' },
+  { name: 'RESEND_FROM', required: false, note: 'admin password-reset email' },
 ] as const;
 
-export async function GET(ctx: APIContext): Promise<Response> {
-  const denied = requireImportAuth(ctx, env);
-  if (denied) return denied;
+export const GET = handler(async (ctx: APIContext) => {
+  // The middleware lets ambassadors this far; the report is for admins.
+  requireRole(ctx, 'admin');
 
   const bag = env as unknown as Record<string, unknown>;
 
@@ -75,7 +89,7 @@ export async function GET(ctx: APIContext): Promise<Response> {
   const unrecognised = Object.keys(bag).filter(
     (k) =>
       typeof bag[k] === 'string' &&
-      /^(DISCORD|IMPORT|VAPID|SESSION)/i.test(k) &&
+      /^(DISCORD|IMPORT|VAPID|SESSION|RESEND)/i.test(k) &&
       !known.has(k as never),
   );
 
@@ -87,6 +101,9 @@ export async function GET(ctx: APIContext): Promise<Response> {
       DB: typeof bag.DB === 'object' && bag.DB !== null,
       MEDIA: typeof bag.MEDIA === 'object' && bag.MEDIA !== null,
       CACHE: typeof bag.CACHE === 'object' && bag.CACHE !== null,
+      // The live board's Durable Object. Without it flares still save, and
+      // clients fall back to polling — worth knowing, not worth failing over.
+      LIVE: typeof bag.LIVE === 'object' && bag.LIVE !== null,
     },
     // Presence is not the gate the webhook actually passes through. `webhookUrl`
     // also rejects any host that is not Discord's, and a rejected value behaves
@@ -105,4 +122,4 @@ export async function GET(ctx: APIContext): Promise<Response> {
       ? `Not visible to the Worker: ${missingRequired.join(', ')}. Check the name is exact (case-sensitive, no trailing space) and that it was saved under this Worker rather than a preview environment.`
       : 'All required variables are present.',
   });
-}
+});

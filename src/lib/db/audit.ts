@@ -36,27 +36,63 @@ export type AuditAction =
   | 'reset-request'
   | 'reset-complete';
 
+/**
+ * A row that does not have an id yet, named by a column that is unique on its
+ * table — the slug or R2 key of something being inserted in the same batch.
+ * Lets a create and its audit row commit together; see `auditStatement`.
+ */
+export interface AuditRowRef {
+  table: 'posts' | 'meetups' | 'pois' | 'media';
+  column: 'slug' | 'r2_key';
+  value: string;
+}
+
 export interface AuditEntry {
   actorId: number | null;
   action: AuditAction;
   entity: string;
-  entityId: string | number | null;
+  entityId: string | number | null | AuditRowRef;
   diff?: unknown;
 }
 
-export async function recordAudit(db: D1Database, entry: AuditEntry): Promise<void> {
-  await db
+function isRowRef(id: AuditEntry['entityId']): id is AuditRowRef {
+  return typeof id === 'object' && id !== null;
+}
+
+/**
+ * The audit INSERT as a prepared statement, for a route to put in the same
+ * `db.batch` as the change it describes.
+ *
+ * A batch is one transaction, so the change and its record land together or
+ * not at all. Written as two awaits, a failure between them left a change that
+ * nobody could account for, or a record of one that never happened (admin
+ * audit, 2026-10, B-15).
+ *
+ * The table and column of an `AuditRowRef` come from closed unions, never from
+ * a request, which is what makes interpolating them safe.
+ */
+export function auditStatement(db: D1Database, entry: AuditEntry): D1PreparedStatement {
+  const ref = isRowRef(entry.entityId) ? entry.entityId : null;
+  const entityId = ref
+    ? `(SELECT CAST(id AS TEXT) FROM ${ref.table} WHERE ${ref.column} = ?4)`
+    : '?4';
+
+  return db
     .prepare(
-      'INSERT INTO audit_log (actor_id, action, entity, entity_id, diff_json) VALUES (?1, ?2, ?3, ?4, ?5)',
+      `INSERT INTO audit_log (actor_id, action, entity, entity_id, diff_json)
+       VALUES (?1, ?2, ?3, ${entityId}, ?5)`,
     )
     .bind(
       entry.actorId,
       entry.action,
       entry.entity,
-      entry.entityId === null ? null : String(entry.entityId),
+      ref ? ref.value : entry.entityId === null ? null : String(entry.entityId),
       entry.diff === undefined ? null : JSON.stringify(entry.diff),
-    )
-    .run();
+    );
+}
+
+export async function recordAudit(db: D1Database, entry: AuditEntry): Promise<void> {
+  await auditStatement(db, entry).run();
 }
 
 /**

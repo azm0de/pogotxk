@@ -8,8 +8,17 @@
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
-import { ApiError, handler, intParam, json, noContent, readJson, requireRole } from '~/lib/api';
-import { diffFields, recordAudit } from '~/lib/db/audit';
+import {
+  ApiError,
+  handler,
+  intParam,
+  json,
+  noContent,
+  readJson,
+  requireRole,
+  requireRowExists,
+} from '~/lib/api';
+import { auditStatement, diffFields } from '~/lib/db/audit';
 import { uniqueSlugInTable } from '~/lib/slug';
 import { poiInput } from './index';
 
@@ -51,6 +60,12 @@ export const PATCH = handler(async (ctx: APIContext) => {
   const input = await readJson(ctx, patchInput);
   const before = await loadPoi(id);
 
+  // A stale id is the editor's 422, not a foreign-key 500 (admin audit,
+  // 2026-10, B-05). `zoneId` is not in the UPDATE below, so it is checked for
+  // the sake of an honest answer rather than for the write.
+  await requireRowExists(env.DB, 'zones', input.zoneId, 'zoneId');
+  await requireRowExists(env.DB, 'media', input.heroMediaId, 'heroMediaId');
+
   // Renaming re-slugs, but the old slug keeps working via the id — existing
   // shared links to ?poi=<old-slug> would otherwise break silently. Only
   // regenerate when the name actually changed.
@@ -77,14 +92,17 @@ export const PATCH = handler(async (ctx: APIContext) => {
     sort: input.sort ?? before.sort,
   };
 
-  await env.DB.prepare(
-    `UPDATE pois SET slug = ?2, name = ?3, type = ?4, description = ?5, lat = ?6, lng = ?7,
-                     is_campsite = ?8, is_meetup_spot = ?9, is_ex_eligible = ?10, sponsor = ?11,
-                     status = ?12, hero_media_id = ?13, sort = ?14,
-                     updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-      WHERE id = ?1`,
-  )
-    .bind(
+  const diff = diffFields(before as unknown as Record<string, unknown>, next);
+
+  // The change and its audit row commit together (admin audit, 2026-10, B-15).
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE pois SET slug = ?2, name = ?3, type = ?4, description = ?5, lat = ?6, lng = ?7,
+                       is_campsite = ?8, is_meetup_spot = ?9, is_ex_eligible = ?10, sponsor = ?11,
+                       status = ?12, hero_media_id = ?13, sort = ?14,
+                       updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ?1`,
+    ).bind(
       id,
       next.slug,
       next.name,
@@ -99,19 +117,11 @@ export const PATCH = handler(async (ctx: APIContext) => {
       next.status,
       next.hero_media_id,
       next.sort,
-    )
-    .run();
-
-  const diff = diffFields(before as unknown as Record<string, unknown>, next);
-  if (diff) {
-    await recordAudit(env.DB, {
-      actorId: user.id,
-      action: 'update',
-      entity: 'poi',
-      entityId: id,
-      diff,
-    });
-  }
+    ),
+    ...(diff
+      ? [auditStatement(env.DB, { actorId: user.id, action: 'update', entity: 'poi', entityId: id, diff })]
+      : []),
+  ]);
 
   return json({ id, slug: next.slug, changed: diff !== null });
 });
@@ -122,25 +132,25 @@ export const DELETE = handler(async (ctx: APIContext) => {
   const hard = new URL(ctx.request.url).searchParams.get('hard') === '1';
   const before = await loadPoi(id);
 
-  if (hard) {
-    // Irreversible, and it cascades to poi_media — admins only.
-    requireRole(ctx, 'admin');
-    await env.DB.prepare('DELETE FROM pois WHERE id = ?1').bind(id).run();
-  } else {
-    await env.DB.prepare(
-      "UPDATE pois SET status = 'archived', updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?1",
-    )
-      .bind(id)
-      .run();
-  }
+  const change = hard
+    ? env.DB.prepare('DELETE FROM pois WHERE id = ?1').bind(id)
+    : env.DB.prepare(
+        "UPDATE pois SET status = 'archived', updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?1",
+      ).bind(id);
 
-  await recordAudit(env.DB, {
-    actorId: user.id,
-    action: hard ? 'delete' : 'archive',
-    entity: 'poi',
-    entityId: id,
-    diff: { name: before.name, type: before.type },
-  });
+  // Irreversible, and it cascades to poi_media — admins only.
+  if (hard) requireRole(ctx, 'admin');
+
+  await env.DB.batch([
+    change,
+    auditStatement(env.DB, {
+      actorId: user.id,
+      action: hard ? 'delete' : 'archive',
+      entity: 'poi',
+      entityId: id,
+      diff: { name: before.name, type: before.type },
+    }),
+  ]);
 
   return noContent();
 });

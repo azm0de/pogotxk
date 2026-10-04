@@ -16,6 +16,7 @@
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
 import { json, requireImportAuth } from '~/lib/admin-auth';
+import { handler } from '~/lib/api';
 import { parseMarkers } from '~/lib/legacy/parse';
 import { transform } from '~/lib/legacy/transform';
 import { readImageSize } from '~/lib/image-size';
@@ -28,7 +29,9 @@ const ORIGIN = 'https://pokemontxk.com';
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 45;
 
-export async function POST(ctx: APIContext): Promise<Response> {
+// Through `handler` for the admin no-store cache policy only; the guard and the
+// error shapes stay this route's own (admin audit, 2026-10, B-20).
+export const POST = handler(async (ctx: APIContext): Promise<Response> => {
   const denied = requireImportAuth(ctx, env);
   if (denied) return denied;
 
@@ -118,4 +121,4 @@ export async function POST(ctx: APIContext): Promise<Response> {
       500,
     );
   }
-}
+});

@@ -9,13 +9,20 @@
  *   curl -X POST http://localhost:4321/api/admin/import-legacy \
  *        -H "Authorization: Bearer $IMPORT_TOKEN"
  *
- * Idempotent: refuses to run against a populated database unless `?force=1`,
- * which clears the imported tables first.
+ * Runs once. On a database that already holds POIs it answers 409 and touches
+ * nothing, and there is no override. There used to be one — `?force=1` cleared
+ * the POI, meetup, media and shape tables before re-importing, which on the
+ * live site would have wiped every edit made since launch with one request
+ * (admin audit, 2026-10, B-12). Re-seeding a database is a job for a fresh
+ * local one, not for a button on production. The parameter is now ignored.
  */
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
 import { json, requireImportAuth } from '~/lib/admin-auth';
+import { handler } from '~/lib/api';
+import { hasRole } from '~/lib/auth/types';
+import { auditStatement } from '~/lib/db/audit';
 import {
   parseCoordArray,
   parseMarkers,
@@ -47,21 +54,26 @@ async function runBatched(db: D1Database, statements: D1PreparedStatement[]): Pr
   }
 }
 
-export async function POST(ctx: APIContext): Promise<Response> {
+/*
+ * Through `handler` only for what it adds to every admin answer — the
+ * no-store cache policy. The guard and the error shapes are this route's own,
+ * because the import guard's 401 carries a bearer challenge the shared
+ * helpers do not produce.
+ */
+export const POST = handler(async (ctx: APIContext): Promise<Response> => {
   const denied = requireImportAuth(ctx, env);
   if (denied) return denied;
 
   const db = env.DB;
-  const force = new URL(ctx.request.url).searchParams.get('force') === '1';
 
   try {
     const existing = await db.prepare('SELECT COUNT(*) AS n FROM pois').first<{ n: number }>();
-    if ((existing?.n ?? 0) > 0 && !force) {
+    if ((existing?.n ?? 0) > 0) {
       return json(
         {
           error: 'Database already contains POIs.',
           pois: existing?.n,
-          hint: 'Re-run with ?force=1 to clear the imported tables and start over.',
+          hint: 'The legacy import only runs against an empty database. Edit POIs in the admin console instead.',
         },
         409,
       );
@@ -81,21 +93,6 @@ export async function POST(ctx: APIContext): Promise<Response> {
     const meetup = parseMeetup(meetupJs);
 
     if (pois.length === 0) throw new Error('Parsed zero POIs — refusing to write.');
-
-    // --- reset ------------------------------------------------------------
-    if (force) {
-      // Order matters: children before parents. poi_media, poi photos and
-      // map_shapes all cascade from pois/zones, but being explicit keeps this
-      // readable and independent of cascade config.
-      await runBatched(db, [
-        db.prepare('DELETE FROM poi_media'),
-        db.prepare('DELETE FROM map_shapes'),
-        db.prepare('DELETE FROM meetups'),
-        db.prepare('DELETE FROM pois'),
-        db.prepare("DELETE FROM media WHERE kind IN ('photo', 'community_photo')"),
-        db.prepare('DELETE FROM zones WHERE slug = ?').bind(ZONE_SLUG),
-      ]);
-    }
 
     // --- zone -------------------------------------------------------------
     // Derived from the data rather than hardcoded, so re-importing a widened
@@ -261,7 +258,7 @@ export async function POST(ctx: APIContext): Promise<Response> {
     // rather than a timestamp, so it is preserved verbatim in location_text and
     // description and left as a draft for an admin to date properly.
     const meetupPoiId = poiIdBySlug.get('campsite-genuine') ?? null;
-    await db
+    const meetupWrite = db
       .prepare(
         `INSERT INTO meetups (zone_id, slug, title, description_md, starts_at, tz, poi_id, location_text, status)
          VALUES (?1, 'imported-next-meetup', ?2, ?3, ?4, 'America/Chicago', ?5, ?6, 'draft')
@@ -279,8 +276,29 @@ export async function POST(ctx: APIContext): Promise<Response> {
         new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
         meetupPoiId,
         meetup.location,
-      )
-      .run();
+      );
+
+    // The import had no audit row at all, so the log could not say who seeded
+    // the site or when (admin audit, 2026-10, B-12). Null actor means the
+    // bearer token, not a session — which is itself worth recording.
+    await db.batch([
+      meetupWrite,
+      auditStatement(db, {
+        actorId: ctx.locals.user?.id ?? null,
+        action: 'import',
+        entity: 'legacy',
+        entityId: null,
+        diff: {
+          zone: ZONE_SLUG,
+          pois: pois.length,
+          media: media.length,
+          poiPhotos: links.length,
+          // `requireImportAuth` lets an admin session in without the token, and
+          // anyone else only with it.
+          via: hasRole(ctx.locals.user, 'admin') ? 'session' : 'token',
+        },
+      }),
+    ]);
 
     const pendingMedia = media.length;
 
@@ -313,4 +331,4 @@ export async function POST(ctx: APIContext): Promise<Response> {
       500,
     );
   }
-}
+});

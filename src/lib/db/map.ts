@@ -6,6 +6,8 @@
  * request instead of a waterfall.
  */
 
+import { httpUrlOrNull } from '~/lib/safe-url';
+
 export type PoiType = 'pokestop' | 'gym' | 'powerspot';
 
 export interface MapPhoto {
@@ -17,6 +19,11 @@ export interface MapPhoto {
   credit: string | null;
   sourceTitle: string | null;
   sourceDate: string | null;
+  /**
+   * Only ever an http(s) link — filtered here, on the way out, so a row written
+   * before the routes refused `javascript:` cannot reach the popup's href
+   * (admin audit, 2026-10, B-03).
+   */
   sourceUrl: string | null;
 }
 
@@ -166,7 +173,7 @@ export async function getMapData(db: D1Database, zoneSlug?: string): Promise<Map
             credit: row.credit,
             sourceTitle: row.source_title,
             sourceDate: row.source_date,
-            sourceUrl: row.source_url,
+            sourceUrl: httpUrlOrNull(row.source_url),
           }
         : null,
     };
@@ -213,7 +220,7 @@ export async function getMapData(db: D1Database, zoneSlug?: string): Promise<Map
       credit: row.credit,
       sourceTitle: row.source_title,
       sourceDate: row.source_date,
-      sourceUrl: row.source_url,
+      sourceUrl: httpUrlOrNull(row.source_url),
       caption: row.caption,
       lat: row.lat,
       lng: row.lng,

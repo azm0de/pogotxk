@@ -347,8 +347,12 @@ const ADMIN_COLUMNS = `p.id, p.slug, p.title, p.excerpt, p.body_md, p.status, p.
         COALESCE(u.global_name, u.username) AS author_name,
         p.created_at, p.updated_at, p.announce_requested, p.announced_at, ${TAGS_SQL}`;
 
-/** Generous for a community blog, and bounded. */
-const ADMIN_LIST_LIMIT = 200;
+/**
+ * Generous for a community blog, and bounded. Exported, and reported in the
+ * list response with the true total, because a silent cap reads as "the post I
+ * wrote last year is gone" (admin audit, 2026-10, B-20).
+ */
+export const ADMIN_POST_LIST_LIMIT = 200;
 
 function toAdmin(row: AdminRow): AdminPost {
   return {
@@ -375,19 +379,25 @@ function toAdmin(row: AdminRow): AdminPost {
 export async function listPostsForAdmin(
   db: D1Database,
   status?: string | null,
-): Promise<AdminPost[]> {
-  const rows = await db
-    .prepare(
-      `SELECT ${ADMIN_LIST_COLUMNS}
-         FROM posts p ${HERO_JOIN} ${AUTHOR_JOIN}
-        WHERE (?1 IS NULL OR p.status = ?1)
-        ORDER BY p.pinned DESC, COALESCE(p.published_at, p.updated_at) DESC, p.id DESC
-        LIMIT ${ADMIN_LIST_LIMIT}`,
-    )
-    .bind(status ?? null)
-    .all<AdminRow>();
+): Promise<{ posts: AdminPost[]; total: number; limit: number }> {
+  const [listRes, countRes] = await db.batch<never>([
+    db
+      .prepare(
+        `SELECT ${ADMIN_LIST_COLUMNS}
+           FROM posts p ${HERO_JOIN} ${AUTHOR_JOIN}
+          WHERE (?1 IS NULL OR p.status = ?1)
+          ORDER BY p.pinned DESC, COALESCE(p.published_at, p.updated_at) DESC, p.id DESC
+          LIMIT ${ADMIN_POST_LIST_LIMIT}`,
+      )
+      .bind(status ?? null),
+    db.prepare('SELECT COUNT(*) AS n FROM posts p WHERE (?1 IS NULL OR p.status = ?1)').bind(status ?? null),
+  ]);
 
-  return rows.results.map(toAdmin);
+  return {
+    posts: (listRes.results as unknown as AdminRow[]).map(toAdmin),
+    total: (countRes.results as unknown as { n: number }[])[0]?.n ?? 0,
+    limit: ADMIN_POST_LIST_LIMIT,
+  };
 }
 
 export async function getPostForAdmin(db: D1Database, id: number): Promise<AdminPost | null> {
@@ -435,25 +445,41 @@ export function normalizeTags(raw: string[]): string[] {
 }
 
 /**
- * Replace a post's tags wholesale. Delete-then-insert rather than a diff: the
- * set is tiny, and a diff would need three statements to save one.
+ * The statements that replace a post's tags wholesale, for a caller to put in
+ * its own `db.batch` beside the post write and the audit row, so the three
+ * commit together (admin audit, 2026-10, B-15). Delete-then-insert rather than
+ * a diff: the set is tiny, and a diff would need three statements to save one.
+ *
+ * `post` is the id, or — for a post being inserted in the same batch, which
+ * has no id yet — its slug, which is unique.
  */
+export function postTagStatements(
+  db: D1Database,
+  post: number | { slug: string },
+  tags: string[],
+): { statements: D1PreparedStatement[]; tags: string[] } {
+  const normalized = normalizeTags(tags);
+  const target = typeof post === 'number' ? '?1' : '(SELECT id FROM posts WHERE slug = ?1)';
+  const key = typeof post === 'number' ? post : post.slug;
+
+  const statements = [db.prepare(`DELETE FROM post_tags WHERE post_id = ${target}`).bind(key)];
+  for (const tag of normalized) {
+    statements.push(
+      db
+        .prepare(`INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (${target}, ?2)`)
+        .bind(key, tag),
+    );
+  }
+  return { statements, tags: normalized };
+}
+
+/** Replace a post's tags wholesale, on its own. */
 export async function replacePostTags(
   db: D1Database,
   postId: number,
   tags: string[],
 ): Promise<string[]> {
-  const normalized = normalizeTags(tags);
-  const statements = [db.prepare('DELETE FROM post_tags WHERE post_id = ?1').bind(postId)];
-
-  for (const tag of normalized) {
-    statements.push(
-      db
-        .prepare('INSERT OR IGNORE INTO post_tags (post_id, tag) VALUES (?1, ?2)')
-        .bind(postId, tag),
-    );
-  }
-
+  const { statements, tags: normalized } = postTagStatements(db, postId, tags);
   await db.batch(statements);
   return normalized;
 }

@@ -1,15 +1,27 @@
 /**
  * Single post: read for the editor, patch, delete.
  *
- * `post_tags` rows disappear with the post via ON DELETE CASCADE, so the
- * delete here is genuinely one statement.
+ * DELETE archives by default — the post leaves the blog but is one status
+ * change away from coming back, so a mis-click costs nothing. `?hard=1` really
+ * deletes, is reserved for admins, and mirrors the same switch on POIs (admin
+ * audit, 2026-10). `post_tags` rows disappear with the post via ON DELETE
+ * CASCADE.
  */
 
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
-import { ApiError, handler, intParam, json, noContent, readJson, requireRole } from '~/lib/api';
-import { diffFields, recordAudit } from '~/lib/db/audit';
-import { getPostForAdmin, replacePostTags } from '~/lib/db/posts';
+import {
+  ApiError,
+  handler,
+  intParam,
+  json,
+  noContent,
+  readJson,
+  requireRole,
+  requireRowExists,
+} from '~/lib/api';
+import { auditStatement, diffFields } from '~/lib/db/audit';
+import { getPostForAdmin, postTagStatements } from '~/lib/db/posts';
 import { settleAnnouncement } from '~/lib/notify/announcements';
 import { uniqueSlugInTable } from '~/lib/slug';
 import { postInput, resolvePublishedAt } from './index';
@@ -42,6 +54,8 @@ export const PATCH = handler(async (ctx: APIContext) => {
 
   const status = input.status ?? before.status;
 
+  await requireRowExists(env.DB, 'media', input.heroMediaId, 'heroMediaId');
+
   const next = {
     slug,
     title: input.title ?? before.title,
@@ -54,28 +68,8 @@ export const PATCH = handler(async (ctx: APIContext) => {
     announce_requested: (input.announce === undefined ? before.announce : input.announce) ? 1 : 0,
   };
 
-  await env.DB.prepare(
-    `UPDATE posts SET slug = ?2, title = ?3, excerpt = ?4, body_md = ?5, hero_media_id = ?6,
-                      status = ?7, pinned = ?8, published_at = ?9, announce_requested = ?10,
-                      updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-      WHERE id = ?1`,
-  )
-    .bind(
-      id,
-      next.slug,
-      next.title,
-      next.excerpt,
-      next.body_md,
-      next.hero_media_id,
-      next.status,
-      next.pinned,
-      next.published_at,
-      next.announce_requested,
-    )
-    .run();
-
-  let tags = before.tags;
-  if (input.tags) tags = await replacePostTags(env.DB, id, input.tags);
+  const tagWrites = input.tags ? postTagStatements(env.DB, id, input.tags) : null;
+  const tags = tagWrites ? tagWrites.tags : before.tags;
 
   // Compare against the same key names the UPDATE writes, so the audit reads
   // like the row rather than like the request body.
@@ -95,22 +89,47 @@ export const PATCH = handler(async (ctx: APIContext) => {
       next,
     ) ?? {};
 
-  if (input.tags && tags.join(',') !== before.tags.join(',')) {
+  if (tagWrites && tags.join(',') !== before.tags.join(',')) {
     diff.tags = { from: before.tags, to: tags };
   }
 
   const changed = Object.keys(diff).length > 0;
-  if (changed) {
-    await recordAudit(env.DB, {
-      actorId: user.id,
-      action: 'update',
-      entity: 'post',
-      entityId: id,
-      // Bodies can be tens of kilobytes; logging the fact of the edit keeps the
-      // audit table from becoming a second copy of the blog.
-      diff: { ...diff, body_md: diff.body_md ? { changed: true } : undefined },
-    });
-  }
+
+  // The row, its tags and its audit entry commit together or not at all
+  // (admin audit, 2026-10, B-15).
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE posts SET slug = ?2, title = ?3, excerpt = ?4, body_md = ?5, hero_media_id = ?6,
+                        status = ?7, pinned = ?8, published_at = ?9, announce_requested = ?10,
+                        updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ?1`,
+    ).bind(
+      id,
+      next.slug,
+      next.title,
+      next.excerpt,
+      next.body_md,
+      next.hero_media_id,
+      next.status,
+      next.pinned,
+      next.published_at,
+      next.announce_requested,
+    ),
+    ...(tagWrites ? tagWrites.statements : []),
+    ...(changed
+      ? [
+          auditStatement(env.DB, {
+            actorId: user.id,
+            action: 'update',
+            entity: 'post',
+            entityId: id,
+            // Bodies can be tens of kilobytes; logging the fact of the edit keeps
+            // the audit table from becoming a second copy of the blog.
+            diff: { ...diff, body_md: diff.body_md ? { changed: true } : undefined },
+          }),
+        ]
+      : []),
+  ]);
 
   // Runs on every save, not only when `announce` was in the body: a post
   // scheduled ahead with the box already ticked becomes announceable the moment
@@ -132,19 +151,31 @@ export const PATCH = handler(async (ctx: APIContext) => {
 export const DELETE = handler(async (ctx: APIContext) => {
   const user = requireRole(ctx, 'ambassador');
   const id = intParam(ctx, 'id');
+  const hard = new URL(ctx.request.url).searchParams.get('hard') === '1';
+  // Irreversible, and it cascades to post_tags — admins only. Checked before
+  // the lookup, so an ambassador learns nothing about which ids exist.
+  if (hard) requireRole(ctx, 'admin');
 
   const before = await getPostForAdmin(env.DB, id);
   if (!before) throw new ApiError(404, 'Post not found');
 
-  await env.DB.prepare('DELETE FROM posts WHERE id = ?1').bind(id).run();
+  const change = hard
+    ? env.DB.prepare('DELETE FROM posts WHERE id = ?1').bind(id)
+    : env.DB.prepare(
+        `UPDATE posts SET status = 'archived', updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+          WHERE id = ?1`,
+      ).bind(id);
 
-  await recordAudit(env.DB, {
-    actorId: user.id,
-    action: 'delete',
-    entity: 'post',
-    entityId: id,
-    diff: { title: before.title, slug: before.slug, status: before.status },
-  });
+  await env.DB.batch([
+    change,
+    auditStatement(env.DB, {
+      actorId: user.id,
+      action: hard ? 'delete' : 'archive',
+      entity: 'post',
+      entityId: id,
+      diff: { title: before.title, slug: before.slug, status: before.status },
+    }),
+  ]);
 
   return noContent();
 });

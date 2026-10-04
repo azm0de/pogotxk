@@ -29,6 +29,7 @@ import FeedStatus from '~/components/game/FeedStatus.astro';
 import ShinyMark from '~/components/game/ShinyMark.astro';
 import { proxiedImageUrl } from '~/lib/game-image';
 import { isoNow } from '~/lib/db/flares';
+import { httpUrlOrNull } from '~/lib/safe-url';
 import { DEFAULT_TZ, formatInZone } from '~/lib/time';
 
 export const prerender = false;
@@ -182,8 +183,11 @@ const nextUp: {
     note: nextMeetup.descriptionMd ? meetupDescriptionText(nextMeetup.descriptionMd) : null,
     // The hand-entered row keeps RSVP in its own column, so there is no
     // guessing to do here — only the Discord path has to dig it out of prose.
-    rsvpUrl: nextMeetup.campfireUrl,
-    rsvpLabel: rsvpLabel(nextMeetup.campfireUrl),
+    // Both become the button's href, so both pass the http(s) guard: a stored
+    // `javascript:` renders no button rather than a script (admin audit,
+    // 2026-10, B-02).
+    rsvpUrl: httpUrlOrNull(nextMeetup.campfireUrl),
+    rsvpLabel: rsvpLabel(httpUrlOrNull(nextMeetup.campfireUrl)),
     fromDiscord: false,
   };
   const discordBody = nextDiscord ? splitDescription(nextDiscord.descriptionMd) : null;
@@ -198,8 +202,8 @@ const nextUp: {
     // lifted the link out; meetupDescriptionText still runs so any remaining
     // emphasis or heading syntax renders as words rather than punctuation.
     note: discordBody?.text ? meetupDescriptionText(discordBody.text) : null,
-    rsvpUrl: discordBody?.url ?? null,
-    rsvpLabel: rsvpLabel(discordBody?.url ?? null),
+    rsvpUrl: httpUrlOrNull(discordBody?.url ?? null),
+    rsvpLabel: rsvpLabel(httpUrlOrNull(discordBody?.url ?? null)),
     fromDiscord: true,
   };
   if (!fromDb) return fromDiscord;

@@ -9,12 +9,12 @@
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
 import { z } from 'zod';
-import { ApiError, handler, json, readJson, requireRole } from '~/lib/api';
-import { recordAudit } from '~/lib/db/audit';
-import { listPostsForAdmin, replacePostTags } from '~/lib/db/posts';
+import { ApiError, handler, json, readJson, requireRole, requireRowExists } from '~/lib/api';
+import { auditStatement } from '~/lib/db/audit';
+import { listPostsForAdmin, postTagStatements } from '~/lib/db/posts';
 import { settleAnnouncement } from '~/lib/notify/announcements';
 import { uniqueSlugInTable } from '~/lib/slug';
-import { DEFAULT_TZ, zonedToUtc } from '~/lib/time';
+import { DEFAULT_TZ, isValidTimeZone, zonedToUtc } from '~/lib/time';
 
 export const prerender = false;
 
@@ -36,7 +36,7 @@ export const postInput = z.object({
     .regex(LOCAL_DATETIME, 'Expected YYYY-MM-DDTHH:MM')
     .nullable()
     .optional(),
-  tz: z.string().min(1).optional(),
+  tz: z.string().trim().refine(isValidTimeZone, 'Unknown time zone').optional(),
   /**
    * "Also announce to Discord."
    *
@@ -99,9 +99,12 @@ export const GET = handler(async (ctx: APIContext) => {
   requireRole(ctx, 'ambassador');
 
   const status = new URL(ctx.request.url).searchParams.get('status');
-  const posts = await listPostsForAdmin(env.DB, status);
+  const { posts, total, limit } = await listPostsForAdmin(env.DB, status);
 
-  return json({ posts, count: posts.length });
+  // The cap is stated rather than silent, so the console can say "showing 200
+  // of 240" instead of letting the oldest posts quietly vanish (admin audit,
+  // 2026-10, B-20).
+  return json({ posts, count: posts.length, total, limit, truncated: total > posts.length });
 });
 
 export const POST = handler(async (ctx: APIContext) => {
@@ -112,13 +115,19 @@ export const POST = handler(async (ctx: APIContext) => {
   const status = input.status ?? 'draft';
   const publishedAt = resolvePublishedAt({ ...input, status }, null);
 
-  const row = await env.DB.prepare(
-    `INSERT INTO posts (slug, title, excerpt, body_md, hero_media_id, status, pinned,
-                        author_id, published_at, announce_requested)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-     RETURNING id`,
-  )
-    .bind(
+  await requireRowExists(env.DB, 'media', input.heroMediaId, 'heroMediaId');
+
+  // Row, tags and audit entry in one transaction (admin audit, 2026-10, B-15).
+  // The new post has no id until the batch runs, so the tag and audit
+  // statements find it by slug, which is unique.
+  const { statements: tagWrites, tags } = postTagStatements(env.DB, { slug }, input.tags ?? []);
+  const [inserted] = await env.DB.batch<{ id: number }>([
+    env.DB.prepare(
+      `INSERT INTO posts (slug, title, excerpt, body_md, hero_media_id, status, pinned,
+                          author_id, published_at, announce_requested)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+       RETURNING id`,
+    ).bind(
       slug,
       input.title,
       input.excerpt ?? null,
@@ -129,22 +138,21 @@ export const POST = handler(async (ctx: APIContext) => {
       user.id,
       publishedAt,
       input.announce ? 1 : 0,
-    )
-    .first<{ id: number }>();
+    ),
+    ...tagWrites,
+    auditStatement(env.DB, {
+      actorId: user.id,
+      action: 'create',
+      entity: 'post',
+      entityId: { table: 'posts', column: 'slug', value: slug },
+      diff: { title: input.title, slug, status, publishedAt, tags, announce: !!input.announce },
+    }),
+  ]);
 
-  if (!row) throw new ApiError(500, 'Insert did not return an id');
+  const id = inserted?.results[0]?.id;
+  if (!id) throw new ApiError(500, 'Insert did not return an id');
 
-  const tags = await replacePostTags(env.DB, row.id, input.tags ?? []);
+  const announced = await settleAnnouncement(ctx, env, 'posts', id, !!input.announce);
 
-  await recordAudit(env.DB, {
-    actorId: user.id,
-    action: 'create',
-    entity: 'post',
-    entityId: row.id,
-    diff: { title: input.title, slug, status, publishedAt, tags, announce: !!input.announce },
-  });
-
-  const announced = await settleAnnouncement(ctx, env, 'posts', row.id, !!input.announce);
-
-  return json({ id: row.id, slug, status, publishedAt, tags, announced }, 201);
+  return json({ id, slug, status, publishedAt, tags, announced }, 201);
 });

@@ -1,14 +1,31 @@
+/**
+ * Edit and remove a single meetup.
+ *
+ * DELETE cancels by default — the meetup stays in the public feed carrying
+ * STATUS:CANCELLED, which is how a subscriber who already has it on their
+ * phone learns it is off. `?hard=1` really deletes, and is reserved for admins,
+ * exactly as on POIs (admin audit, 2026-10).
+ */
+
 import type { APIContext } from 'astro';
 import { env } from 'cloudflare:workers';
-import { ApiError, handler, intParam, json, noContent, readJson, requireRole } from '~/lib/api';
-import { diffFields, recordAudit } from '~/lib/db/audit';
+import {
+  ApiError,
+  handler,
+  intParam,
+  json,
+  noContent,
+  readJson,
+  requireRole,
+  requireRowExists,
+} from '~/lib/api';
+import { auditStatement, diffFields } from '~/lib/db/audit';
 import { settleAnnouncement } from '~/lib/notify/announcements';
-import { zonedToUtc } from '~/lib/time';
-import { meetupInput } from './index';
+import { meetupFields, toUtcOrThrow } from './index';
 
 export const prerender = false;
 
-const patchInput = meetupInput.partial();
+const patchInput = meetupFields.partial();
 
 interface MeetupRecord {
   id: number;
@@ -44,16 +61,14 @@ export const PATCH = handler(async (ctx: APIContext) => {
   let startsAt = before.starts_at;
   let endsAt = before.ends_at;
 
-  try {
-    if (input.startsAtLocal) startsAt = zonedToUtc(input.startsAtLocal, tz);
-    if (input.endsAtLocal !== undefined) {
-      endsAt = input.endsAtLocal ? zonedToUtc(input.endsAtLocal, tz) : null;
-    }
-  } catch (err) {
-    throw new ApiError(422, err instanceof Error ? err.message : 'Invalid date');
+  if (input.startsAtLocal) startsAt = toUtcOrThrow(input.startsAtLocal, tz);
+  if (input.endsAtLocal !== undefined) {
+    endsAt = input.endsAtLocal ? toUtcOrThrow(input.endsAtLocal, tz) : null;
   }
 
   if (endsAt && endsAt <= startsAt) throw new ApiError(422, 'End time must be after the start time');
+
+  await requireRowExists(env.DB, 'pois', input.poiId, 'poiId');
 
   const next = {
     title: input.title ?? before.title,
@@ -66,7 +81,7 @@ export const PATCH = handler(async (ctx: APIContext) => {
     campfire_url:
       input.campfireUrl === undefined ? before.campfire_url : input.campfireUrl || null,
     recurrence_rule:
-      input.recurrenceRule === undefined ? before.recurrence_rule : input.recurrenceRule,
+      input.recurrenceRule === undefined ? before.recurrence_rule : input.recurrenceRule || null,
     status: input.status ?? before.status,
     announce_requested: (
       input.announce === undefined ? before.announce_requested === 1 : input.announce
@@ -75,14 +90,18 @@ export const PATCH = handler(async (ctx: APIContext) => {
       : 0,
   };
 
-  await env.DB.prepare(
-    `UPDATE meetups SET title = ?2, description_md = ?3, starts_at = ?4, ends_at = ?5, tz = ?6,
-                        poi_id = ?7, location_text = ?8, campfire_url = ?9, recurrence_rule = ?10,
-                        status = ?11, announce_requested = ?12,
-                        updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-      WHERE id = ?1`,
-  )
-    .bind(
+  const diff = diffFields(before as unknown as Record<string, unknown>, next);
+
+  // The change and its audit row commit together, or neither does (admin
+  // audit, 2026-10, B-15).
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE meetups SET title = ?2, description_md = ?3, starts_at = ?4, ends_at = ?5, tz = ?6,
+                          poi_id = ?7, location_text = ?8, campfire_url = ?9, recurrence_rule = ?10,
+                          status = ?11, announce_requested = ?12,
+                          updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ?1`,
+    ).bind(
       id,
       next.title,
       next.description_md,
@@ -95,19 +114,19 @@ export const PATCH = handler(async (ctx: APIContext) => {
       next.recurrence_rule,
       next.status,
       next.announce_requested,
-    )
-    .run();
-
-  const diff = diffFields(before as unknown as Record<string, unknown>, next);
-  if (diff) {
-    await recordAudit(env.DB, {
-      actorId: user.id,
-      action: 'update',
-      entity: 'meetup',
-      entityId: id,
-      diff,
-    });
-  }
+    ),
+    ...(diff
+      ? [
+          auditStatement(env.DB, {
+            actorId: user.id,
+            action: 'update',
+            entity: 'meetup',
+            entityId: id,
+            diff,
+          }),
+        ]
+      : []),
+  ]);
 
   // Every save, not only the ones carrying `announce`: a draft that was created
   // with the box ticked becomes announceable the moment it is published here.
@@ -119,16 +138,28 @@ export const PATCH = handler(async (ctx: APIContext) => {
 export const DELETE = handler(async (ctx: APIContext) => {
   const user = requireRole(ctx, 'ambassador');
   const id = intParam(ctx, 'id');
+  const hard = new URL(ctx.request.url).searchParams.get('hard') === '1';
+  // Before the lookup, so an ambassador learns nothing about which ids exist.
+  if (hard) requireRole(ctx, 'admin');
   const before = await loadMeetup(id);
 
-  await env.DB.prepare('DELETE FROM meetups WHERE id = ?1').bind(id).run();
-  await recordAudit(env.DB, {
-    actorId: user.id,
-    action: 'delete',
-    entity: 'meetup',
-    entityId: id,
-    diff: { title: before.title, startsAt: before.starts_at },
-  });
+  const change = hard
+    ? env.DB.prepare('DELETE FROM meetups WHERE id = ?1').bind(id)
+    : env.DB.prepare(
+        `UPDATE meetups SET status = 'cancelled', updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+          WHERE id = ?1`,
+      ).bind(id);
+
+  await env.DB.batch([
+    change,
+    auditStatement(env.DB, {
+      actorId: user.id,
+      action: hard ? 'delete' : 'archive',
+      entity: 'meetup',
+      entityId: id,
+      diff: { title: before.title, startsAt: before.starts_at, status: before.status },
+    }),
+  ]);
 
   return noContent();
 });

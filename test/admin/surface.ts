@@ -28,10 +28,12 @@
  * silently changed. `Answerer` is what makes that visible.
  */
 
-import { env } from 'cloudflare:test';
+import { env, SELF } from 'cloudflare:test';
 import {
+  jsonAsToken,
   jsonAsUser,
   jsonRequest,
+  seedSession,
   seedMedia,
   seedMeetup,
   seedPoi,
@@ -43,6 +45,7 @@ import {
   type SeededMeetup,
   type SeededPoi,
   type SeededPost,
+  type SeededUser,
 } from '../helpers/factories';
 
 export const ORIGIN = 'https://pogotxk.test';
@@ -127,8 +130,9 @@ function ambassadorFloor(ok: number): Record<Caller, Outcome> {
 }
 
 /**
- * The floor, plus a second `requireRole` inside the handler. Only `?hard=1` on
- * POI delete uses this: it is irreversible and cascades to `poi_media`.
+ * The floor, plus a second `requireRole` inside the handler. Used by the three
+ * `?hard=1` deletes — POIs, posts and meetups — which are irreversible and
+ * cascade, and by `config-check`, which reports on the Worker's secrets.
  */
 function adminOnly(ok: number): Record<Caller, Outcome> {
   return {
@@ -151,20 +155,6 @@ function importGuarded(ok: number): Record<Caller, Outcome> {
     ambassador: { status: 401, by: 'import-guard' },
     admin: { status: ok, by: 'route' },
     'banned admin': { status: 401, by: 'import-guard' },
-  };
-}
-
-/**
- * Both guards stacked. `config-check` is *not* import-prefixed, so the
- * middleware's floor applies first and only then does the route ask
- * `requireImportAuth` — which is why an ambassador gets past the middleware and
- * is refused by the route, with a different status and a different body than
- * the member one step below them.
- */
-function middlewareThenImportGuard(ok: number): Record<Caller, Outcome> {
-  return {
-    ...ambassadorFloor(ok),
-    ambassador: { status: 401, by: 'import-guard' },
   };
 }
 
@@ -321,7 +311,15 @@ export const ADMIN_ROUTES: readonly AdminRoute[] = [
     file: 'meetups/[id].ts',
     method: 'DELETE',
     build: (fx) => ({ path: `/api/admin/meetups/${fx.meetup.id}`, init: del() }),
+    // The soft delete: cancels the meetup, and an ambassador may do it.
     expect: ambassadorFloor(204),
+  },
+  {
+    name: 'DELETE /api/admin/meetups/:id?hard=1',
+    file: 'meetups/[id].ts',
+    method: 'DELETE',
+    build: (fx) => ({ path: `/api/admin/meetups/${fx.meetup.id}?hard=1`, init: del() }),
+    expect: adminOnly(204),
   },
   {
     name: 'GET /api/admin/posts',
@@ -362,7 +360,15 @@ export const ADMIN_ROUTES: readonly AdminRoute[] = [
     file: 'posts/[id].ts',
     method: 'DELETE',
     build: (fx) => ({ path: `/api/admin/posts/${fx.post.id}`, init: del() }),
+    // The soft delete: archives the post, and an ambassador may do it.
     expect: ambassadorFloor(204),
+  },
+  {
+    name: 'DELETE /api/admin/posts/:id?hard=1',
+    file: 'posts/[id].ts',
+    method: 'DELETE',
+    build: (fx) => ({ path: `/api/admin/posts/${fx.post.id}?hard=1`, init: del() }),
+    expect: adminOnly(204),
   },
   {
     name: 'GET /api/admin/media',
@@ -395,11 +401,12 @@ export const ADMIN_ROUTES: readonly AdminRoute[] = [
     build: () => ({ path: '/api/admin/import-legacy', init: { method: 'POST' } }),
     /*
      * 409, not 200: the fixtures seed a POI, and the importer refuses to run
-     * against a populated database without `?force=1`. That refusal is the
-     * first thing the handler does after the guard, it needs no network, and it
-     * is therefore the cleanest available proof that an admin got through —
-     * the alternative, letting it reach `fetch`, would be a blocked outbound
-     * call and a 500 that says nothing about authorisation.
+     * against a populated database — with no override since the admin audit
+     * (2026-10, B-12). That refusal is the first thing the handler does after
+     * the guard, it needs no network, and it is therefore the cleanest
+     * available proof that an admin got through — the alternative, letting it
+     * reach `fetch`, would be a blocked outbound call and a 500 that says
+     * nothing about authorisation.
      */
     expect: importGuarded(409),
   },
@@ -422,7 +429,13 @@ export const ADMIN_ROUTES: readonly AdminRoute[] = [
     file: 'config-check.ts',
     method: 'GET',
     build: () => ({ path: '/api/admin/config-check', init: GET_INIT }),
-    expect: middlewareThenImportGuard(200),
+    /*
+     * Admin session only (admin audit, 2026-10, B-09). Not import-prefixed, so
+     * the middleware's floor applies first and an ambassador gets past it —
+     * then `requireRole(ctx, 'admin')` refuses them. The import bearer token is
+     * no longer a way in at all; `behaviour-config-check.test.ts` proves it.
+     */
+    expect: adminOnly(200),
   },
 ];
 
@@ -472,4 +485,89 @@ export async function contentSnapshot(): Promise<string> {
     parts.push(`${table}:${JSON.stringify(results)}`);
   }
   return parts.join('\n');
+}
+
+/* ------------------------------------------------------- behaviour suites */
+
+/*
+ * Shared by the `behaviour-*.test.ts` files, which test what the admin routes
+ * *do* once a caller is through — the half of the surface the matrix above
+ * deliberately says nothing about. Kept here rather than in a helpers module
+ * so the request shape (origin, cookie, `redirect: 'manual'`) is the same one
+ * the matrix sends.
+ */
+
+export interface SignedIn {
+  readonly user: SeededUser;
+  /** `path` is relative to the origin; the method defaults to GET. */
+  send(path: string, init?: JsonInit): Promise<Response>;
+}
+
+/** A user of `role` with a live session, and a way to send requests as them. */
+export async function signedIn(role: 'ambassador' | 'admin' = 'admin'): Promise<SignedIn> {
+  const user = await seedUser(env.DB, { role });
+  const token = await seedSession(env.DB, user);
+  return {
+    user,
+    send: (path, init = {}) =>
+      SELF.fetch(jsonAsToken(token, `${ORIGIN}${path}`, { method: 'GET', ...init }), {
+        redirect: 'manual',
+      }),
+  };
+}
+
+/** A JSON write, for `send(path, write('PATCH', {...}))`. */
+export function write(method: string, json: unknown): JsonInit {
+  return { method, json };
+}
+
+export interface AuditRow {
+  id: number;
+  actor_id: number | null;
+  action: string;
+  entity: string;
+  entity_id: string | null;
+  diff_json: string | null;
+}
+
+/** Every audit row, oldest first. */
+export async function auditRows(): Promise<AuditRow[]> {
+  const { results } = await env.DB.prepare(
+    'SELECT id, actor_id, action, entity, entity_id, diff_json FROM audit_log ORDER BY id',
+  ).all<AuditRow>();
+  return results;
+}
+
+/** Rows in `table`, optionally narrowed by a WHERE clause written in the test. */
+export async function rowCount(table: string, where = '1 = 1', ...binds: unknown[]): Promise<number> {
+  const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM "${table}" WHERE ${where}`)
+    .bind(...binds)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/**
+ * Runs `body` with every audit INSERT refused by the database.
+ *
+ * A trigger rather than a renamed table, so the schema the other tests see is
+ * never altered — only a trigger is added, and it is dropped in `finally`. It
+ * is the cleanest way to make the *last* statement of a route's batch fail,
+ * which is what proves the statements before it did not land on their own.
+ */
+export async function withFailingAudit<T>(body: () => Promise<T>): Promise<T> {
+  await env.DB.prepare(
+    `CREATE TRIGGER test_refuse_audit BEFORE INSERT ON audit_log
+     BEGIN SELECT RAISE(ABORT, 'audit refused by test'); END`,
+  ).run();
+  try {
+    return await body();
+  } finally {
+    await env.DB.prepare('DROP TRIGGER IF EXISTS test_refuse_audit').run();
+  }
+}
+
+/** The error body every admin route answers a refusal with. */
+export interface ErrorBody {
+  error: string;
+  detail?: { path: string; message: string }[] | unknown;
 }
