@@ -1,6 +1,6 @@
 ---
 tags: [runbook]
-updated: 2026-09-23
+updated: 2026-10-04
 ---
 
 # Local Development
@@ -65,6 +65,23 @@ the palette Apple Mail would use.
 
 That mints `admin:localadmin` — a standalone admin identity with no Discord account behind it,
 which is the same shape the two production admins have.
+
+For development and browser testing, where a password prompt is in the way, there is a
+non-interactive helper:
+
+```bash
+npm run dev:admin -- --create localadmin                       # generates a password, prints it once
+npm run dev:admin -- --create localadmin --email dev@example.com --password "<16+ characters>"
+```
+
+It writes the same two rows `set:password --create` does (a `users` row `admin:<name>` with
+`role_locked = 1`, and the `admin_credentials` row), using the app's own `hashPassword`. It is
+**local only**: `--local` is hard-coded, and any argument containing "remote" stops it. Running
+it again for the same name replaces the password, clears a lockout and signs that user's old
+sessions out. A generated password is a local development credential; don't reuse it.
+It takes `--password` on the command line, which `set:password` refuses to do, so it must never
+be pointed at a real database. The conductor of the 2026-10 audit will add an npm script for
+it (`dev:admin`); until that lands, use the `npx tsx` form above.
 
 > [!danger] `set:password` refuses to run outside a real console, and that is the point
 > Under Git Bash / mintty, `node` gets a pipe rather than a console: `stdin.isTTY` is
@@ -147,6 +164,14 @@ Each test instead starts from tables emptied in one batch, so a straggling `wait
 lands on an empty table and says nothing.
 
 ## Gotchas
+
+> [!danger] `scripts/send-real-discord-embed.mjs` posts a REAL embed
+> Despite the name, it is not a test. It sends one real message to whatever
+> `DISCORD_WEBHOOK_URL` is set to in your environment, which is the community's live Discord if
+> `.dev.vars` has the production value. It is excluded from every chain (`npm test`,
+> `test:worker`, CI) and must stay that way; only run it by hand, deliberately, with a webhook
+> you own. The audit asked for it to be renamed so that its name says what it does (the
+> conductor does this; the file was outside the docs agent's remit).
 
 > [!danger] The Vitest layer is sandboxed. `wrangler dev` is not.
 > `.dev.vars` holds a live `DISCORD_WEBHOOK_URL` for the community's real Discord, and wrangler

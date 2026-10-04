@@ -113,3 +113,64 @@ somebody will hit), **minor** (wrong but survivable), **polish**. Status: `open`
 | C-28 | polish | news | first load | On first load the island fetched `/api/admin/posts` twice, the first answering 401 and the second 200 (React StrictMode double-mount in dev, or the request fires before cookies attach). Harmless in production but worth a look if a "Forbidden" flashes | network log | a6854ce | part-2 (P2-C: check; likely dev-only) |
 | C-29 | minor | layout | `Admin.astro:423-434` | At 375px only Dashboard, Map and Meetups fit in the admin nav; News and Media are off-screen in a row that scrolls with a hidden scrollbar and no visual cue | nav `scrollWidth 389 vs clientWidth 121`; visible items: Dashboard, Map, Meetups | a6854ce | part-2 (P2-C: fade edge or wrap) |
 | C-30 | — | layout | all admin pages | No horizontal overflow at 375px on dashboard, map, news, meetups or media; map keeps ~365px of height on an 812px phone with nothing selected (the "~140px" hypothesis was too pessimistic; untested with the form open); dark mode renders correctly | `scrollWidth === clientWidth` on every page | a6854ce | verified OK |
+
+## Decisions
+
+Taken by Justin, 2026-10-04, while Part 2 was being planned. The docs and the code were changed
+to match these.
+
+- **`GET /api/admin/config-check` takes an admin session only.** The old claim "or
+  `IMPORT_TOKEN`" never worked (A-04) and will not be made true: it would mean widening the
+  gate's exemption for one more path. An ambassador now gets 403 "Requires admin". The
+  `import-legacy` and `import-media` endpoints keep "admin session or token". Justin, 2026-10-04.
+- **The import curl needs an `Origin` header** (or a JSON content type), or Astro's CSRF check
+  answers 403 before the route runs (A-05). Documented in [[Importing Legacy Data]]. Justin,
+  2026-10-04.
+- **`import-legacy?force=1` and the "Clear and re-import" button are removed** (B-12). The
+  importer refuses a populated database with 409; a re-import from scratch is a developer task,
+  done by deleting rows in SQL first. Justin, 2026-10-04.
+- **Posts and meetups archive by default**, as POIs already did: the row is kept, with status
+  `archived` / `cancelled`. Permanent delete stays admin-only, like POI `?hard=1`. This also
+  resolves C-23. Justin, 2026-10-04.
+- **The dashboard hides "Open reports" and "Awaiting review"** until those screens exist
+  (C-12). Justin, 2026-10-04.
+- **The session cookie renews on use**, a rolling 14 days (A-01). Justin, 2026-10-04.
+- **Sign-out becomes a POST form button** (A-09); **the lockout message says how long remains**
+  (A-07); **anonymous API calls under `/api/admin` answer "Unauthorized"** (B-18). Justin,
+  2026-10-04.
+- **`DISCORD_BOOTSTRAP_ADMIN_ID` stays unset and is not recommended anywhere.** An admin is made
+  with `npm run set:password -- --create <name>`. Justin, 2026-10-04.
+- **Deferred, recorded in [[Backlog]]:** B-14 (no `AUTOINCREMENT`, ids are reused; needs a
+  table-rebuild migration), B-22 (no media DELETE route), the Settings page (still undecided),
+  per-page OG images (untouched), E-25 (the timing guards stay weak unless someone tightens
+  them), and type-checking `.astro` files in CI (`@astrojs/check`).
+- **Wontfix by design:** A-08 (the lock reveals an account exists; the lock is the control),
+  B-19 (any ambassador can edit anything; the intended boundary).
+
+## Pre-go-live checklist for Justin
+
+None of this is done by the audit. Merging the pull request is the release, so work through it
+before the merge, and the last two items after.
+
+- [ ] **Resend open and click tracking confirmed OFF** for the sending domain (`gnomelabz.com`).
+      Click tracking would route the reset link, a live credential, through a third party.
+      See [[Configuration#Turning on the admin password reset]].
+- [ ] **Nick's recovery email confirmed set.** Justin says it is. Confirm by trying "Lost the
+      password?" with Nick sitting next to you.
+- [ ] **Discord webhook repointed to the public channel**, after every test flare is closed
+      (a webhook cannot edit messages sent through the channel it used to point at). See
+      [[Notifications]].
+- [ ] **Webhook avatar set**, so announcements do not post with the default grey blob.
+- [ ] **Discord client secret rotated.** It passed through a transcript once. Set the new one at
+      wrangler's prompt, never as a piped value.
+- [ ] **Custom domain decision** (`pokemontxk.com`): not live yet. Decide before the announcement
+      whether the site stays on the `workers.dev` address for now.
+- [ ] **Take a D1 export before merging.** The command is
+      `wrangler d1 export pogotxk-db --remote --output <file>`. **Justin runs this, not the
+      audit.** Keep the file outside the repository.
+- [ ] **Run `npm run db:migrate:remote` only if Part 2 added a migration.** It did not, unless the
+      conductor's notes say otherwise. The newest file is `0005_admin_password_reset.sql`.
+- [ ] **Merge the pull request.** That is the deploy.
+- [ ] **Run the health sweep** in [[Deploying#Health sweep]] against the live address, and sign in
+      once as an admin to check the dashboard.
+- [ ] Give Nick [[Handover for Nick]].

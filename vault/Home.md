@@ -30,7 +30,7 @@ Replaces the hand-maintained static site at [pokemontxk.com](https://pokemontxk.
 | Structure | [[Architecture Overview]] · [[Data Model]] · [[Routes]] |
 | Look | [[Design System]] |
 | Behaviour | [[Auth and Roles]] · [[Flares and Realtime]] · [[Notifications]] |
-| Operating it | [[Local Development]] · [[Deploying]] · [[Configuration]] · [[Importing Legacy Data]] |
+| Operating it | [[Local Development]] · [[Deploying]] · [[Configuration]] · [[Importing Legacy Data]] · [[Handover for Nick]] |
 | Android | [[Android App]] |
 | Obligations | [[Attribution Obligations]] · [[Never Touch the Game]] |
 | History | [[Migration from the Old Site]] · [[Bugs Worth Remembering]] |

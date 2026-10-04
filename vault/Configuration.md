@@ -1,6 +1,6 @@
 ---
 tags: [runbook, security]
-updated: 2026-09-23
+updated: 2026-10-04
 ---
 
 # Configuration
@@ -24,12 +24,13 @@ updated: 2026-09-23
 |---|---|---|---|
 | `DISCORD_CLIENT_ID` | var | `wrangler.jsonc` | Public — appears in the OAuth URL |
 | `DISCORD_CLIENT_SECRET` | Secret | dashboard | |
-| `IMPORT_TOKEN` | Secret | dashboard | Only needed before anyone can sign in |
+| `IMPORT_TOKEN` | Secret | dashboard | Lets a script call the two import endpoints (`import-legacy`, `import-media`) without a session. Those two only: nothing else accepts it, `config-check` included |
 | `VAPID_PUBLIC_KEY` | var | `wrangler.jsonc` | Public — handed to every browser as `applicationServerKey` |
 | `VAPID_PRIVATE_KEY` | Secret | `wrangler secret` | Set 2026-08-06 |
 | `VAPID_SUBJECT` | Secret | `wrangler secret` | `mailto:jeportillo1@gmail.com` |
 | `DISCORD_GUILD_ID` | var | `wrangler.jsonc` | Public — membership check is ON; outsiders are guests |
 | `RESEND_API_KEY` | Secret | `wrangler secret` | Admin password reset by email — see [[#Turning on the admin password reset]] |
+| `DISCORD_WEBHOOK_URL` | Secret | `wrangler secret` | Flares and announcements into Discord — [[Notifications]]. Set and confirmed 2026-09-05; still to be repointed to the public channel |
 | `RESEND_FROM` | Secret | `wrangler secret` | A **bare** address on the verified sending domain, `gnomelabz.com`. Inboxes show "PoGo TXK": the name is added in code |
 
 > [!danger] Set the bootstrap admin BEFORE the guild id, never after
@@ -104,7 +105,6 @@ listed below as unset on purpose, not as something missing.
 
 | Name | Type | Enables |
 |---|---|---|
-| `DISCORD_WEBHOOK_URL` | Secret | Flares into Discord — [[Notifications]] |
 | `DISCORD_BOOTSTRAP_ADMIN_ID` | Secret | One Discord account that always resolves to `admin`. **Unset on purpose**: the code still honours it, so setting it brings that short-circuit back. See the note under [[#Currently set]] |
 | `DISCORD_ROLE_ADMIN` / `_AMBASSADOR` | var | Automatic role mapping |
 | `DISCORD_ROLE_MEMBER` | var | A role-gated membership check. **Usually leave unset** — see [[Backlog]] |
@@ -201,9 +201,18 @@ Two ways, no terminal needed for the first:
 
 1. Visit `/auth/login` — when unconfigured it renders a page naming which specific variable is
    missing, plus the likely causes.
-2. `GET /api/admin/config-check` (admin session or `IMPORT_TOKEN`) returns booleans, lengths and
-   whitespace/quote warnings — **never values** — and flags near-miss names like
-   `DISCORD_CLIENTID`.
+2. `GET /api/admin/config-check` returns booleans, lengths and whitespace/quote warnings —
+   **never values** — and flags near-miss names like `DISCORD_CLIENTID`. It needs an **admin
+   session**, so sign in at `/admin/login` first. It does **not** accept `IMPORT_TOKEN`
+   (an earlier version of this note said it did; it never worked, because the path is not
+   one of the import paths the gate lets a token through for, and it will not be made to).
+   An ambassador gets 403 "Requires admin"; a signed-out caller gets 401.
+
+> [!note] Calling the import endpoints with the token
+> `import-legacy` and `import-media` do accept `Authorization: Bearer $IMPORT_TOKEN`. A
+> non-browser `POST` must also send `-H "Origin: https://<the site>"` (or a JSON
+> content type), or Astro's origin check answers a plain-text 403 before the route runs.
+> See [[Importing Legacy Data]].
 
 > [!tip] For the webhook, ask for `webhook.accepted`, not `webhook.present`
 > `webhookUrl()` rejects any host that is not Discord's, and a rejected value behaves

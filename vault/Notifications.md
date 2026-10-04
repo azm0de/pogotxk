@@ -1,14 +1,17 @@
 ---
 tags: [architecture, feature]
-updated: 2026-09-08
-status: needs-secrets
+updated: 2026-10-04
+status: live
 ---
 
 # Notifications
 
-> [!note] Not switched on yet
-> The code is deployed and tested, but both channels need secrets that have not been set.
-> See [[Configuration]]. Until then flares reach the live board but notify nobody.
+> [!note] Both channels are switched on; one step is still open
+> Web push is live: the VAPID pair was set on 2026-08-06 and `/api/push/subscribe` reports
+> `enabled: true`. The Discord webhook is set too, and was confirmed on 2026-09-05. What is
+> **still open** is repointing the webhook to the public channel, which must wait until every
+> test flare is closed. See [[Backlog]] and [[Configuration]]. Until the repoint, flares reach
+> only the test channel.
 
 Without this, a flare only exists if someone happens to have the page open. This is the other
 half.
@@ -99,6 +102,8 @@ blip means they never hear about a raid again.
 half of the keypair has to be committed and rotating them needs no rebuild.
 
 ## Turning it on
+
+Done in production; kept for a fresh deployment.
 
 ```bash
 npm run gen:vapid

@@ -1,4 +1,7 @@
 /**
+ * DANGER: this posts a REAL embed into whatever channel DISCORD_WEBHOOK_URL points at.
+ * It is deliberately NOT named test-* and is in no test chain; run it by hand only.
+ *
  * Fires one test embed at DISCORD_WEBHOOK_URL to prove the webhook works,
  * WITHOUT ever printing the URL.
  *
@@ -6,8 +9,8 @@
  * regardless of who can read it. So this script reads it from `.dev.vars`
  * (gitignored) and never echoes it — not to stdout, not into an error message.
  *
- *   node scripts/test-discord-webhook.mjs
- *   node scripts/test-discord-webhook.mjs --close   # also test the edit path
+ *   node scripts/send-real-discord-embed.mjs
+ *   node scripts/send-real-discord-embed.mjs --close   # also test the edit path
  *
  * It reuses the SAME host validation as src/lib/notify/discord.ts. That matters:
  * a URL the app would reject behaves *identically* to one that is missing —
@@ -78,7 +81,7 @@ console.log('  Posting a test embed…');
 const embed = {
   title: '🔥 Raid starting',
   color: 0xe2703a,
-  description: 'Test flare from `scripts/test-discord-webhook.mjs` — safe to ignore.',
+  description: 'Test flare from `scripts/send-real-discord-embed.mjs` — safe to ignore.',
   fields: [
     { name: 'Boss', value: 'Test Boss', inline: true },
     { name: 'Needs', value: '2 more', inline: true },

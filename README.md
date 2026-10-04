@@ -47,14 +47,36 @@ npm run build && npm run preview
 Two layers, and `npm run test:all` runs both.
 
 ```bash
-npm test             # 15 tsx suites, 559 assertions — pure helpers, no runtime
-npm run test:worker  # astro build && vitest run — 858 tests inside workerd
+npm test             # the tsx suites — pure helpers, no runtime
+npm run test:worker  # astro build && vitest run — the Worker suite, inside workerd
 ```
 
-The Vitest layer exists because 21 of the 22 API routes, and the middleware, reach
-`cloudflare:workers` at module scope — which plain `tsx` cannot import at all. It is therefore
-the only layer that can touch a route, a binding or the authorisation gate. Which layer a new
-test belongs in is in [`vault/Local Development.md`](<vault/Local Development.md>).
+<!-- counts: conductor updates -->
+Current counts: suites and assertions for `npm test`, files and tests for `npm run test:worker`
+(the exact numbers live in [`vault/Local Development.md`](<vault/Local Development.md>)).
+
+The Vitest layer exists because most of the API route files (22 of the 25 import
+`cloudflare:workers` directly), and the middleware, reach it at module scope — which plain `tsx`
+cannot import at all. It is therefore the only layer that can touch a route, a binding or the
+authorisation gate. Which layer a new test belongs in is in
+[`vault/Local Development.md`](<vault/Local Development.md>).
+
+## Admin access
+
+The site has two standalone admin accounts. They are not Discord accounts: each signs in with a
+username (or the recovery email on file) and a password at `/admin/login`, and each can reset a
+forgotten password by email at `/admin/reset`. Discord sign-in never produces an admin.
+
+An admin is made from a real console (PowerShell or Windows Terminal, not Git Bash) with:
+
+```bash
+npm run set:password -- --create <name> --email you@example.com
+```
+
+The password is prompted for, never typed on the command line. For a local development admin
+with no prompt, see `scripts/dev-admin.ts` in
+[`vault/Local Development.md`](<vault/Local Development.md>). For the person who will co-run the
+site, the plain-English guide is [`vault/Handover for Nick.md`](<vault/Handover for Nick.md>).
 
 ## Deploying
 
