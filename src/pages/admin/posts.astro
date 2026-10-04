@@ -1,10 +1,15 @@
 ---
 import PostEditor from '~/components/admin/PostEditor';
 import Admin from '~/layouts/Admin.astro';
+import { hasRole } from '~/lib/auth/types';
 
 export const prerender = false;
+
+// "Delete permanently" is admin-only; the API refuses `?hard=1` to anyone
+// else, and this keeps the button from being offered to them at all.
+const isAdmin = hasRole(Astro.locals.user, 'admin');
 ---
 
 <Admin title="News">
-  <PostEditor client:load />
+  <PostEditor client:load isAdmin={isAdmin} />
 </Admin>

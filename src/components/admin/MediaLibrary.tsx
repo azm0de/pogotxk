@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, SignedOutError } from '~/lib/client-api';
+import { LoadNotice, Toast, useBeforeUnload, useToast, type LoadState } from './admin-ui';
 import './MediaLibrary.css';
 
 /**
@@ -97,18 +99,20 @@ function CloseIcon() {
   );
 }
 
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    // Astro rejects cross-site POSTs without a JSON content-type.
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `Request failed (${res.status})`);
-  }
-  return (await res.json()) as T;
-}
+/**
+ * Every `media.kind` the API accepts, in plain words. The sheet offered only
+ * the first two, so opening a `doc` or `import` row showed the wrong kind and
+ * saving it silently reclassified the file (admin audit, 2026-10, B-04).
+ */
+const KINDS: { id: string; label: string }[] = [
+  { id: 'photo', label: 'POI photo' },
+  { id: 'community_photo', label: 'Community photo (shows in the gallery)' },
+  { id: 'doc', label: 'Document' },
+  { id: 'import', label: 'Imported (unclassified)' },
+];
+
+/** The file's own name, which is what a person recognises it by. */
+const fileName = (item: MediaItem) => item.r2_key.split('/').pop() ?? item.r2_key;
 
 function toDraft(item: MediaItem): Draft {
   return {
@@ -131,30 +135,41 @@ function formatBytes(n: number | null): string {
 
 export default function MediaLibrary() {
   const [items, setItems] = useState<MediaItem[] | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
+  /** The list API may cap how many rows it returns; say so when it did. */
+  const [total, setTotal] = useState<number | null>(null);
   const [filter, setFilter] = useState<FilterId>('all');
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState('');
+  const { message, notify, fail, clear } = useToast();
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLUListElement>(null);
   /** The tile the sheet was opened from, so focus can go back to it. */
   const openerRef = useRef<HTMLButtonElement | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<MediaItem[]> => {
     try {
-      const data = await api<{ media: MediaItem[] }>('/api/admin/media?limit=500');
+      const data = await api<{ media: MediaItem[]; total?: number }>('/api/admin/media?limit=500');
       setItems(data.media);
+      setTotal(typeof data.total === 'number' ? data.total : null);
+      setLoadState('ready');
+      setError(null);
+      return data.media;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      // A failed reload behind an open sheet keeps the grid it already has.
+      setLoadState((s) => (s === 'ready' ? s : err instanceof SignedOutError ? 'signedout' : 'failed'));
+      throw err;
     }
   }, []);
 
   useEffect(() => {
-    void load();
+    // The failure is already in state for <LoadNotice>; nothing else to do.
+    load().catch(() => undefined);
   }, [load]);
 
   const visible = useMemo(() => {
@@ -182,12 +197,28 @@ export default function MediaLibrary() {
     };
   }, [items]);
 
-  const open = useCallback((item: MediaItem, trigger: HTMLButtonElement) => {
-    openerRef.current = trigger;
-    setOpenId(item.id);
-    setDraft(toDraft(item));
-    setStatus('');
-  }, []);
+  const open = useCallback(
+    (item: MediaItem, trigger: HTMLButtonElement) => {
+      openerRef.current = trigger;
+      setOpenId(item.id);
+      setDraft(toDraft(item));
+      clear();
+    },
+    [clear],
+  );
+
+  const openItem = items?.find((i) => i.id === openId) ?? null;
+  const dirty =
+    openItem !== null && draft !== null && JSON.stringify(toDraft(openItem)) !== JSON.stringify(draft);
+  useBeforeUnload(dirty);
+
+  /** Read by the document-level key handler, which is bound once per open. */
+  const dirtyRef = useRef(false);
+  const openNameRef = useRef('');
+  useEffect(() => {
+    dirtyRef.current = dirty;
+    openNameRef.current = openItem ? fileName(openItem) : '';
+  });
 
   const close = useCallback(() => {
     setOpenId(null);
@@ -203,6 +234,30 @@ export default function MediaLibrary() {
       else gridRef.current?.querySelector<HTMLButtonElement>('.media-tile')?.focus();
     });
   }, []);
+
+  /**
+   * Every way out of the sheet — Escape, the backdrop, the close button — asks
+   * first if there are edits. Escape and a stray backdrop click used to throw
+   * typed attribution away without a word (admin audit, 2026-10, C-22).
+   */
+  const requestClose = useCallback(() => {
+    if (
+      dirtyRef.current &&
+      !window.confirm(`Discard unsaved changes to "${openNameRef.current || 'this file'}"?`)
+    )
+      return;
+    close();
+  }, [close]);
+
+  // The page behind a modal sheet must not scroll under it (C-22 / D-19).
+  useEffect(() => {
+    if (openId === null) return;
+    const before = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = before;
+    };
+  }, [openId]);
 
   /**
    * Dialog focus management.
@@ -221,7 +276,7 @@ export default function MediaLibrary() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        close();
+        requestClose();
         return;
       }
       if (e.key !== 'Tab' || !sheet) return;
@@ -245,46 +300,56 @@ export default function MediaLibrary() {
 
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [openId, close]);
+  }, [openId, requestClose]);
 
   const save = useCallback(async () => {
-    if (openId === null || !draft) return;
+    if (openId === null || !draft || !openItem) return;
+    // Only the fields that changed. The API validates what it is sent, so an
+    // untouched legacy value (an old source URL, say) can no longer block a
+    // fix to the alt text beside it.
+    const before = toDraft(openItem);
+    const changed = Object.fromEntries(
+      (Object.keys(draft) as (keyof Draft)[])
+        .filter((k) => draft[k] !== before[k])
+        .map((k) => [k, draft[k]]),
+    );
+    if (Object.keys(changed).length === 0) return;
     setSaving(true);
-    setStatus('');
+    clear();
     try {
       await api(`/api/admin/media/${openId}`, {
         method: 'PATCH',
-        body: JSON.stringify(draft),
+        body: JSON.stringify(changed),
       });
       // Reload rather than patching local state: the server decides what an
       // empty string became, and guessing here is how the two drift apart.
-      await load();
-      setStatus('Saved.');
+      const fresh = await load();
+      const saved = fresh.find((i) => i.id === openId);
+      if (saved) setDraft(toDraft(saved));
+      notify('ok', 'Saved');
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : String(err));
+      fail(err, 'Could not save');
     } finally {
       setSaving(false);
     }
-  }, [openId, draft, load]);
+  }, [openId, draft, openItem, load, notify, fail, clear]);
 
-  if (error) {
+  if (!items) {
     return (
       <div className="media admin-page admin-page--wide">
-        <p className="media-error" role="alert">
-          {error}
-        </p>
+        <h1 className="sr-only">Media</h1>
+        <LoadNotice
+          state={loadState}
+          what="the media library"
+          error={error}
+          onRetry={() => {
+            setLoadState('loading');
+            load().catch(() => undefined);
+          }}
+        />
       </div>
     );
   }
-
-  if (!items)
-    return (
-      <div className="media admin-page admin-page--wide">
-        <p className="media-loading">Loading media…</p>
-      </div>
-    );
-
-  const openItem = items.find((i) => i.id === openId) ?? null;
 
   return (
     <div className="media admin-page admin-page--wide">
@@ -303,6 +368,13 @@ export default function MediaLibrary() {
               type="button"
               className="chip"
               aria-pressed={filter === f.id}
+              aria-label={
+                f.id === 'needs-credit' && gaps.credit > 0
+                  ? `${f.label}, ${gaps.credit}`
+                  : f.id === 'needs-alt' && gaps.alt > 0
+                    ? `${f.label}, ${gaps.alt}`
+                    : undefined
+              }
               onClick={() => setFilter(f.id)}
             >
               {f.label}
@@ -331,6 +403,7 @@ export default function MediaLibrary() {
         {visible.length} of {items.length} items
         {gaps.credit > 0 && ` · ${gaps.credit} with no credit`}
         {gaps.alt > 0 && ` · ${gaps.alt} with no alt text`}
+        {total !== null && total > items.length && ` · showing the newest ${items.length} of ${total}`}
       </p>
 
       <ul className="media-grid" ref={gridRef}>
@@ -372,22 +445,29 @@ export default function MediaLibrary() {
       {visible.length === 0 && <p className="empty-state">Nothing matches that filter.</p>}
 
       {openItem && draft && (
-        <div className="media-sheet-backdrop" onClick={close} role="presentation">
+        <div className="media-sheet-backdrop" onClick={requestClose} role="presentation">
           <div
             className="media-sheet admin-form"
             ref={sheetRef}
             tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="media-sheet-title"
+            // "Attribution, <file>": the heading alone named every sheet the
+            // same, so a screen reader could not tell which photo was open (D-19).
+            aria-labelledby="media-sheet-title media-sheet-file"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="media-sheet-head">
-              <h2 id="media-sheet-title">Attribution</h2>
+              <div className="media-sheet-titles">
+                <h2 id="media-sheet-title">Attribution</h2>
+                <p id="media-sheet-file" className="media-sheet-file">
+                  {fileName(openItem)}
+                </p>
+              </div>
               <button
                 type="button"
                 className="media-close"
-                onClick={close}
+                onClick={requestClose}
                 aria-label="Close, without saving"
               >
                 <CloseIcon />
@@ -472,8 +552,16 @@ export default function MediaLibrary() {
                 value={draft.kind}
                 onChange={(e) => setDraft({ ...draft, kind: e.target.value })}
               >
-                <option value="photo">POI photo</option>
-                <option value="community_photo">Community photo (shows in the gallery)</option>
+                {KINDS.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.label}
+                  </option>
+                ))}
+                {/* A kind the API knows and this list does not: show it
+                    rather than let the select silently pick the first option. */}
+                {!KINDS.some((k) => k.id === draft.kind) && (
+                  <option value={draft.kind}>{draft.kind}</option>
+                )}
               </select>
             </label>
 
@@ -482,7 +570,7 @@ export default function MediaLibrary() {
                 type="button"
                 className="btn btn--primary btn--sm"
                 onClick={save}
-                disabled={saving}
+                disabled={saving || !dirty}
               >
                 {saving ? 'Saving…' : 'Save'}
               </button>
@@ -494,10 +582,11 @@ export default function MediaLibrary() {
               >
                 Open the file
               </a>
-              <span className="media-status" role="status" aria-live="polite">
-                {status}
+              <span className="admin-save-state" aria-live="polite">
+                {dirty ? 'Unsaved changes' : 'No unsaved changes'}
               </span>
             </div>
+            <Toast message={message} onDismiss={clear} />
           </div>
         </div>
       )}

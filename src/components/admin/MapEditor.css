@@ -61,6 +61,18 @@
   gap: var(--space-2);
   flex: none;
 }
+.editor-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+/* Phones only: see the 680px block at the end. */
+.editor-back {
+  display: none;
+}
+
 /* The page's only h1. The editor is full-bleed, so it lives at the top of the
    list column rather than in a page header that does not exist here. */
 .editor-title {
@@ -75,12 +87,18 @@
   min-width: 0;
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-strong);
+  /* --text-muted, not --border-strong: a field's edge has to clear 3:1 against
+     the panel (D-06); --border-strong measured 1.46. */
+  border: 1px solid var(--text-muted);
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
   color: var(--text);
   font-family: var(--font-read);
   font-size: var(--text-base);
+}
+.editor-list-head input[type='search']::placeholder {
+  color: var(--text-muted); /* 5.50:1 on sunken light, 7.04:1 dark (D-09) */
+  opacity: 1;
 }
 
 .editor-filters {
@@ -94,6 +112,11 @@
   min-height: 32px;
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
+}
+/* The type is spelled out beside its dot now (D-02 / D-04): the dots sit
+   1.18–1.53:1 apart, so the hue alone never told the types apart. */
+.chip-count {
+  font-variant-numeric: tabular-nums;
 }
 /* A tally, not a warning colour. It used to be `--poi-gym` at 11px: 3.18:1. */
 .editor-drafts {
@@ -187,7 +210,13 @@
   transform: translateX(-50%);
   z-index: 600; /* Leaflet's marker pane: with the pins, under the popups */
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-2);
+  /* Three buttons in add mode: wrap rather than run under the zoom control
+     on a phone-width map. */
+  width: max-content;
+  max-width: calc(100% - 7rem);
 }
 /* The primitive button, shaped for a floating map control. */
 .editor-toolbar .btn {
@@ -199,27 +228,19 @@
   box-shadow: var(--shadow-md);
 }
 
-.editor-toast {
-  position: absolute;
-  left: 50%;
-  bottom: var(--space-5);
-  transform: translateX(-50%);
-  z-index: 700; /* Leaflet's popup pane: a result has to clear an open popup */
-  margin: 0;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-md);
-  font-weight: 700;
-  box-shadow: var(--shadow-lg);
-  max-width: min(90%, 520px);
-}
-.editor-toast--ok {
-  background: var(--accent-solid);
-  color: #fff; /* white on --accent-solid: 5.99:1, both themes */
-}
-.editor-toast--err {
-  background: var(--live);
-  color: #fff; /* white on --live: 5.00:1 light, 5.99:1 dark */
+/* The result toast is the shared `.admin-toast` (admin-ui.css), floated over
+   the map by `.admin-toast--float`. Its own red-for-success copy lived here
+   until the admin audit (2026-10, C-13). */
+
+/*
+ * The marker focus ring. The global ring is `--accent`, which in dark mode is
+ * the light red #ff5c6e — and the basemap under the pins stays light in both
+ * themes, so that ring measured 2.41:1 against the tiles (D-11). `--accent-solid`
+ * is the deep red in both themes: 4.81:1 on the pale map ground (#e9e6e0).
+ */
+.editor-map .leaflet-marker-icon:focus-visible {
+  outline: 3px solid var(--accent-solid);
+  outline-offset: 2px;
 }
 
 /* Selected pin — a ring rather than a colour change, so the type hue stays
@@ -264,6 +285,11 @@
 }
 .form-head code {
   font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.form-head-note {
+  margin: 0;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
@@ -335,6 +361,7 @@
 /* A file input's own button cannot be styled, so the label is the control and
    the input is hidden inside it. */
 .upload-btn {
+  position: relative; /* contains the 1px input below */
   display: flex !important;
   align-items: center;
   justify-content: center;
@@ -354,19 +381,46 @@
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-.upload-btn input {
+/* `.admin-form` in the selector on purpose: the shared `.admin-form input`
+   rule (Admin.astro) sets `width: 100%; min-height: 44px` at the same
+   specificity as a bare `.upload-btn input`, and won — so the "hidden" input
+   was a full-width box. The news editor's copy of this pushed the page 256px
+   sideways (admin audit, 2026-10, D-01). */
+.admin-form .upload-btn input {
   /* Not `display: none`: a hidden-but-focusable input is what gives the label
      its focus ring through `:focus-within`. */
   position: absolute;
   width: 1px;
+  min-width: 0;
   height: 1px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
   opacity: 0;
   pointer-events: none;
 }
 
+.form-actions {
+  align-items: center;
+}
 /* Archive is destructive and sits away from Save and Revert. */
 .form-actions .btn--danger {
   margin-left: auto;
+}
+/*
+ * Save with nothing to save. The primitive's disabled state is 60% opacity,
+ * which on the red fill left white text at ~3:1 — and it used to be the only
+ * place the state was written ("Saved"). The state now has its own words in
+ * `.admin-save-state`; the button just reads plainly as not available.
+ */
+.form-actions .btn--primary:disabled {
+  opacity: 1;
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-muted); /* 6.32:1 light, 6.71:1 dark on the panel */
+}
+.form-actions .admin-save-state {
+  flex-basis: 100%;
 }
 
 @media (max-width: 1080px) {
@@ -392,5 +446,29 @@
   .editor-list {
     border-right: 0;
     border-bottom: 1px solid var(--border);
+  }
+
+  /*
+   * A location is open: the list folds to one row — the heading and "Back to
+   * list" — so the map is not squeezed between the list and the form. With
+   * both open the map measured 139px on a 375×812 phone (D-17); folded, it
+   * keeps over 300px.
+   */
+  .editor.has-selection {
+    grid-template-rows: auto minmax(300px, 1fr) auto;
+  }
+  .editor.has-selection .editor-list-head {
+    border-bottom: 0;
+  }
+  .editor.has-selection .editor-list-head > :not(.editor-title-row),
+  .editor.has-selection .editor-items,
+  .editor.has-selection .admin-load {
+    display: none;
+  }
+  .editor.has-selection .editor-back {
+    display: inline-flex;
+  }
+  .editor.has-selection .editor-form {
+    max-height: 40dvh;
   }
 }

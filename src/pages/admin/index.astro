@@ -12,16 +12,15 @@ const db = env.DB;
 const [counts, nextMeetup, recent] = await Promise.all([
   db
     .prepare(
+      // Only what a card shows. "Awaiting review", "Open reports" and a user
+      // count used to be queried too; the first two are hidden until their
+      // screens exist (admin audit, 2026-10, C-12) and the third was never shown.
       `SELECT
          (SELECT COUNT(*) FROM pois WHERE status = 'published')  AS pois_live,
-         (SELECT COUNT(*) FROM pois WHERE status = 'pending')    AS pois_pending,
-         (SELECT COUNT(*) FROM pois WHERE status = 'archived')   AS pois_archived,
          (SELECT COUNT(*) FROM media)                            AS media,
          (SELECT COUNT(*) FROM posts WHERE status = 'published') AS posts,
          (SELECT COUNT(*) FROM meetups WHERE status = 'published'
-            AND starts_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now')) AS meetups_upcoming,
-         (SELECT COUNT(*) FROM poi_reports WHERE status = 'open') AS reports_open,
-         (SELECT COUNT(*) FROM users)                            AS users`,
+            AND starts_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now')) AS meetups_upcoming`,
     )
     .first<Record<string, number>>(),
 
@@ -40,19 +39,70 @@ const [counts, nextMeetup, recent] = await Promise.all([
          FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
         ORDER BY a.id DESC LIMIT 8`,
     )
-    .all<{ action: string; entity: string; entity_id: string; created_at: string; username: string | null }>(),
+    .all<{ action: string; entity: string; entity_id: string | null; created_at: string; username: string | null }>(),
 ]);
 
 const c = counts ?? {};
 
-const cards = [
+/*
+ * "Awaiting review" and "Open reports" both linked to /admin/map, which has
+ * no status filter and no reports screen — a count with nowhere to act on it.
+ * Hidden until those screens exist (Justin's decision, admin audit 2026-10,
+ * C-12); add them back in the same change as the screen.
+ */
+interface Card {
+  label: string;
+  value: number;
+  href?: string;
+  warn?: boolean;
+}
+const cards: Card[] = [
   { label: 'Live locations', value: c.pois_live ?? 0, href: '/admin/map' },
-  { label: 'Awaiting review', value: c.pois_pending ?? 0, href: '/admin/map', warn: (c.pois_pending ?? 0) > 0 },
   { label: 'Upcoming meetups', value: c.meetups_upcoming ?? 0, href: '/admin/meetups' },
   { label: 'Published posts', value: c.posts ?? 0, href: '/admin/posts' },
   { label: 'Media items', value: c.media ?? 0, href: '/admin/media' },
-  { label: 'Open reports', value: c.reports_open ?? 0, href: '/admin/map', warn: (c.reports_open ?? 0) > 0 },
 ];
+
+/*
+ * Recent activity in words. It printed the raw audit codes ("update",
+ * "poi #105") and a bare UTC timestamp with no zone (C-21). The verbs mirror
+ * `AuditAction` in src/lib/db/audit.ts; anything new falls back to its code.
+ */
+const VERB: Record<string, string> = {
+  create: 'Created',
+  update: 'Edited',
+  delete: 'Deleted',
+  archive: 'Archived',
+  restore: 'Restored',
+  import: 'Imported',
+};
+/** Events about a person rather than a thing: no "#id" after them. */
+const SELF_EVENT: Record<string, string> = {
+  login: 'Signed in',
+  lockout: 'Locked out after failed sign-ins',
+  'reset-request': 'Asked for a password reset',
+  'reset-complete': 'Reset a password',
+};
+const NOUN: Record<string, string> = {
+  poi: 'location',
+  post: 'post',
+  meetup: 'meetup',
+  media: 'media item',
+  flare: 'flare',
+};
+
+function describe(r: { action: string; entity: string; entity_id: string | null }): string {
+  const self = SELF_EVENT[r.action];
+  if (self) return self;
+  const verb = VERB[r.action] ?? r.action;
+  const noun = NOUN[r.entity] ?? r.entity.replace(/_/g, ' ');
+  return r.entity_id ? `${verb} ${noun} #${r.entity_id}` : `${verb} ${noun}`;
+}
+
+/** "Sat, Oct 4, 3:12 PM CT" — the zone named, as everywhere else in admin. */
+function when(iso: string): string {
+  return formatInZone(iso).replace(/\s(CDT|CST)$/, ' CT');
+}
 ---
 
 <Admin title="Dashboard">
@@ -127,12 +177,9 @@ const cards = [
           <ul class="activity">
             {recent.results.map((r) => (
               <li>
-                <code class="admin-code">{r.action}</code>
-                <span>
-                  {r.entity} #{r.entity_id}
-                </span>
+                <span>{describe(r)}</span>
                 <span class="muted">by {r.username ?? 'system'}</span>
-                <time datetime={r.created_at}>{r.created_at.replace('T', ' ').replace('Z', '')}</time>
+                <time datetime={r.created_at}>{when(r.created_at)}</time>
               </li>
             ))}
           </ul>
@@ -143,8 +190,9 @@ const cards = [
     </section>
 
     {
-      /* Once the map has data, the importer stops being the headline action —
-         but it still needs to be reachable to re-sync from the old site. */
+      /* Once the map has data, the importer stops being the headline action.
+         It will not re-import over a populated site (it answers 409); what it
+         still offers here is the resumable photo copy. */
       hasRole(Astro.locals.user, 'admin') && (c.pois_live ?? 0) > 0 && (
         <ImportPanel client:load poiCount={c.pois_live ?? 0} mediaCount={c.media ?? 0} />
       )

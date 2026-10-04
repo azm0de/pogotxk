@@ -14,16 +14,6 @@
   font-family: var(--font-read);
 }
 
-.media-loading,
-.media-error {
-  margin: var(--space-6) 0;
-  color: var(--text-muted);
-}
-.media-error {
-  color: var(--live-text);
-  font-weight: 700;
-}
-
 .media-head {
   margin-bottom: var(--space-4);
 }
@@ -73,12 +63,19 @@
   min-width: 0;
   min-height: 40px;
   padding: var(--space-2) var(--space-4);
-  border: 1.5px solid var(--border-strong);
+  /* A field edge that clears 3:1 against the page: 6.32 light, 6.71 dark.
+     --border-strong measured 1.46 (admin audit, 2026-10, D-06). */
+  border: 1.5px solid var(--text-muted);
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text);
   font-family: var(--font-read);
-  font-size: var(--text-md);
+  /* 16px: iOS zooms the page into anything smaller on focus (C-16). */
+  font-size: var(--text-base);
+}
+.media-search input::placeholder {
+  color: var(--text-muted); /* 6.32:1 light, 6.71:1 dark (D-09) */
+  opacity: 1;
 }
 
 .media-summary {
@@ -217,9 +214,21 @@
   padding-bottom: var(--space-2);
   border-bottom: 2px solid var(--text);
 }
+.media-sheet-titles {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
 .media-sheet-head h2 {
   margin: 0;
   font-size: var(--display-sm);
+}
+/* The file name, which joins the heading in the dialog's accessible name. */
+.media-sheet-file {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 .media-close {
   display: grid;
@@ -289,7 +298,5 @@
   gap: var(--space-3);
   margin-top: var(--space-1);
 }
-.media-status {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
+/* Results arrive in the shared `.admin-toast` under this row (admin-ui.css);
+   the row itself carries "Unsaved changes" / "No unsaved changes". */

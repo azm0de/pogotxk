@@ -35,20 +35,19 @@
   font-size: var(--text-xl);
 }
 
-.meetups-toast {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  font-weight: 700;
-  font-size: var(--text-md);
+/* The result toast is the shared `.admin-toast` (admin-ui.css). This file's
+   red-on-success copy was retired by the admin audit (2026-10, C-13). */
+
+/* Status filters, the same chips the news list has, so cancelled meetups can
+   be found once Cancel stopped deleting them. */
+.meetups-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
-.meetups-toast--ok {
-  background: var(--accent-solid);
-  color: #fff; /* white on --accent-solid: 5.99:1, both themes */
-}
-.meetups-toast--err {
-  background: var(--live);
-  color: #fff; /* white on --live: 5.00:1 light, 5.99:1 dark */
+.meetups-filters .filter-count {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
 }
 
 /* ------------------------------------------------------------------ form -- */

@@ -1,10 +1,15 @@
 ---
 import Admin from '~/layouts/Admin.astro';
 import MeetupEditor from '~/components/admin/MeetupEditor';
+import { hasRole } from '~/lib/auth/types';
 
 export const prerender = false;
+
+// "Delete permanently" is admin-only; the API refuses `?hard=1` to anyone
+// else, and this keeps the button from being offered to them at all.
+const isAdmin = hasRole(Astro.locals.user, 'admin');
 ---
 
 <Admin title="Meetups">
-  <MeetupEditor client:load />
+  <MeetupEditor client:load isAdmin={isAdmin} />
 </Admin>

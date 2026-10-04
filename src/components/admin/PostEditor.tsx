@@ -1,9 +1,59 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminPost, PostStatus } from '~/lib/db/posts';
+import { api, SignedOutError } from '~/lib/client-api';
 import { renderMarkdown } from '~/lib/markdown';
 import { slugify } from '~/lib/slug';
 import { DEFAULT_TZ, formatInZone, utcToZoned } from '~/lib/time';
+import {
+  LoadNotice,
+  scrollBehavior,
+  Toast,
+  useBeforeUnload,
+  useToast,
+  type LoadState,
+} from './admin-ui';
 import './PostEditor.css';
+
+interface Props {
+  /** Admins also get "Delete permanently"; everyone else archives. */
+  isAdmin?: boolean;
+}
+
+/** Plain names for `media.kind`, to tell apart two images with the same alt. */
+const KIND_LABEL: Record<string, string> = {
+  photo: 'POI photo',
+  community_photo: 'Community photo',
+  doc: 'Document',
+  import: 'Imported',
+};
+
+/** ATX heading, as `src/lib/markdown.ts` reads one. */
+const HEADING_RE = /^ {0,3}(#{1,6})\s+/;
+const FENCE_RE = /^ {0,3}(```|~~~)/;
+
+/**
+ * The heading offset that lands the body's shallowest heading on <h3>.
+ *
+ * The published page puts the body under the post's <h1>, so the renderer
+ * starts it at <h2>. In the editor the preview sits under the form's own <h2>
+ * ("Edit post"), so starting at <h2> there made the author's headings siblings
+ * of the form heading, and a `#`/`###` body skipped a level (D-20). One level
+ * deeper, consistently, keeps the page's outline h1 > h2 > h3.
+ */
+function previewHeadingOffset(source: string): number {
+  let shallowest = 7;
+  let inFence = false;
+  for (const line of source.split('\n')) {
+    if (FENCE_RE.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const m = HEADING_RE.exec(line);
+    if (m) shallowest = Math.min(shallowest, (m[1] ?? '#').length);
+  }
+  return shallowest === 7 ? 2 : 3 - shallowest;
+}
 
 interface MediaOption {
   id: number;
@@ -135,24 +185,6 @@ function announceSuffix(status: AnnounceStatus): string {
   return '';
 }
 
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    // Astro rejects cross-site POSTs without a JSON content-type.
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; detail?: unknown };
-    const detail = Array.isArray(body.detail)
-      ? ` — ${(body.detail as { path: string; message: string }[])
-          .map((d) => `${d.path}: ${d.message}`)
-          .join(', ')}`
-      : '';
-    throw new Error(`${body.error ?? res.statusText}${detail}`);
-  }
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
-}
-
 function nowIso(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
@@ -178,12 +210,20 @@ function defaultScheduleTime(): string {
   ).padStart(2, '0')}T18:00`;
 }
 
-export default function PostEditor() {
+export default function PostEditor({ isAdmin = false }: Props) {
   const [posts, setPosts] = useState<AdminPost[]>([]);
+  const [load, setLoad] = useState<LoadState>('loading');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  /** The list API may cap how many posts it returns; say so when it did. */
+  const [truncated, setTruncated] = useState(false);
   const [media, setMedia] = useState<MediaOption[]>([]);
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>('all');
   const [editingId, setEditingId] = useState<number | 'new' | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
+  /** The form as it was opened (or last saved), to tell whether it is dirty. */
+  const [baseline, setBaseline] = useState<Form | null>(null);
+  /** Bumped to move focus into the form once it has rendered (C-15). */
+  const [openTick, setOpenTick] = useState(0);
   const [slugTouched, setSlugTouched] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
   const [pane, setPane] = useState<PaneMode>('split');
@@ -194,41 +234,90 @@ export default function PostEditor() {
   const [uploadingHero, setUploadingHero] = useState(false);
   /** Alt text queued for the *next* hero upload. An existing image's alt is edited in Media. */
   const [heroAlt, setHeroAlt] = useState('');
-  const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const { message, notify, fail, clear } = useToast();
 
-  const notify = useCallback((kind: 'ok' | 'err', text: string) => {
-    setMessage({ kind, text });
-    window.setTimeout(() => setMessage(null), kind === 'ok' ? 2600 : 7000);
-  }, []);
+  const dirty =
+    editingId !== null && baseline !== null && JSON.stringify(form) !== JSON.stringify(baseline);
+  useBeforeUnload(dirty);
 
+  /** Asks before unsaved work is thrown away. `true` means go ahead. */
+  const confirmDiscard = () =>
+    !dirty ||
+    window.confirm(`Discard unsaved changes to "${form.title.trim() || 'this post'}"?`);
+
+  const loadedRef = useRef(false);
   const reload = useCallback(async () => {
+    // The list is what the page is for; the media options only feed the hero
+    // picker. Loaded separately so a media hiccup cannot blank the list.
     try {
-      const [p, m] = await Promise.all([
-        api<{ posts: AdminPost[] }>('/api/admin/posts'),
-        api<{ media: MediaOption[] }>('/api/admin/media?limit=200'),
-      ]);
+      const p = await api<{ posts: AdminPost[]; truncated?: boolean; total?: number }>(
+        '/api/admin/posts',
+      );
       setPosts(p.posts);
+      setTruncated(
+        Boolean(p.truncated) || (typeof p.total === 'number' && p.total > p.posts.length),
+      );
+      loadedRef.current = true;
+      setLoad('ready');
+      setLoadError(null);
+    } catch (err) {
+      if (loadedRef.current) fail(err, 'Could not reload the posts');
+      else {
+        setLoad(err instanceof SignedOutError ? 'signedout' : 'failed');
+        setLoadError(err instanceof Error ? err.message : null);
+      }
+      return;
+    }
+    try {
+      const m = await api<{ media: MediaOption[] }>('/api/admin/media?limit=200');
       setMedia(m.media);
     } catch (err) {
-      notify('err', err instanceof Error ? err.message : 'Could not load posts');
+      fail(err, 'Could not load the image list');
     }
-  }, [notify]);
+  }, [fail]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
+  /*
+   * Focus and scroll after the form has rendered. `scrollIntoView` used to be
+   * called in the click handler, before the form existed on a first open, so
+   * it did nothing — and focus stayed on the button, often far below the form
+   * (admin audit, 2026-10, C-15).
+   */
+  useEffect(() => {
+    if (openTick === 0) return;
+    formRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+    titleRef.current?.focus({ preventScroll: true });
+  }, [openTick]);
+
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const startNew = () => {
+    if (editingId === 'new' && !dirty) {
+      setOpenTick((n) => n + 1);
+      return;
+    }
+    if (!confirmDiscard()) return;
     setForm(EMPTY);
+    setBaseline(EMPTY);
     setSlugTouched(false);
     setTagDraft('');
     setHeroAlt('');
     setEditingId('new');
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    clear();
+    setOpenTick((n) => n + 1);
+  };
+
+  const close = () => {
+    if (!confirmDiscard()) return;
+    setEditingId(null);
+    setBaseline(null);
   };
 
   /**
@@ -241,13 +330,18 @@ export default function PostEditor() {
    * the textarea and destroy the post on save.
    */
   const startEdit = async (post: AdminPost) => {
+    if (editingId === post.id) {
+      setOpenTick((n) => n + 1);
+      return;
+    }
+    if (!confirmDiscard()) return;
     setEditingId(post.id);
     setSlugTouched(true); // An existing post has a URL; never rewrite it from the title.
     setTagDraft('');
     setHeroAlt('');
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    clear();
 
-    setForm({
+    const opened: Form = {
       title: post.title,
       slug: post.slug,
       excerpt: post.excerpt ?? '',
@@ -259,7 +353,10 @@ export default function PostEditor() {
       publishedAtLocal: post.publishedAt ? utcToZoned(post.publishedAt) : '',
       announce: post.announce,
       announcedAt: post.announcedAt,
-    });
+    };
+    setForm(opened);
+    setBaseline(opened);
+    setOpenTick((n) => n + 1);
 
     setBodyLoading(true);
     try {
@@ -267,13 +364,22 @@ export default function PostEditor() {
       // Guard against a slow response landing after the user opened another
       // post — otherwise this would drop one post's body into another's form.
       setEditingId((current) => {
-        if (current === post.id) setForm((f) => ({ ...f, bodyMd: full.bodyMd }));
+        if (current === post.id) {
+          setForm((f) => ({ ...f, bodyMd: full.bodyMd }));
+          // The body arriving is not an edit.
+          setBaseline((b) => (b ? { ...b, bodyMd: full.bodyMd } : b));
+        }
         return current;
       });
     } catch (err) {
-      notify('err', err instanceof Error ? err.message : 'Could not load the post body');
-      // Leave edit mode rather than offer an empty textarea that would wipe it.
-      setEditingId(null);
+      fail(err, 'Could not load the post body');
+      // Leave edit mode rather than offer an empty textarea that would wipe it
+      // — but only if this is still the post on screen.
+      setEditingId((current) => {
+        if (current !== post.id) return current;
+        setBaseline(null);
+        return null;
+      });
     } finally {
       setBodyLoading(false);
     }
@@ -313,6 +419,8 @@ export default function PostEditor() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
+    clear();
+    const sent = form;
     try {
       const payload = {
         title: form.title,
@@ -345,24 +453,66 @@ export default function PostEditor() {
         announced = saved.announced;
         notify('ok', `Post saved${announceSuffix(announced)}`);
       }
+      // What was sent is now what is stored; anything typed during the
+      // request still counts as unsaved.
+      setBaseline(sent);
       await reload();
+      // Submit disabled the button mid-request, which drops focus to <body>.
+      // Put it on the form's heading so the next Tab starts in the form.
+      headingRef.current?.focus();
     } catch (err) {
-      notify('err', err instanceof Error ? err.message : 'Could not save');
+      fail(err, 'Could not save');
     } finally {
       setBusy(false);
     }
   };
 
-  const remove = async (post: AdminPost) => {
-    if (!window.confirm(`Delete “${post.title}”? This cannot be undone.`)) return;
+  /**
+   * Archive is the default (admin audit, 2026-10 — Justin's decision): the
+   * row is kept with status `archived`, off the site, and can be brought back
+   * by setting its status again. Permanent delete is a separate, admin-only
+   * button.
+   */
+  const archive = async (post: AdminPost) => {
+    const editingThis = editingId === post.id;
+    if (
+      !window.confirm(
+        `Archive "${post.title}"? It comes off the site but is kept; set its status again to bring it back.` +
+          (editingThis && dirty ? ' Your unsaved changes to it will be lost.' : ''),
+      )
+    )
+      return;
     setBusy(true);
+    clear();
     try {
       await api(`/api/admin/posts/${post.id}`, { method: 'DELETE' });
-      if (editingId === post.id) setEditingId(null);
+      if (editingThis) {
+        setEditingId(null);
+        setBaseline(null);
+      }
       await reload();
-      notify('ok', 'Deleted');
+      notify('ok', `Archived "${post.title}"`);
     } catch (err) {
-      notify('err', err instanceof Error ? err.message : 'Could not delete');
+      fail(err, 'Could not archive');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const destroy = async (post: AdminPost) => {
+    if (!window.confirm(`Delete "${post.title}" permanently? This cannot be undone.`)) return;
+    setBusy(true);
+    clear();
+    try {
+      await api(`/api/admin/posts/${post.id}?hard=1`, { method: 'DELETE' });
+      if (editingId === post.id) {
+        setEditingId(null);
+        setBaseline(null);
+      }
+      await reload();
+      notify('ok', `Deleted "${post.title}" permanently`);
+    } catch (err) {
+      fail(err, 'Could not delete');
     } finally {
       setBusy(false);
     }
@@ -371,8 +521,8 @@ export default function PostEditor() {
   /**
    * Uploads a new hero image and attaches it to the post being edited.
    *
-   * Raw `fetch` with `FormData`, not the `api()` helper above — this is a
-   * multipart body, not JSON. Mirrors `MapEditor.tsx`'s `uploadPhoto`, minus
+   * A `FormData` body through the shared `api()`, which leaves the content
+   * type for the browser to write. Mirrors `MapEditor.tsx`'s `uploadPhoto`, minus
    * `poiId`: the server already treats that as optional (`media.ts`), so a
    * standalone upload with no POI is a supported call.
    *
@@ -402,12 +552,11 @@ export default function PostEditor() {
         body.set('name', form.title);
         if (alt) body.set('alt', alt);
 
-        const res = await fetch('/api/admin/media', { method: 'POST', body });
-        if (!res.ok) {
-          const e = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(e.error ?? res.statusText);
-        }
-        const created = (await res.json()) as { id: number; key: string };
+        clear();
+        const created = await api<{ id: number; key: string }>('/api/admin/media', {
+          method: 'POST',
+          body,
+        });
 
         setMedia((prev) => [
           { id: created.id, r2_key: created.key, alt: alt || null, kind: 'photo' },
@@ -417,19 +566,41 @@ export default function PostEditor() {
         setHeroAlt('');
         notify('ok', alt ? 'Hero image uploaded' : 'Hero image uploaded — no alt text set');
       } catch (err) {
-        notify('err', err instanceof Error ? err.message : 'Upload failed');
+        fail(err, 'Upload failed');
       } finally {
         setUploadingHero(false);
       }
     },
-    [heroAlt, form.title, notify],
+    [heroAlt, form.title, notify, fail, clear],
   );
 
   // Rendering 20 KB of Markdown on every keystroke would make typing stutter;
   // `useDeferredValue` lets React keep the textarea responsive and catch the
   // preview up when it has a moment.
   const deferredBody = useDeferredValue(form.bodyMd);
-  const previewHtml = useMemo(() => renderMarkdown(deferredBody), [deferredBody]);
+  const previewHtml = useMemo(
+    () => renderMarkdown(deferredBody, { headingOffset: previewHeadingOffset(deferredBody) }),
+    [deferredBody],
+  );
+
+  /**
+   * Hero picker labels. Keyed by alt text, two photos described the same way
+   * were indistinguishable (C-20); a collision gets the kind and the id.
+   */
+  const mediaLabels = useMemo(() => {
+    const base = (m: MediaOption) => m.alt || m.r2_key.split('/').pop() || m.r2_key;
+    const seen = new Map<string, number>();
+    for (const m of media) seen.set(base(m), (seen.get(base(m)) ?? 0) + 1);
+    return new Map(
+      media.map((m) => {
+        const label = base(m);
+        return [
+          m.id,
+          (seen.get(label) ?? 0) > 1 ? `${label} — ${KIND_LABEL[m.kind] ?? m.kind} #${m.id}` : label,
+        ];
+      }),
+    );
+  }, [media]);
   const previewStale = deferredBody !== form.bodyMd;
 
   const visible = useMemo(
@@ -458,14 +629,19 @@ export default function PostEditor() {
         </button>
       </header>
 
-      <p className={`posts-toast${message ? ` posts-toast--${message.kind}` : ''}`} role="status" aria-live="polite">
-        {message?.text ?? ''}
-      </p>
+      <Toast message={message} onDismiss={clear} />
 
       {editingId !== null && (
-        <form className="post-form panel admin-form" onSubmit={submit} ref={formRef}>
+        <form
+          className="post-form panel admin-form"
+          onSubmit={submit}
+          ref={formRef}
+          aria-labelledby="post-form-heading"
+        >
           <div className="post-form-head">
-            <h2>{editingId === 'new' ? 'New post' : 'Edit post'}</h2>
+            <h2 id="post-form-heading" ref={headingRef} tabIndex={-1}>
+              {editingId === 'new' ? 'New post' : 'Edit post'}
+            </h2>
             {editingId !== 'new' && form.slug && (
               <a
                 className="btn btn--outline btn--sm btn--arrow"
@@ -479,19 +655,25 @@ export default function PostEditor() {
           </div>
 
           <label>
-            <span>Title</span>
+            <span>
+              Title <em>(required)</em>
+            </span>
             <input
+              ref={titleRef}
               value={form.title}
               onChange={(e) => onTitle(e.target.value)}
               placeholder="e.g. August Community Day recap"
               required
+              aria-required="true"
               maxLength={200}
             />
           </label>
 
           <div className="form-grid">
             <label>
-              <span>Slug (the URL)</span>
+              <span>
+                Slug, the URL <em>(optional — made from the title)</em>
+              </span>
               <input
                 value={form.slug}
                 onChange={(e) => {
@@ -504,7 +686,9 @@ export default function PostEditor() {
             </label>
             <div className="hero-field">
               <label>
-                <span>Hero image</span>
+                <span>
+                  Hero image <em>(optional)</em>
+                </span>
                 <select
                   value={form.heroMediaId ?? ''}
                   onChange={(e) =>
@@ -514,7 +698,7 @@ export default function PostEditor() {
                   <option value="">— none —</option>
                   {media.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.alt || m.r2_key}
+                      {mediaLabels.get(m.id)}
                     </option>
                   ))}
                 </select>
@@ -568,7 +752,9 @@ export default function PostEditor() {
           </div>
 
           <label>
-            <span>Excerpt — the card blurb and meta description (optional)</span>
+            <span>
+              Excerpt <em>(optional) — the card blurb and meta description</em>
+            </span>
             <textarea
               rows={2}
               value={form.excerpt}
@@ -622,7 +808,9 @@ export default function PostEditor() {
           <div className="form-grid">
             <div className="tag-field">
               <label htmlFor="post-tag-input">
-                <span>Tags</span>
+                <span>
+                  Tags <em>(optional)</em>
+                </span>
               </label>
               <div className="tag-input">
                 {form.tags.map((tag) => (
@@ -741,6 +929,10 @@ export default function PostEditor() {
             {pane !== 'write' && (
               <div
                 className={`body-preview prose${previewStale ? ' is-stale' : ''}`}
+                // Named, so the author's headings inside it are heard as the
+                // preview's and not as the page's own sections (D-20).
+                role="region"
+                aria-label="Preview"
                 aria-live="off"
                 // Safe by construction: renderMarkdown escapes the source before
                 // it emits a single tag, so nothing an author types can become
@@ -764,11 +956,14 @@ export default function PostEditor() {
             <button
               type="button"
               className="btn btn--outline"
-              onClick={() => setEditingId(null)}
+              onClick={close}
               disabled={busy}
             >
               Close
             </button>
+            <span className="admin-save-state" aria-live="polite">
+              {dirty ? 'Unsaved changes' : editingId === 'new' ? 'Not saved yet' : 'No unsaved changes'}
+            </span>
           </div>
         </form>
       )}
@@ -789,22 +984,45 @@ export default function PostEditor() {
       <h2 id="posts-list-heading" className="posts-list-heading">Posts</h2>
 
       <div className="posts-filters" role="group" aria-label="Filter by status">
-        {STATUS_FILTERS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            className="chip"
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-          >
-            {value === 'all' ? 'All' : value[0]?.toUpperCase() + value.slice(1)}
-            <span className="filter-count">{counts[value] ?? 0}</span>
-          </button>
-        ))}
+        {STATUS_FILTERS.map((value) => {
+          const label = value === 'all' ? 'All' : value[0]?.toUpperCase() + value.slice(1);
+          return (
+            <button
+              key={value}
+              type="button"
+              className="chip"
+              aria-pressed={filter === value}
+              // Read as "Draft, 2", not "Draft2" (D-20).
+              aria-label={`${label}, ${counts[value] ?? 0}`}
+              onClick={() => setFilter(value)}
+            >
+              {label}
+              <span className="filter-count">{counts[value] ?? 0}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {visible.length === 0 ? (
-        <p className="empty-state">Nothing here yet. Create a post above.</p>
+      {truncated && load === 'ready' && (
+        <p className="form-note">
+          Showing the newest {posts.length} posts. Older ones are not listed here.
+        </p>
+      )}
+
+      {load !== 'ready' ? (
+        <LoadNotice
+          state={load}
+          what="the posts"
+          error={loadError}
+          onRetry={() => {
+            setLoad('loading');
+            void reload();
+          }}
+        />
+      ) : visible.length === 0 ? (
+        <p className="empty-state">
+          {filter === 'all' ? 'Nothing here yet. Create a post above.' : `No ${filter} posts.`}
+        </p>
       ) : (
         <ul className="admin-rows">
           {visible.map((post) => {
@@ -845,14 +1063,26 @@ export default function PostEditor() {
                   >
                     Edit
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn--danger btn--sm"
-                    onClick={() => void remove(post)}
-                    disabled={busy}
-                  >
-                    Delete
-                  </button>
+                  {post.status !== 'archived' && (
+                    <button
+                      type="button"
+                      className="btn btn--outline btn--sm"
+                      onClick={() => void archive(post)}
+                      disabled={busy}
+                    >
+                      Archive
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className="btn btn--danger btn--sm"
+                      onClick={() => void destroy(post)}
+                      disabled={busy}
+                    >
+                      Delete permanently
+                    </button>
+                  )}
                 </div>
               </li>
             );

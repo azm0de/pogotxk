@@ -102,9 +102,22 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
           class:list={['badge', 'admin-role', user.role === 'admin' ? 'admin-role--admin' : 'badge--outline']}
           >{user.role}</span
         >
-        <a class="admin-signout" href="/auth/logout">Sign out</a>
+        {/* A POST, not a link (admin audit, 2026-10, A-09): a GET that ends a
+            session can be fired by any page that embeds the URL. A plain form,
+            so it still works with scripts off. */}
+        <form class="admin-signout-form" method="post" action="/auth/logout">
+          <button class="admin-signout" type="submit">Sign out</button>
+        </form>
       </div>
     </header>
+
+    <script>
+      // On a phone the current tab can start scrolled out of the nav (Media is
+      // the last of five); bring it into view so You Are Here is visible.
+      document
+        .querySelector('.admin-header nav [aria-current="page"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    </script>
 
     <main id="admin-main">
       <slot />
@@ -119,28 +132,13 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
       for order.
     -->
     <style is:global>
-      /* PROMOTE: .btn--danger — the destructive form of the primitive button
-         (Archive a POI, Delete a post or meetup, Clear and re-import). Three
-         admin islands hand-rolled it; the public site has no destructive action
-         yet, which is why it is not in primitives.css. Outline rather than
-         filled: it should read as the thing you have to mean. */
-      .btn--danger {
-        background: transparent;
-        border-color: var(--live-text);
-        color: var(--live-text);
-      }
-      .btn--danger:hover {
-        background: var(--live-text);
-        border-color: var(--live-text);
-        color: var(--bg-panel);
-      }
-
-      /* PROMOTE: .badge--retired — a status that is over (archived, cancelled).
-         Muted ink on the badge's own sunken fill: 5.50:1. The public site has no
-         retired state to print, so it is admin-local for now. */
-      .badge--retired {
-        --badge-fg: var(--text-muted);
-      }
+      /*
+       * `.btn--danger` and `.badge--retired` used to be declared here as well as
+       * in primitives.css, with different hover fills and different badge
+       * shapes. Being unlayered, these copies silently won over the promoted
+       * ones. They now live only in primitives.css, which is where DESIGN.md
+       * says they were promoted to (admin audit, 2026-10).
+       */
 
       /* ------------------------------------------------------- admin page -- */
       /* The centred column every non-map admin surface sits in. */
@@ -163,6 +161,17 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
        * ~12.5px. The control is set at --text-base on purpose: it is the size
        * iOS will not zoom into, and it is the one thing here that gets typed in.
        */
+      /*
+       * A field's edge has to be visible against the panel it sits on: 3:1 for
+       * a control boundary (SC 1.4.11). `--border-strong` measured 1.46:1 light
+       * and 2.05:1 dark, so the inputs read as white on white (admin audit,
+       * 2026-10, D-06). `--text-muted` is the palette's next step that clears
+       * it in both schemes — 6.32:1 on the light panel, 6.71:1 on the dark one
+       * — and needs no new colour.
+       */
+      .admin-form {
+        --field-border: var(--text-muted);
+      }
       .admin-form label {
         display: grid;
         gap: var(--space-1);
@@ -182,7 +191,7 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
         min-width: 0;
         min-height: 44px;
         padding: var(--space-2) var(--space-3);
-        border: 1px solid var(--border-strong);
+        border: 1px solid var(--field-border);
         border-radius: var(--radius-sm);
         background: var(--bg-sunken);
         color: var(--text);
@@ -190,6 +199,13 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
         font-size: var(--text-base);
         font-weight: 400;
         line-height: var(--lh-ui);
+      }
+      /* The UA placeholder grey measured 4.01:1 light and 3.61:1 dark (D-09).
+         Muted ink on the sunken field: 5.50:1 light, 7.04:1 dark. `opacity: 1`
+         because Firefox dims placeholders on top of their colour. */
+      .admin-form ::placeholder {
+        color: var(--text-muted);
+        opacity: 1;
       }
       .admin-form textarea {
         min-height: 0;
@@ -299,6 +315,7 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
       }
       .admin-row-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: var(--space-2);
       }
       @media (max-width: 860px) {
@@ -429,6 +446,22 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
         overflow-x: auto;
         scrollbar-width: none;
       }
+      /*
+       * At phone width the tabs scroll in a box ~120px wide with no scrollbar,
+       * and News and Media sat off-screen with nothing to say they were there
+       * (admin audit, 2026-10, C-29 / D-16). The right edge now fades out, so a
+       * cut-off tab reads as "more this way". The end padding is the same width
+       * as the fade, so once scrolled to the end the fade falls on empty space
+       * and the last tab is fully legible. Black here is a mask stop, not a
+       * colour. Wrapping to a second row was the other option; it cost the map
+       * page ~45px of height it does not have on a phone.
+       */
+      @media (max-width: 720px) {
+        nav ul {
+          padding-inline-end: var(--space-6);
+          mask-image: linear-gradient(to right, #000 calc(100% - var(--space-6)), transparent);
+        }
+      }
       nav ul::-webkit-scrollbar {
         display: none;
       }
@@ -493,7 +526,8 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
        * against both the bar and the white current-page plate, which the 2px
        * offset separates it from.
        */
-      .admin-header a:focus-visible {
+      .admin-header a:focus-visible,
+      .admin-header button:focus-visible {
         outline: 3px solid var(--header-fg);
         outline-offset: 2px;
       }
@@ -520,11 +554,21 @@ const visible = nav.filter((i) => !i.adminOnly || hasRole(user, 'admin'));
         --badge-bg: var(--header-fg);
         --badge-fg: var(--ink-900); /* 19.83:1 */
       }
+      .admin-signout-form {
+        display: contents;
+      }
       .admin-signout {
         /* 24px standalone target (SC 2.5.8) without moving the bar's baseline. */
         display: inline-block;
         padding-block: 5px;
+        padding-inline: 0;
         margin-block: -5px;
+        /* A button dressed as the link it replaced. */
+        border: 0;
+        background: none;
+        font: inherit;
+        line-height: inherit;
+        cursor: pointer;
         color: var(--header-fg-2);
         text-decoration: none;
       }
