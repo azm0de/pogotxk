@@ -80,8 +80,8 @@ It writes the same two rows `set:password --create` does (a `users` row `admin:<
 it again for the same name replaces the password, clears a lockout and signs that user's old
 sessions out. A generated password is a local development credential; don't reuse it.
 It takes `--password` on the command line, which `set:password` refuses to do, so it must never
-be pointed at a real database. The conductor of the 2026-10 audit will add an npm script for
-it (`dev:admin`); until that lands, use the `npx tsx` form above.
+be pointed at a real database. `npm run dev:admin` is the npm script for it; `npx tsx
+scripts/dev-admin.ts` is the same thing.
 
 > [!danger] `set:password` refuses to run outside a real console, and that is the point
 > Under Git Bash / mintty, `node` gets a pipe rather than a console: `stdin.isTTY` is
