@@ -196,3 +196,39 @@ before the merge, and the last two items after.
 | D-21 | polish | map | disabled "Saved" | Effective 3.26 in light; exempt (disabled) but used as status | measured | 2ecc0b3 | fixed e4ad0df |
 | D-22 | polish | news | tag input wrapper | Focus is a 1px border change rather than the 3px ring used elsewhere | measured | 2ecc0b3 | fixed e4ad0df |
 | D-pass | — | all admin pages | — | Verified OK: one h1 per page, no skipped levels; every control named except markers; no target below 24×24; text contrast ≥ 5.57 everywhere in both schemes; focus rings 3px solid (two exceptions above); reduced-motion rule covers admin; `min-width:0` present; no overflow at 375 except D-01; media dialog traps focus, Escape closes, focus returns; login/reset pages: noindex, labels, autocomplete, role=alert, 16px inputs; import panel has progressbar/aria-live/alert. **All 20 items closed by the 2026-09-01 audit are still closed.** | measured 2026-10-04 | 2ecc0b3 | verified OK |
+
+## Part 2 — what landed, and how it was checked
+
+Four file-disjoint agents, one build lock, four commits plus two follow-ups:
+
+| Commit | Area | Covers |
+|---|---|---|
+| `28c26d1`, `2ecc0b3` | docs & ops | every E-row, the handover page, `scripts/dev-admin.ts`, the real-embed script renamed |
+| `0a4ccce` | auth & gate | A-01, A-03, A-06, A-07, A-09 (menu), A-10, A-11, A-12, A-13, A-14, B-17, C-25, D-06 (login/reset), D-15, E-25, the two session backlog items |
+| `f1b4641` | API & data | B-01…B-13, B-15, B-16, B-20, B-24, the import force removal, archive-by-default, media kind enum, seven behaviour suites |
+| `e4ad0df` | admin islands & pages | every C-row and D-row on the editors, dashboard and layout; the shared client fetch helper |
+| `7570f2f` | gate | B-18 (Unauthorized vs Forbidden, no-store) |
+| `58c5ff5` | layout | a regression from the batch: the new Sign out button shrank to 25px and wrapped; fixed and re-measured at 47×30 |
+
+**Final run (2026-10-04, after every commit above):** `npm run typecheck` clean; `npm test` 17
+suites / 802 assertions; `npm run test:worker` 37 files / 1325 tests, all green.
+
+**Browser re-verification, signed in as `admin:auditadmin` on the dev server:** dashboard shows
+only cards that lead somewhere, activity reads "Deleted location #105 … 11:03 AM CT", the import
+panel no longer offers a wipe; News focuses the title on New/Edit, has no sideways overflow at
+1280 or 768, 16px body, chips named "Draft, 2", rows offer Archive and (admin only) Delete
+permanently; a save with the session gone shows "You were signed out. Sign in again — your draft
+is still here" linking to `/admin/login?next=/admin/posts`; the map asks "Discard unsaved
+changes to …?" before switching location and keeps the edit when refused, chips read
+"PokéStops, 66", the selected row carries `aria-current` with its type, markers carry their
+names, Add location → Place at map centre makes an unsaved draft (no POST until Create),
+Discard and Escape leave add mode; Meetups has status chips, "Cancel meetup", "— PokéStop"
+suffixes on duplicate names and "Central time" in the preview; the media sheet is labelled
+"Attribution / <file>", locks page scroll and lists all four kinds; an ambassador sees Archive
+but not Delete permanently. Lockout: five wrong passwords → `?error=locked&minutes=1`, the
+page says how long, a correct password while locked is still refused; `/admin/login` is
+`no-store`; an anonymous API call answers `401 {"error":"Unauthorized"}`.
+
+**Not verified here, by design:** the reset mail end to end in production (Resend; Justin
+confirms it is configured and Nick has an address); the live board, which does not exist
+under `astro dev`; a real drag of a pin (code path read, rounding fixed).
