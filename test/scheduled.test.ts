@@ -22,10 +22,14 @@
 import { describe, expect, it } from 'vitest';
 // The built entry — the same module `vitest.config.ts` runs as `main`, and the
 // one Cloudflare invokes.
+// @ts-ignore -- dist/ exists only after `astro build`; CI runs the typecheck on a
+// clean checkout first, and this import kept its typecheck red from 2026-09-26
+// until the admin audit (2026-10). Vitest always builds before it runs this.
 import * as entry from '../dist/server/entry.mjs';
 // The file `wrangler deploy` reads, not the source it was generated from — the
 // adapter rewrites `wrangler.jsonc` during `astro build`, and the generated
 // copy is what reaches Cloudflare.
+// @ts-ignore -- same reason as above.
 import deployed from '../dist/server/wrangler.json';
 
 describe('cron triggers', () => {
